@@ -1,7 +1,7 @@
 name: Publish to MCP Registry
 on:
   push:
-    tags: ["v*"]
+    branches: ["main"]
 
 jobs:
   publish:
