@@ -6,12 +6,12 @@
     "url": "https://github.com/coder-ka/procm-mcp",
     "source": "github"
   },
-  "version": "1.0.0",
+  "version": "0.0.37",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "procm-mcp",
-      "version": "1.0.0",
+      "version": "0.0.37",
       "transport": {
         "type": "stdio"
       }
