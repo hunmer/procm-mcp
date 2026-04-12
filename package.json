@@ -2,6 +2,7 @@
   "type": "module",
   "version": "0.0.35",
   "name": "procm-mcp",
+  "mcpName": "io.github.coder-ka/procm-mcp",
   "description": "A Model Context Protocol (MCP) server for process management.",
   "author": "Katsuyuki Oeda <coder.ka.issues@gmail.com>",
   "repository": "coder-ka/procm-mcp",
