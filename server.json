@@ -1,17 +1,18 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.coder-ka/procm-mcp",
+  "title": "Procm",
   "description": "A Model Context Protocol (MCP) server for process management.",
   "repository": {
     "url": "https://github.com/coder-ka/procm-mcp",
     "source": "github"
   },
-  "version": "0.0.37",
+  "version": "0.0.38",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "procm-mcp",
-      "version": "0.0.37",
+      "version": "0.0.38",
       "transport": {
         "type": "stdio"
       }
