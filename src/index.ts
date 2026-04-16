@@ -910,15 +910,18 @@ async function killProcessTree(
   processMetadata: ProcessMetadata,
   force = false
 ): Promise<void> {
-  new Promise<void>((resolve, reject) => {
-    kill(pid, force ? "SIGKILL" : "SIGTERM", async (err) => {
+  // On Windows, SIGTERM is not supported — always use SIGKILL which maps to
+  // `taskkill /T /F` in tree-kill, ensuring cmd /c child processes are also terminated.
+  const signal = process.platform === "win32" ? "SIGKILL" : force ? "SIGKILL" : "SIGTERM";
+
+  return new Promise<void>((resolve, reject) => {
+    kill(pid, signal, async (err) => {
       if (err) {
         serverLog(
           `Error killing process: ${processMetadata.name} (ID: ${processMetadata.id}) - ${err}`
         );
         reject(err);
       } else {
-        // await sleep(5000);
         serverLog(
           `Process killed successfully: ${processMetadata.name} (ID: ${processMetadata.id})`
         );

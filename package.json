@@ -1,6 +1,6 @@
 {
   "type": "module",
-  "version": "0.0.38",
+  "version": "0.0.39",
   "name": "procm-mcp",
   "mcpName": "io.github.coder-ka/procm-mcp",
   "description": "A Model Context Protocol (MCP) server for process management.",
