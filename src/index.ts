@@ -764,28 +764,37 @@ async function startProcess(
       },
     });
 
-    childProcess.on("spawn", () => {
-      const processMetadata = processes.find((p) => p.id === processId);
+    let processMetadata: ProcessMetadata | null = null;
+    let status: ProcessMetadata["status"] = "spawning";
+    let pid = childProcess.pid;
+    let exitCode: number | null = null;
+    let processError: string | null = null;
+
+    const applyProcessState = () => {
       if (processMetadata) {
-        processMetadata.status = "running";
-        processMetadata.pid = childProcess.pid;
+        processMetadata.status = status;
+        processMetadata.pid = pid;
+        processMetadata.exitCode = exitCode;
+        processMetadata.error = processError;
       }
+    };
+
+    childProcess.on("spawn", () => {
+      status = "running";
+      pid = childProcess.pid;
+      applyProcessState();
     });
 
     childProcess.on("exit", (code) => {
-      const processMetadata = processes.find((p) => p.id === processId);
-      if (processMetadata) {
-        processMetadata.status = "exited";
-        processMetadata.exitCode = code;
-      }
+      status = "exited";
+      exitCode = code;
+      applyProcessState();
     });
 
     childProcess.on("error", (error) => {
-      const processMetadata = processes.find((p) => p.id === processId);
-      if (processMetadata) {
-        processMetadata.status = "error";
-        processMetadata.error = error.message;
-      }
+      status = "error";
+      processError = error.message;
+      applyProcessState();
     });
 
     const [stdoutClient, stderrClient] = await Promise.all([
@@ -809,21 +818,22 @@ async function startProcess(
       } in cwd: ${cwd}`
     );
 
-    return {
+    processMetadata = {
       id: processId,
-      pid: childProcess.pid,
+      pid,
       name: name || command,
       script,
       args: args || [],
       cwd,
       envs,
-      status: "spawning",
-      error: null,
-      exitCode: null,
+      status,
+      error: processError,
+      exitCode,
       process: childProcess,
       stdoutClient,
       stderrClient,
     };
+    return processMetadata;
   } catch (error) {
     serverLog(`Error starting process: ${name || script} - ${error}`);
     throw error;

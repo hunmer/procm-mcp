@@ -30,3 +30,6 @@ approval_mode = "approve"
 
 [mcp_servers."procm-mcp".tools.delete-allowed-process]
 approval_mode = "approve"
+
+[mcp_servers."procm-mcp".tools.get-server-id]
+approval_mode = "approve"
