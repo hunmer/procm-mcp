@@ -29,7 +29,7 @@ export async function createProcessStdoutClient({
   serverId: string;
 }): Promise<ProcessStdoutClient> {
   const serverDir = ServerDir({ serverId });
-  const filePath = path.join(serverDir, "processes", `${id}-${type}.sqlite3`);
+  const filePath = path.join(serverDir, "processes", `${id}-${type}.json`);
   const textFilePath = path.join(serverDir, "processes", `${id}-${type}.log`);
   await mkdirp(path.dirname(filePath));
 

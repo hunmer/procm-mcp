@@ -1,8 +1,13 @@
-import sqlite3 from "sqlite3";
+import { Low } from "lowdb";
+import { JSONFile } from "lowdb/node";
 
 export type LogRecord = {
   timestamp: number;
   message: string;
+};
+
+type LogsDb = {
+  logs: LogRecord[];
 };
 
 export type LogsRepository = {
@@ -15,15 +20,7 @@ export type LogsRepository = {
 export async function createLogsRepository(
   filePath: string
 ): Promise<LogsRepository> {
-  const db = await new Promise<sqlite3.Database>((resolve, reject) => {
-    const db = new sqlite3.Database(filePath, (err) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(db);
-      }
-    });
-  });
+  const db = new Low<LogsDb>(new JSONFile<LogsDb>(filePath), { logs: [] });
 
   return {
     initialize: () => initialize(db),
@@ -33,61 +30,24 @@ export async function createLogsRepository(
   };
 }
 
-function initialize(db: sqlite3.Database): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    db.run(
-      "CREATE TABLE IF NOT EXISTS logs (timestamp INTEGER, message TEXT)",
-      (err) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve();
-        }
-      }
-    );
-  });
+async function initialize(db: Low<LogsDb>): Promise<void> {
+  await db.read();
+  await db.write();
 }
 
-function insert(db: sqlite3.Database, record: LogRecord): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    db.run(
-      "INSERT INTO logs (timestamp, message) VALUES (?, ?)",
-      [record.timestamp, record.message],
-      (err) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve();
-        }
-      }
-    );
-  });
+async function insert(db: Low<LogsDb>, record: LogRecord): Promise<void> {
+  await db.read();
+  db.data.logs.push(record);
+  await db.write();
 }
 
-function top(db: sqlite3.Database, count: number): Promise<LogRecord[]> {
-  return new Promise<LogRecord[]>((resolve, reject) => {
-    db.all<LogRecord>(
-      "SELECT timestamp, message FROM logs ORDER BY timestamp DESC LIMIT ?",
-      [count],
-      (err, rows) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(rows);
-        }
-      }
-    );
-  });
+async function top(db: Low<LogsDb>, count: number): Promise<LogRecord[]> {
+  await db.read();
+  return [...db.data.logs]
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .slice(0, count);
 }
 
-function close(db: sqlite3.Database): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    db.close((err) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve();
-      }
-    });
-  });
+async function close(db: Low<LogsDb>): Promise<void> {
+  await db.write();
 }
