@@ -2,10 +2,10 @@ import fs from "fs";
 import path from "path";
 import { Readable } from "stream";
 import { ServerDir } from "./server-dir.js";
-import sqlite3 from "sqlite3";
 import { mkdirp } from "mkdirp";
 import { log } from "./logger.js";
 import { toErrorMessage } from "./error.js";
+import { createLogsRepository } from "./logs-repository.js";
 
 export type ProcessStdoutChunk = {
   timestamp: Date;
@@ -33,28 +33,8 @@ export async function createProcessStdoutClient({
   const textFilePath = path.join(serverDir, "processes", `${id}-${type}.log`);
   await mkdirp(path.dirname(filePath));
 
-  const db = await new Promise<sqlite3.Database>((resolve, reject) => {
-    const db = new sqlite3.Database(filePath, (err) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(db);
-      }
-    });
-  });
-
-  await new Promise<void>((resolve, reject) => {
-    db.run(
-      "CREATE TABLE IF NOT EXISTS logs (timestamp INTEGER, message TEXT)",
-      (err) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve();
-        }
-      }
-    );
-  });
+  const logsRepository = await createLogsRepository(filePath);
+  await logsRepository.initialize();
 
   const updateQueue = createUpdateQueue();
 
@@ -65,18 +45,9 @@ export async function createProcessStdoutClient({
     updateQueue.unshift(async () => {
       try {
         await Promise.all([
-          new Promise<void>(async (resolve, reject) => {
-            db.run(
-              "INSERT INTO logs (timestamp, message) VALUES (?, ?)",
-              [timestamp, message],
-              (err) => {
-                if (err) {
-                  reject(err);
-                } else {
-                  resolve();
-                }
-              }
-            );
+          logsRepository.insert({
+            timestamp,
+            message,
           }),
           new Promise<void>((resolve, reject) => {
             fs.appendFile(
@@ -105,36 +76,15 @@ export async function createProcessStdoutClient({
     top: async (count: number) => {
       await updateQueue.processing;
 
-      return new Promise<ProcessStdoutChunk[]>((resolve, reject) => {
-        db.all<ProcessStdoutChunk>(
-          "SELECT timestamp, message FROM logs ORDER BY timestamp DESC LIMIT ?",
-          [count],
-          (err, rows) => {
-            if (err) {
-              reject(err);
-            } else {
-              resolve(
-                rows.map((row) => ({
-                  timestamp: new Date(row.timestamp),
-                  message: row.message,
-                }))
-              );
-            }
-          }
-        );
-      });
+      const rows = await logsRepository.top(count);
+      return rows.map((row) => ({
+        timestamp: new Date(row.timestamp),
+        message: row.message,
+      }));
     },
     close: async () => {
       readable.off("data", onData);
-      await new Promise<void>((res, rej) => {
-        db.close((err) => {
-          if (err) {
-            rej(err);
-          } else {
-            res();
-          }
-        });
-      });
+      await logsRepository.close();
     },
   };
 }
