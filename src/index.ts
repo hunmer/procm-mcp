@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -94,7 +96,7 @@ try {
             {
               type: "text",
               text: `Process creation allowed for script: ${script} with args: ${args.join(
-                " "
+                " ",
               )} in cwd: ${cwd}.`,
             },
           ],
@@ -110,7 +112,7 @@ try {
           ],
         };
       }
-    }
+    },
   );
 
   // list allowed processes
@@ -149,7 +151,7 @@ try {
       } finally {
         logToolEnd("list-allowed-processes", {});
       }
-    }
+    },
   );
 
   // delete allowed process
@@ -185,7 +187,7 @@ try {
             {
               type: "text",
               text: `Allowed process deleted for script: ${script} with args: ${args.join(
-                " "
+                " ",
               )} in cwd: ${cwd}.`,
             },
           ],
@@ -207,7 +209,7 @@ try {
           cwd,
         });
       }
-    }
+    },
   );
 
   server.tool(
@@ -246,7 +248,7 @@ Warning: Do not invoke background processes that will not exit automatically, an
               {
                 type: "text",
                 text: `Process creation is not allowed for script: ${script} with args: ${args.join(
-                  " "
+                  " ",
                 )} in cwd: ${cwd}. Please allow it first using the allow-start-process tool.`,
               },
             ],
@@ -261,7 +263,7 @@ Warning: Do not invoke background processes that will not exit automatically, an
           name,
           args,
           cwd,
-          envs
+          envs,
         );
 
         processes.push(startedProcess);
@@ -293,7 +295,7 @@ Warning: Do not invoke background processes that will not exit automatically, an
           ],
         };
       }
-    }
+    },
   );
 
   server.tool(
@@ -343,7 +345,7 @@ Warning: Do not invoke background processes that will not exit automatically, an
           ],
         };
       }
-    }
+    },
   );
 
   server.tool(
@@ -377,7 +379,7 @@ Warning: Do not invoke background processes that will not exit automatically, an
           processMetadata.name,
           processMetadata.args,
           processMetadata.cwd,
-          processMetadata.envs
+          processMetadata.envs,
         );
         processes[processIndex] = newProcess;
 
@@ -402,7 +404,7 @@ Warning: Do not invoke background processes that will not exit automatically, an
           ],
         };
       }
-    }
+    },
   );
 
   server.tool(
@@ -460,7 +462,7 @@ Warning: Do not invoke background processes that will not exit automatically, an
           ],
         };
       }
-    }
+    },
   );
 
   server.tool("list-processes", "List all running processes", {}, async () => {
@@ -566,7 +568,7 @@ Warning: Do not invoke background processes that will not exit automatically, an
           ],
         };
       }
-    }
+    },
   );
 
   server.tool(
@@ -629,7 +631,7 @@ Warning: Do not invoke background processes that will not exit automatically, an
           ],
         };
       }
-    }
+    },
   );
 
   let cleanupped: Promise<void> | undefined;
@@ -729,7 +731,7 @@ async function cleanup() {
   try {
     // Kill all child processes
     await Promise.all(
-      processes.map((processMetadata) => killProcess(processMetadata))
+      processes.map((processMetadata) => killProcess(processMetadata)),
     );
 
     serverLog("All processes cleaned up successfully.");
@@ -745,12 +747,12 @@ async function startProcess(
   name: string | undefined,
   args: string[] | undefined,
   cwd: string,
-  envs: Record<string, string>
+  envs: Record<string, string>,
 ): Promise<ProcessMetadata> {
   serverLog(
     `Starting process: ${name || script} with args: ${
       args?.join(" ") || ""
-    } in cwd: ${cwd}`
+    } in cwd: ${cwd}`,
   );
 
   try {
@@ -815,7 +817,7 @@ async function startProcess(
     serverLog(
       `Process started: ${name || script} with args: ${
         args?.join(" ") || ""
-      } in cwd: ${cwd}`
+      } in cwd: ${cwd}`,
     );
 
     processMetadata = {
@@ -842,7 +844,7 @@ async function startProcess(
 
 async function killProcess(processMetadata: ProcessMetadata) {
   serverLog(
-    `Killing process: ${processMetadata.name} (ID: ${processMetadata.id})`
+    `Killing process: ${processMetadata.name} (ID: ${processMetadata.id})`,
   );
 
   try {
@@ -852,7 +854,7 @@ async function killProcess(processMetadata: ProcessMetadata) {
         const onExit = () => {
           clearTimeout(forceKillTimeoutId);
           serverLog(
-            `Process exited: ${processMetadata.name} (ID: ${processMetadata.id})`
+            `Process exited: ${processMetadata.name} (ID: ${processMetadata.id})`,
           );
           resolve();
         };
@@ -860,7 +862,7 @@ async function killProcess(processMetadata: ProcessMetadata) {
           processMetadata.process.off("exit", onExit);
 
           serverLog(
-            `Process did not exit in time, force killing: ${processMetadata.name} (ID: ${processMetadata.id})`
+            `Process did not exit in time, force killing: ${processMetadata.name} (ID: ${processMetadata.id})`,
           );
           killProcessTree(pid, processMetadata, true);
 
@@ -879,12 +881,12 @@ async function killProcess(processMetadata: ProcessMetadata) {
       ]);
     } else {
       serverLog(
-        `Process with ID ${processMetadata.id} has no PID, cannot kill.`
+        `Process with ID ${processMetadata.id} has no PID, cannot kill.`,
       );
     }
   } catch (error) {
     serverLog(
-      `Error killing process: ${processMetadata.name} (ID: ${processMetadata.id}) - ${error}`
+      `Error killing process: ${processMetadata.name} (ID: ${processMetadata.id}) - ${error}`,
     );
     throw error;
   }
@@ -918,22 +920,23 @@ function exitProcess(code: number) {
 async function killProcessTree(
   pid: number,
   processMetadata: ProcessMetadata,
-  force = false
+  force = false,
 ): Promise<void> {
   // On Windows, SIGTERM is not supported — always use SIGKILL which maps to
   // `taskkill /T /F` in tree-kill, ensuring cmd /c child processes are also terminated.
-  const signal = process.platform === "win32" ? "SIGKILL" : force ? "SIGKILL" : "SIGTERM";
+  const signal =
+    process.platform === "win32" ? "SIGKILL" : force ? "SIGKILL" : "SIGTERM";
 
   return new Promise<void>((resolve, reject) => {
     kill(pid, signal, async (err) => {
       if (err) {
         serverLog(
-          `Error killing process: ${processMetadata.name} (ID: ${processMetadata.id}) - ${err}`
+          `Error killing process: ${processMetadata.name} (ID: ${processMetadata.id}) - ${err}`,
         );
         reject(err);
       } else {
         serverLog(
-          `Process killed successfully: ${processMetadata.name} (ID: ${processMetadata.id})`
+          `Process killed successfully: ${processMetadata.name} (ID: ${processMetadata.id})`,
         );
         resolve();
       }
