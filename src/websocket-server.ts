@@ -6,13 +6,14 @@ import {
   LOG_APPEND,
   type LogAppendPayload,
 } from "./events.js";
-import { listProcesses } from "./process-manager.js";
-import { ProcessMetadata } from "./types.js";
+import { listProcessRecords } from "./process-manager.js";
+import type { ProcessRecord } from "./processes-repository.js";
 import { serverLog } from "./server-log.js";
 
-// Public process view — mirrors http-server's `toPublicView` (envs intentionally
-// omitted). Duplicated here to avoid a circular import back into http-server.
-function toPublicView(p: ProcessMetadata) {
+// Public process view — mirrors http-server's `toPublicRecord` (envs
+// intentionally omitted, lifecycle timestamps included). Duplicated here to
+// avoid a circular import back into http-server.
+function toPublicView(p: ProcessRecord) {
   return {
     id: p.id,
     name: p.name,
@@ -20,9 +21,12 @@ function toPublicView(p: ProcessMetadata) {
     args: p.args,
     cwd: p.cwd,
     status: p.status,
-    pid: p.pid ?? null,
+    pid: p.pid,
     exitCode: p.exitCode,
     error: p.error,
+    desc: p.desc,
+    startedAt: p.startedAt,
+    stoppedAt: p.stoppedAt,
   };
 }
 
@@ -34,14 +38,18 @@ function toPublicView(p: ProcessMetadata) {
 export function attachWebsocketServer(
   server: http.Server,
   token: string | undefined,
-  opts: { serverId: string; pid: number },
+  opts: { serverId: string; pid: number; startedAt: number },
 ) {
-  const buildProcessesMessage = (snapshot = false): string => {
+  // Build the processes payload from the merged live+historical view so the
+  // dashboard sees expired records too (consistent with GET /api/processes).
+  const buildProcessesMessage = async (snapshot = false): Promise<string> => {
+    const records = await listProcessRecords();
     const body: Record<string, unknown> = {
       type: "processes",
       serverId: opts.serverId,
       pid: opts.pid,
-      data: listProcesses().map(toPublicView),
+      startedAt: opts.startedAt,
+      data: records.map(toPublicView),
     };
     if (snapshot) body.snapshot = true;
     return JSON.stringify(body);
@@ -53,6 +61,15 @@ export function attachWebsocketServer(
   // and auth path as the REST API, rather than using ws's built-in server
   // integration (which would bypass our token check).
   server.on("upgrade", (req, socket, head) => {
+    // Only handle the /ws path; anything else (e.g. HMR sockets in dev) is
+    // left to other handlers / dropped. This also lets a dev proxy route
+    // /ws -> backend while the SPA root stays on the Vite dev server.
+    const url = new URL(req.url || "/", "http://localhost");
+    if (url.pathname !== "/ws") {
+      socket.destroy();
+      return;
+    }
+
     if (!authorizeUpgrade(req, token)) {
       // Reject with a 401 so misconfigured clients see a clear reason.
       socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
@@ -69,10 +86,15 @@ export function attachWebsocketServer(
     serverLog("WebSocket dashboard client connected");
     // Send an immediate snapshot so the UI can render without an extra REST
     // round-trip on connect/reconnect.
-    ws.send(buildProcessesMessage(true));
+    void buildProcessesMessage(true).then((msg) => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+    });
 
     const onProcessChange = () => {
-      if (ws.readyState === WebSocket.OPEN) ws.send(buildProcessesMessage(false));
+      if (ws.readyState !== WebSocket.OPEN) return;
+      void buildProcessesMessage(false).then((msg) => {
+        if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+      });
     };
     const onLog = (payload: LogAppendPayload) => {
       if (ws.readyState === WebSocket.OPEN) {

@@ -12,6 +12,12 @@ export interface ProcessView {
   pid: number | null;
   exitCode: number | null;
   error: string | null;
+  // Optional human-readable description, shown in the process list.
+  desc?: string | null;
+  // Lifecycle timestamps (epoch ms). addedAt stays undefined for live-only
+  // records the server didn't persist, so the UI tolerates their absence.
+  startedAt?: number;
+  stoppedAt?: number | null;
 }
 
 export interface ProcessListResponse {
@@ -25,12 +31,21 @@ export interface LogsResponse {
   text: string;
 }
 
+// A single structured log line, with its source stream. stdout and stderr are
+// merged into one chronologically ordered list in the UI.
+export interface LogEntry {
+  timestamp: number; // epoch ms
+  stream: ProcessStream;
+  message: string;
+}
+
 export interface StartProcessBody {
   name?: string;
   script: string;
   args?: string[];
   cwd: string;
   envs?: Record<string, string>;
+  desc?: string;
 }
 
 // ---- WebSocket messages (mirrors src/websocket-server.ts envelope) ----
@@ -42,6 +57,8 @@ export interface WsProcessesMessage {
   type: "processes";
   serverId?: string;
   pid?: number;
+  // Wall-clock ms when the backend started; used to compute uptime.
+  startedAt?: number;
   data: ProcessView[];
   snapshot?: boolean;
 }

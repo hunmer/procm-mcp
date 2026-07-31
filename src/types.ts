@@ -14,6 +14,9 @@ export type ProcessMetadata = {
   status: ProcessStatus;
   error: string | null;
   exitCode: number | null;
+  // Optional human-readable description, carried through from the caller
+  // (MCP tool arg / dashboard form) and persisted alongside the record.
+  desc: string | null;
   process: ChildProcess;
   stdoutClient: ProcessStdoutClient;
   stderrClient: ProcessStdoutClient;

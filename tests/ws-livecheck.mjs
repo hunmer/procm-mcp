@@ -24,7 +24,7 @@ backend.on("exit", (code) => {
   process.stderr.write(`[backend exited code=${code}]\n`);
 });
 
-const wsUrl = `ws://127.0.0.1:${PORT}/`;
+const wsUrl = `ws://127.0.0.1:${PORT}/ws`;
 
 function waitFor(predicate, { timeout = 10000, interval = 100 } = {}) {
   const start = Date.now();

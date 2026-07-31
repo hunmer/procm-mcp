@@ -28,13 +28,15 @@ Warning: Do not invoke background processes that will not exit automatically, an
       args: z.array(z.string()).optional(),
       cwd: z.string(),
       envs: z.record(z.string()).optional(),
+      desc: z.string().optional(),
     },
-    async ({ script, name, args = [], cwd = process.cwd(), envs = {} }) => {
+    async ({ script, name, args = [], cwd = process.cwd(), envs = {}, desc }) => {
       logToolStart("start-process", {
         script,
         name,
         args,
         cwd,
+        desc,
       });
 
       try {
@@ -67,6 +69,7 @@ Warning: Do not invoke background processes that will not exit automatically, an
           args,
           cwd,
           envs,
+          desc,
         );
         pushProcess(startedProcess);
 
@@ -76,6 +79,7 @@ Warning: Do not invoke background processes that will not exit automatically, an
           script,
           args: args || [],
           cwd,
+          desc,
         });
 
         return textResult(`Process started: ${name || command} (ID: ${processId})`);

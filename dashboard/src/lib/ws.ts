@@ -117,15 +117,15 @@ export function useDashboardSocket(): UseDashboardSocket {
 }
 
 // Build a ws:// or wss:// URL from the current page origin (dashboard is
-// served same-origin by the backend). When PROCM_HTTP_TOKEN is in use, a token
-// may be appended via ?token=; read from the page URL if the operator passed it.
+// served same-origin by the backend, so the WS endpoint lives at /ws). When
+// PROCM_HTTP_TOKEN is in use, a token may be appended via ?token=; read from
+// the page URL if the operator passed it.
 function buildWsUrl(): string {
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const base = `${proto}//${window.location.host}`;
+  const base = `${proto}//${window.location.host}/ws`;
   const params = new URLSearchParams(window.location.search);
   const token = params.get("token");
-  const url = `${base}/`;
-  return token ? `${url}?token=${encodeURIComponent(token)}` : url;
+  return token ? `${base}?token=${encodeURIComponent(token)}` : base;
 }
 
 export type { ProcessStream };

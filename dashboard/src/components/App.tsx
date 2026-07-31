@@ -1,30 +1,53 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/registry/default/ui/button";
+import { Badge } from "@/registry/default/ui/badge";
 import { MoonIcon, PanelLeftOpenIcon, SunIcon } from "lucide-react";
-import { NewProcessDialog } from "./NewProcessDialog";
+import { NewProcessDialog, ProcessDetailsDialog } from "./NewProcessDialog";
 import { ProcessList } from "./ProcessList";
 import { LogPanel } from "./LogPanel";
 import { Toast } from "./Toast";
 import { useTheme } from "@/lib/useTheme";
 import { useDashboardSocket } from "@/lib/ws";
-import type { ProcessListResponse, ProcessView } from "@/lib/types";
+import type {
+  ProcessListResponse,
+  ProcessView,
+  WsLogMessage,
+} from "@/lib/types";
 
 export function App() {
   const [data, setData] = useState<ProcessListResponse | null>(null);
-  const [meta, setMeta] = useState("loading…");
+  // Backend start time (epoch ms) — received via WS, used to show uptime.
+  const [serverStartedAt, setServerStartedAt] = useState<number | null>(null);
+  // Ticks every second so the uptime display stays current.
+  const [now, setNow] = useState(() => Date.now());
   const [selected, setSelected] = useState<ProcessView | null>(null);
   // The log panel collapses/expands independently of which process is selected,
   // so closing it keeps the selection and lets you reopen to the same logs.
   const [logCollapsed, setLogCollapsed] = useState(false);
+  // Process details dialog (read-only view opened from the row context menu).
+  const [viewing, setViewing] = useState<ProcessView | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     isError?: boolean;
     key: number;
   } | null>(null);
+  // Per-process unread log counters (incremented on live log push, cleared
+  // when that process's log panel is open).
+  const [unread, setUnread] = useState<Record<string, number>>({});
   const { theme, toggle } = useTheme();
 
   const { status, reconnectInMs, onProcessesMessage, onLogMessage } =
     useDashboardSocket();
+
+  // Whether the log panel is currently open (visible + not collapsed) and
+  // which process it shows — used to decide whether to count a live log line
+  // as unread. Kept in a ref so the log handler (registered once) always sees
+  // the latest value without re-subscribing.
+  const openLogIdRef = useRef<string | null>(null);
+  // Forwarder for live log lines to the active LogPanel. The panel registers
+  // its callback here; everything else increments the unread counter.
+  const liveLogForwardRef = useRef<((m: WsLogMessage) => void) | null>(null);
 
   // Live updates from the backend: replace the process list and keep the
   // selected log target in sync with the latest view. This replaces the old
@@ -35,12 +58,20 @@ export function App() {
       pid: m.pid ?? data?.pid ?? 0,
       processes: m.data,
     });
-    setMeta(
-      `server ${m.serverId ?? ""}${m.pid ? ` (pid ${m.pid})` : ""} · ${new Date().toLocaleTimeString()}`,
-    );
+    if (m.startedAt != null) setServerStartedAt(m.startedAt);
     setSelected((cur) =>
       cur ? m.data.find((p) => p.id === cur.id) ?? null : null,
     );
+  });
+
+  // Dispatch every live log line: forward to the open panel if it matches,
+  // otherwise bump that process's unread badge.
+  onLogMessage((m) => {
+    if (m.processId === openLogIdRef.current) {
+      liveLogForwardRef.current?.(m);
+    } else {
+      setUnread((cur) => ({ ...cur, [m.processId]: (cur[m.processId] ?? 0) + 1 }));
+    }
   });
 
   // Drop the selected process if it no longer exists (e.g. after being stopped).
@@ -50,6 +81,35 @@ export function App() {
     }
   }, [data, selected]);
 
+  // Tick once per second so the uptime display updates live.
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Format the backend's uptime as e.g. "1h 02m 03s" / "02m 03s" / "03s".
+  const uptime =
+    serverStartedAt != null ? formatUptime(Math.max(0, now - serverStartedAt)) : null;
+
+  // Track which process's logs are currently visible so unread counting is
+  // suspended for it, and clear its unread badge on open.
+  const openLogFor = useCallback((p: ProcessView | null) => {
+    setSelected(p);
+    setLogCollapsed(false);
+    openLogIdRef.current = p?.id ?? null;
+    if (p) setUnread((cur) => (cur[p.id] ? { ...cur, [p.id]: 0 } : cur));
+  }, []);
+
+  // Keep openLogIdRef in sync when the panel collapses/expands or selection
+  // changes via other paths.
+  useEffect(() => {
+    openLogIdRef.current =
+      selected && !logCollapsed ? selected.id : null;
+    if (selected && !logCollapsed) {
+      setUnread((cur) => (cur[selected.id] ? { ...cur, [selected.id]: 0 } : cur));
+    }
+  }, [selected, logCollapsed]);
+
   const showToast = useCallback(
     (message: string, isError?: boolean) =>
       setToast({ message, isError, key: Date.now() }),
@@ -57,6 +117,10 @@ export function App() {
   );
 
   const processes = data?.processes ?? [];
+  // Live (non-stopped, running) processes — shown as a badge in the header.
+  const runningCount = processes.filter(
+    (p) => p.stoppedAt == null && p.status === "running",
+  ).length;
 
   const statusMeta =
     status === "open"
@@ -70,25 +134,8 @@ export function App() {
   return (
     <div className="flex h-full flex-col">
       <header className="bg-card sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3.5">
-        <div className="min-w-0">
-          <h1 className="text-base font-semibold leading-tight">procm-mcp</h1>
-          <p className="text-muted-foreground truncate text-xs">{meta}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <NewProcessDialog
-            onStarted={(id) => showToast(`Started: ${id}`)}
-            onError={(m) => showToast(m, true)}
-          />
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
-            onClick={toggle}
-          >
-            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-          </Button>
-          {/* Live connection indicator: green=open, yellow=connecting,
-              red=closed/reconnecting. Replaces the old "auto (3s)" poll toggle. */}
+        {/* Left: live WS connection indicator + server uptime. */}
+        <div className="flex items-center gap-3">
           <span
             className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs text-muted-foreground"
             title={statusMeta}
@@ -105,30 +152,61 @@ export function App() {
             />
             {statusMeta}
           </span>
+          {uptime && (
+            <span
+              className="text-muted-foreground font-mono text-xs tabular-nums"
+              title="Server uptime"
+            >
+              {uptime}
+            </span>
+          )}
+        </div>
+        {/* Right: actions. */}
+        <div className="flex items-center gap-2">
+          <NewProcessDialog
+            onStarted={(id) => showToast(`Started: ${id}`)}
+            onError={(m) => showToast(m, true)}
+          />
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+            onClick={toggle}
+          >
+            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+          </Button>
         </div>
       </header>
 
       {/* Inline left/right split: selecting a process's logs opens the right
           column, which squeezes the left process list (no overlay). */}
       <div className="flex min-h-0 flex-1">
-        <main className="min-w-0 flex-1 overflow-auto p-5">
-          <div className="bg-card mb-0 rounded-xl border">
-            <div className="flex items-center justify-between border-b px-4 py-3">
-              <h2 className="text-sm font-semibold">
-                Processes
+        <main className="flex min-w-0 flex-1 flex-col gap-4 p-5">
+          <div className="bg-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
+            <div className="flex shrink-0 items-center justify-between border-b px-4 py-3">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold">Processes</h2>
                 {processes.length > 0 && (
-                  <span className="text-muted-foreground ml-2 text-xs">
+                  <span className="text-muted-foreground text-xs">
                     ({processes.length})
                   </span>
                 )}
-              </h2>
+              </div>
+              {runningCount > 0 && (
+                <Badge variant="success" className="gap-1.5">
+                  <span className="inline-block size-1.5 rounded-full bg-current" />
+                  {runningCount} running
+                </Badge>
+              )}
             </div>
             <ProcessList
               processes={processes}
               selectedId={selected?.id ?? null}
-              onSelectLogs={(p) => {
-                setSelected(p);
-                setLogCollapsed(false);
+              unread={unread}
+              onSelectLogs={openLogFor}
+              onView={(p) => {
+                setViewing(p);
+                setDetailsOpen(true);
               }}
               onToast={showToast}
             />
@@ -136,11 +214,14 @@ export function App() {
         </main>
 
         {selected && !logCollapsed && (
-          <div className="w-full max-w-[min(640px,46vw)] shrink-0">
+          <div className="w-full max-w-[min(640px,46vw)] shrink-0 p-5 pl-0">
             <LogPanel
               process={selected}
               onClose={() => setLogCollapsed(true)}
-              onLogMessage={onLogMessage}
+              onLiveLog={(cb) => {
+                liveLogForwardRef.current = cb;
+              }}
+              onToast={showToast}
             />
           </div>
         )}
@@ -168,6 +249,24 @@ export function App() {
           onDismiss={() => setToast(null)}
         />
       )}
+
+      <ProcessDetailsDialog
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+        viewProcess={viewing}
+      />
     </div>
   );
+}
+
+// Format a duration (ms) as a compact uptime string. Shows hours only when
+// present, always zero-padded minutes/seconds: "1h 02m 03s" / "02m 03s" / "03s".
+function formatUptime(ms: number): string {
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const mm = String(m).padStart(2, "0");
+  const ss = String(s).padStart(2, "0");
+  return h > 0 ? `${h}h ${mm}m ${ss}s` : `${mm}m ${ss}s`;
 }

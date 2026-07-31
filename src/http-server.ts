@@ -4,17 +4,20 @@ import {
   getDashboardServeState,
   readDashboardAsset,
 } from "./dashboard-html.js";
-import { serverLog, serverId } from "./server-log.js";
+import { serverLog, serverId, serverStartedAt } from "./server-log.js";
 import {
   listProcesses,
+  listProcessRecords,
   getProcess,
   startProcess,
   removeProcess,
+  deleteProcess,
   restartProcess,
   generateProcessId,
   validateScript,
   pushProcess,
 } from "./process-manager.js";
+import type { ProcessRecord } from "./processes-repository.js";
 import { toErrorMessage } from "./error.js";
 import { ProcessMetadata } from "./types.js";
 import { handleMcpRequest } from "./mcp-http.js";
@@ -74,6 +77,26 @@ function toPublicView(p: ProcessMetadata) {
     pid: p.pid ?? null,
     exitCode: p.exitCode,
     error: p.error,
+    desc: p.desc,
+  };
+}
+
+// Public view of a (possibly historical) process record. Adds the lifecycle
+// timestamps so the UI can show expired entries and sort by start time.
+function toPublicRecord(p: ProcessRecord) {
+  return {
+    id: p.id,
+    name: p.name,
+    script: p.script,
+    args: p.args,
+    cwd: p.cwd,
+    status: p.status,
+    pid: p.pid,
+    exitCode: p.exitCode,
+    error: p.error,
+    desc: p.desc,
+    startedAt: p.startedAt,
+    stoppedAt: p.stoppedAt,
   };
 }
 
@@ -144,6 +167,18 @@ function createRequestHandler(token: string | undefined) {
         return;
       }
 
+      // GET /api/meta -> server metadata (cwd, etc.) for dashboard conveniences
+      // like preset auto-fill.
+      if (method === "GET" && pathname === "/api/meta") {
+        json(res, 200, {
+          serverId,
+          pid: process.pid,
+          cwd: process.cwd(),
+          startedAt: serverStartedAt,
+        });
+        return;
+      }
+
       // /api/processes[/:id[/action]]
       const apiMatch = pathname.match(
         /^\/api\/processes(?:\/([^/]+))?(?:\/(stop|restart|logs))?$/,
@@ -153,10 +188,13 @@ function createRequestHandler(token: string | undefined) {
 
         // GET /api/processes
         if (method === "GET" && !idParam) {
+          // Merge live + historical (stopped/exited) records so expired
+          // processes remain visible across restarts.
+          const records = await listProcessRecords();
           json(res, 200, {
             serverId,
             pid: process.pid,
-            processes: listProcesses().map(toPublicView),
+            processes: records.map(toPublicRecord),
           });
           return;
         }
@@ -183,6 +221,7 @@ function createRequestHandler(token: string | undefined) {
             body.envs && typeof body.envs === "object" && !Array.isArray(body.envs)
               ? body.envs
               : {};
+          const desc = body.desc ? String(body.desc) : undefined;
           const processId = generateProcessId();
           // NOTE: human-driven dashboard start intentionally bypasses allow-x.
           const started = await startProcess(
@@ -192,6 +231,7 @@ function createRequestHandler(token: string | undefined) {
             args,
             cwd,
             envs,
+            desc,
           );
           pushProcess(started);
           json(res, 201, { id: processId, name: started.name });
@@ -276,6 +316,17 @@ function createRequestHandler(token: string | undefined) {
           return;
         }
 
+        // DELETE /api/processes/:id  -> stop (if running) and erase the record
+        if (method === "DELETE" && !action) {
+          const ok = await deleteProcess(idParam);
+          if (!ok) {
+            json(res, 404, { error: "Process not found" });
+            return;
+          }
+          json(res, 200, { id: idParam, deleted: true });
+          return;
+        }
+
         // GET /api/processes/:id
         if (method === "GET" && !action) {
           const meta = getProcess(idParam);
@@ -333,7 +384,11 @@ export function startHttpServer(port: number): Promise<http.Server> {
       );
       // Attach the WebSocket endpoint on the same server/port so the dashboard
       // can receive real-time process + log updates instead of polling.
-      attachWebsocketServer(server, token, { serverId, pid: process.pid });
+      attachWebsocketServer(server, token, {
+        serverId,
+        pid: process.pid,
+        startedAt: serverStartedAt,
+      });
       resolve(server);
     });
   });

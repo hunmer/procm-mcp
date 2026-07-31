@@ -129,6 +129,35 @@
       Roboto, Helvetica, Arial, sans-serif;
     line-height: 1.5;
     margin: 0;
+    /* Hide scrollbars on the page body while keeping it scrollable. */
+    scrollbar-width: none;
+  }
+  body::-webkit-scrollbar {
+    display: none;
+  }
+
+  /*
+   * The dashboard is an app shell, not a document: most text (headers, table
+   * cells, badges) is meant to be read, not selected. Disable selection app-
+   * wide, then re-enable it for the log body (the one place users legitimately
+   * copy from) and form inputs.
+   */
+  body {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  /* Log content is the copyable surface. */
+  .log-selectable,
+  .log-selectable * {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+  /* Inputs must stay selectable/editable regardless of the global rule. */
+  input,
+  textarea,
+  [contenteditable="true"] {
+    user-select: text;
+    -webkit-user-select: text;
   }
 
   code,

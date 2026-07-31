@@ -8,9 +8,66 @@ import { toErrorMessage } from "./error.js";
 import { serverLog, logServerId } from "./server-log.js";
 import { dashboardEvents } from "./events.js";
 import { ProcessMetadata, ProcessStatus } from "./types.js";
+import path from "path";
+import { ProcmMcpDir } from "./procm-mcp-dir.js";
+import { mkdirp } from "mkdirp";
+import {
+  createProcessesRepository,
+  type ProcessRecord,
+  type ProcessesRepository,
+} from "./processes-repository.js";
 
 // Module-level singleton, shared by MCP tools and the HTTP dashboard.
 const processes: ProcessMetadata[] = [];
+
+// Durable store of process records (including stopped/exited ones) so the
+// history survives backend restarts. Lazily initialized on first use; resolved
+// before the first process is started (see `ensureRepository`).
+let processesRepo: ProcessesRepository | null = null;
+let processesRepoPromise: Promise<ProcessesRepository> | null = null;
+
+async function ensureRepository(): Promise<ProcessesRepository> {
+  if (processesRepo) return processesRepo;
+  if (!processesRepoPromise) {
+    processesRepoPromise = (async () => {
+      // Use a stable path NOT scoped by serverId: process records must survive
+      // backend restarts, and each restart gets a fresh serverId. (Logs are
+      // per-instance by design, but the process history is global.)
+      const dir = ProcmMcpDir();
+      await mkdirp(dir);
+      const filePath = path.join(dir, "processes.json");
+      const repo = await createProcessesRepository(filePath);
+      await repo.initialize();
+      processesRepo = repo;
+      return repo;
+    })();
+  }
+  return processesRepoPromise;
+}
+
+// Map an in-memory ProcessMetadata to its durable record shape. `stoppedAt`
+// defaults to null — it's only set when the process is removed from the list.
+function toRecord(meta: ProcessMetadata, stoppedAt: number | null = null): ProcessRecord {
+  return {
+    id: meta.id,
+    name: meta.name,
+    script: meta.script,
+    args: meta.args,
+    cwd: meta.cwd,
+    status: meta.status,
+    pid: meta.pid ?? null,
+    exitCode: meta.exitCode,
+    error: meta.error,
+    desc: meta.desc,
+    startedAt: startedAtByMeta.get(meta.id) ?? Date.now(),
+    stoppedAt,
+  };
+}
+
+// Track each process's original start time in memory so upsert() preserves it
+// across status updates (the record's own startedAt is authoritative once
+// persisted, but we need a value before the first write lands).
+const startedAtByMeta = new Map<string, number>();
 
 // When true, the allow-x (allow-start-process) gate is skipped for the
 // start-process / start-procm-command tools. DANGEROUS: set only in trusted
@@ -27,6 +84,22 @@ export function isAllowAll(): boolean {
 
 export function listProcesses(): ProcessMetadata[] {
   return processes;
+}
+
+// Return a merged view of live (in-memory) and historical (persisted) process
+// records. Live processes take precedence over any stale persisted copy with
+// the same id; everything else comes from the durable store so stopped/exited
+// processes remain visible across restarts. Newest startedAt first.
+export async function listProcessRecords(): Promise<ProcessRecord[]> {
+  const repo = await ensureRepository();
+  const persisted = await repo.getAll();
+  const liveIds = new Set(processes.map((p) => p.id));
+  const liveRecords = processes.map((m) => toRecord(m));
+  // Drop persisted entries that are still live — the in-memory record wins.
+  const historical = persisted.filter((p) => !liveIds.has(p.id));
+  return [...liveRecords, ...historical].sort(
+    (a, b) => b.startedAt - a.startedAt,
+  );
 }
 
 export function getProcess(id: string): ProcessMetadata | undefined {
@@ -69,6 +142,7 @@ export async function startProcess(
   args: string[] | undefined,
   cwd: string,
   envs: Record<string, string>,
+  desc?: string | null,
 ): Promise<ProcessMetadata> {
   serverLog(
     `Starting process: ${name || script} with args: ${
@@ -103,6 +177,8 @@ export async function startProcess(
         // list view has changed. Note: this only fires after the metadata
         // object is registered; pre-spawn changes are covered by pushProcess.
         dashboardEvents.emitProcessChange();
+        // Persist the latest state so the record survives a restart.
+        void persist(processMetadata);
       }
     };
 
@@ -156,6 +232,7 @@ export async function startProcess(
       status,
       error: processError,
       exitCode,
+      desc: desc ? desc.trim() || null : null,
       process: childProcess,
       stdoutClient,
       stderrClient,
@@ -228,8 +305,50 @@ export async function removeProcess(id: string): Promise<boolean> {
 
   await killProcess(processMetadata);
   processes.splice(processIndex, 1);
+  startedAtByMeta.delete(id);
+  // Mark the record as stopped but keep it persisted so it still shows up as a
+  // historical/expired entry after a backend restart.
+  void markStopped(processMetadata);
   dashboardEvents.emitProcessChange();
   return true;
+}
+
+// Mark a process record as stopped in the durable store. Like persist(), this
+// is fire-and-forget — a failure here must not block the in-memory removal.
+async function markStopped(meta: ProcessMetadata): Promise<void> {
+  try {
+    const repo = await ensureRepository();
+    await repo.upsert({ ...toRecord(meta), stoppedAt: Date.now() });
+  } catch (err) {
+    serverLog(`Error marking process record stopped: ${toErrorMessage(err)}`);
+  }
+}
+
+// Delete a process entirely: if it is still running, stop it first; then erase
+// its persisted record so it no longer appears as history. Returns false only
+// when neither a live process nor a stored record exists for the id.
+export async function deleteProcess(id: string): Promise<boolean> {
+  let removedLive = false;
+  const idx = findProcessIndex(id);
+  if (idx !== -1) {
+    await killProcess(processes[idx]);
+    processes.splice(idx, 1);
+    startedAtByMeta.delete(id);
+    removedLive = true;
+  }
+  // Erase the persisted record (whether it was live or already historical).
+  let removedStored = false;
+  try {
+    const repo = await ensureRepository();
+    removedStored = await repo.remove(id);
+  } catch (err) {
+    serverLog(`Error deleting process record: ${toErrorMessage(err)}`);
+  }
+  if (removedLive || removedStored) {
+    dashboardEvents.emitProcessChange();
+    return true;
+  }
+  return false;
 }
 
 // Restart an existing process, preserving its id and position in the list.
@@ -249,6 +368,7 @@ export async function restartProcess(id: string): Promise<ProcessMetadata | null
     processMetadata.args,
     processMetadata.cwd,
     processMetadata.envs,
+    processMetadata.desc,
   );
   processes[processIndex] = newProcess;
   dashboardEvents.emitProcessChange();
@@ -311,5 +431,22 @@ async function killProcessTree(
 // Internal helper for pushing a freshly started process onto the list.
 export function pushProcess(metadata: ProcessMetadata) {
   processes.push(metadata);
+  startedAtByMeta.set(metadata.id, Date.now());
   dashboardEvents.emitProcessChange();
+  // Persist the initial record so a crash between spawn and the next state
+  // change still leaves a trace.
+  void persist(metadata);
+}
+
+// Persist a snapshot of a live process's state. Fire-and-forget: the in-memory
+// list is the source of truth for the running dashboard; persistence only
+// guarantees history survives a restart. Errors are logged, never thrown, so a
+// storage hiccup can't break process lifecycle.
+async function persist(meta: ProcessMetadata): Promise<void> {
+  try {
+    const repo = await ensureRepository();
+    await repo.upsert(toRecord(meta));
+  } catch (err) {
+    serverLog(`Error persisting process record: ${toErrorMessage(err)}`);
+  }
 }

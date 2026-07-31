@@ -4,6 +4,9 @@ import { toErrorMessage } from "./error.js";
 
 export const serverId = nanoid(6);
 export const logServerId = `${serverId}(${process.pid})`;
+// Wall-clock time when this backend process started, exposed so the dashboard
+// can display server uptime. Captured once at module load.
+export const serverStartedAt = Date.now();
 
 export function serverLog(message: string) {
   log(message, { id: logServerId });

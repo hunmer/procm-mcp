@@ -1,6 +1,8 @@
 import type {
+  LogEntry,
   LogsResponse,
   ProcessListResponse,
+  ProcessStream,
   ProcessView,
   StartProcessBody,
 } from "./types";
@@ -59,6 +61,86 @@ export function getLogs(
   );
 }
 
+// Search a single stream for a regex pattern (backed by the /logs?grep= route).
+export function grepLogs(
+  id: string,
+  stream: ProcessStream,
+  grep: string,
+  ignoreCase = false,
+  count = 500,
+): Promise<LogsResponse> {
+  const qs = `stream=${stream}&grep=${encodeURIComponent(grep)}${
+    ignoreCase ? "&ignoreCase=1" : ""
+  }&count=${count}`;
+  return api<LogsResponse>(
+    "GET",
+    `/api/processes/${encodeURIComponent(id)}/logs?${qs}`,
+  );
+}
+
+// Fetch both streams' recent history in parallel and merge them into a single
+// chronologically ordered list of structured log lines.
+export async function getMergedLogs(
+  id: string,
+  count = 200,
+): Promise<LogEntry[]> {
+  const [out, err] = await Promise.all([
+    getLogs(id, "stdout", count),
+    getLogs(id, "stderr", count),
+  ]);
+  return mergeEntries([
+    ...parseLogText(out.text, "stdout"),
+    ...parseLogText(err.text, "stderr"),
+  ]);
+}
+
+// Grep both streams in parallel and merge the results.
+export async function grepMergedLogs(
+  id: string,
+  grep: string,
+  ignoreCase = false,
+  count = 500,
+): Promise<LogEntry[]> {
+  const [out, err] = await Promise.all([
+    grepLogs(id, "stdout", grep, ignoreCase, count).catch(() => null),
+    grepLogs(id, "stderr", grep, ignoreCase, count).catch(() => null),
+  ]);
+  return mergeEntries([
+    ...(out ? parseLogText(out.text, "stdout") : []),
+    ...(err ? parseLogText(err.text, "stderr") : []),
+  ]);
+}
+
+// Parse the backend's `[ISO timestamp] message\n` text blob into structured
+// entries. Lines without a leading bracketed timestamp fall back to "now".
+export function parseLogText(text: string, stream: ProcessStream): LogEntry[] {
+  if (!text || text === "(empty)") return [];
+  const entries: LogEntry[] = [];
+  for (const raw of text.split("\n")) {
+    if (!raw) continue;
+    const m = raw.match(/^\[(.+?)\]\s?(.*)$/);
+    if (m) {
+      const t = Date.parse(m[1]);
+      entries.push({
+        timestamp: Number.isNaN(t) ? Date.now() : t,
+        stream,
+        message: m[2],
+      });
+    } else {
+      entries.push({ timestamp: Date.now(), stream, message: raw });
+    }
+  }
+  return entries;
+}
+
+// Merge one or more arrays of log entries into a single oldest-first list.
+// Stable sort preserves the within-stream order for equal timestamps.
+export function mergeEntries(
+  ...arrays: LogEntry[][]
+): LogEntry[] {
+  return arrays.flat().sort((a, b) => a.timestamp - b.timestamp);
+}
+
 export function startProcess(body: StartProcessBody): Promise<{ id: string }> {
   return api<{ id: string; name: string }>("POST", "/api/processes", body);
 }
@@ -67,6 +149,15 @@ export function stopProcess(id: string): Promise<void> {
   return api<void>(
     "POST",
     `/api/processes/${encodeURIComponent(id)}/stop`,
+  );
+}
+
+// Delete a process entirely: stops it if still running, then erases its
+// persisted record so it no longer shows up in the (historical) list.
+export function deleteProcessCall(id: string): Promise<void> {
+  return api<void>(
+    "DELETE",
+    `/api/processes/${encodeURIComponent(id)}`,
   );
 }
 
