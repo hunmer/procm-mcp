@@ -34,6 +34,24 @@ await runTest("/mcp initialize handshake", async () => {
   assertEqual(r.result.protocolVersion, "2025-06-18", "protocol version echoed");
 });
 
+await runTest("/mcp CORS preflight allows Inspector headers", async () => {
+  const res = await fetch(`http://127.0.0.1:${port}/mcp`, {
+    method: "OPTIONS",
+    headers: {
+      Origin: "http://localhost:6274",
+      "Access-Control-Request-Method": "POST",
+      "Access-Control-Request-Headers":
+        "accept,authorization,content-type,mcp-protocol-version,mcp-session-id,x-mcp-proxy-auth",
+    },
+  });
+  assertEqual(res.status, 204, "preflight status");
+  const allowed = res.headers.get("access-control-allow-headers") || "";
+  for (const header of ["mcp-protocol-version", "mcp-session-id", "x-mcp-proxy-auth"]) {
+    assert(allowed.toLowerCase().includes(header), `allows ${header}`);
+  }
+  assertEqual(res.headers.get("access-control-allow-origin"), "http://localhost:6274", "origin");
+});
+
 await runTest("tools/list returns 14 tools over HTTP", async () => {
   await mcpHttpHandshake(port);
   const r = await mcpHttp(port, 2, "tools/list", {});

@@ -121,6 +121,15 @@ function createRequestHandler(token: string | undefined) {
   return async (req: http.IncomingMessage, res: http.ServerResponse) => {
     try {
       const url = new URL(req.url || "/", "http://localhost");
+      const method = req.method || "GET";
+      const pathname = url.pathname;
+
+      // Browser MCP clients send an unauthenticated CORS preflight. It must
+      // reach the MCP handler before the optional HTTP token check.
+      if (method === "OPTIONS" && pathname === "/mcp") {
+        await handleMcpRequest(req, res);
+        return;
+      }
 
       // Auth check applies to everything.
       if (token) {
@@ -131,9 +140,6 @@ function createRequestHandler(token: string | undefined) {
           return;
         }
       }
-
-      const method = req.method || "GET";
-      const pathname = url.pathname;
 
       // GET /  -> built React dashboard, or a fallback page if not built yet.
       if (method === "GET" && pathname === "/") {

@@ -52,6 +52,64 @@ function isMcpMethod(method: string | undefined): boolean {
   return method === "POST" || method === "GET" || method === "DELETE";
 }
 
+// CORS support for browser-based MCP clients (e.g. MCP Inspector), which load
+// from a different origin than this server and would otherwise be blocked by
+// the browser's same-origin policy. Strategy: reflect the request's Origin.
+// Safe because the HTTP server is bound to 127.0.0.1 (loopback only). When no
+// Origin header is present (e.g. curl), no CORS headers are added — same-origin
+// and non-browser clients don't need them.
+const CORS_HEADERS = {
+  "Access-Control-Allow-Methods": "POST, GET, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers":
+    "Content-Type, Accept, Authorization, MCP-Protocol-Version, MCP-Session-Id, X-MCP-Proxy-Auth, Last-Event-ID",
+  "Access-Control-Expose-Headers": "MCP-Session-Id, MCP-Protocol-Version",
+  "Access-Control-Allow-Credentials": "true",
+  // Reflecting Origin means responses vary by origin, so caches must key on it.
+  Vary: "Origin",
+};
+
+// The MCP transport drives the response itself via hono's request listener,
+// which calls res.writeHead(status, headers) with the headers it built — that
+// would overwrite anything we setHeader'd beforehand. Wrap writeHead so CORS
+// headers are merged into the headers passed to writeHead, before they're
+// flushed. Scoped to this one request's res.
+function patchWriteHeadForCors(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+): void {
+  const original = res.writeHead.bind(res);
+  // writeHead overloads: (code), (code, reason), (code, headers), (code, reason, headers).
+  // Normalize to find the headers argument and inject CORS there.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  res.writeHead = ((...args: any[]) => {
+    if (req.headers.origin) {
+      // args: [code] | [code, reason] | [code, headers] | [code, reason, headers]
+      // The headers object is the last argument when present, and is an object
+      // (not a string reason).
+      let idx = -1;
+      for (let i = args.length - 1; i >= 1; i--) {
+        if (args[i] && typeof args[i] === "object") {
+          idx = i;
+          break;
+        }
+      }
+      const corsHeaders: Record<string, string> = {
+        "Access-Control-Allow-Origin": req.headers.origin,
+        ...CORS_HEADERS,
+      };
+      if (idx !== -1) {
+        for (const [k, v] of Object.entries(corsHeaders)) {
+          (args[idx] as Record<string, string>)[k] = v;
+        }
+      } else {
+        args.push(corsHeaders);
+      }
+    }
+    return original(...(args as [number]));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  }) as any;
+}
+
 // Handle a single request against the /mcp endpoint. Returns true if the
 // request was handled as MCP, false if it should fall through to REST.
 export async function handleMcpRequest(
@@ -59,6 +117,20 @@ export async function handleMcpRequest(
   res: http.ServerResponse,
 ): Promise<boolean> {
   if (req.url?.split("?")[0] !== "/mcp") return false;
+
+  // Apply CORS to every /mcp response (browser clients like MCP Inspector load
+  // cross-origin). Harmless for same-origin / non-browser callers (no Origin).
+  patchWriteHeadForCors(req, res);
+
+  // CORS preflight: browsers send OPTIONS before the real POST. Handle it here
+  // and short-circuit, otherwise it would fall through to the 404 handler and
+  // the browser would block the subsequent request.
+  if (req.method === "OPTIONS") {
+    res.writeHead(204);
+    res.end();
+    return true;
+  }
+
   if (!isMcpMethod(req.method)) return false;
 
   let session: { server: McpServer; transport: StreamableHTTPServerTransport };
