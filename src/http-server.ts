@@ -163,6 +163,27 @@ function createRequestHandler(token: string | undefined) {
           const count = Number(url.searchParams.get("count") || "200");
           const client =
             stream === "stderr" ? meta.stderrClient : meta.stdoutClient;
+
+          // Optional grep: if `grep` is present, search instead of tailing.
+          const grepPattern = url.searchParams.get("grep");
+          if (grepPattern !== null) {
+            const ignoreCase =
+              (url.searchParams.get("ignoreCase") || "").toLowerCase() === "1";
+            let regex: RegExp;
+            try {
+              regex = new RegExp(grepPattern, ignoreCase ? "i" : "");
+            } catch (e) {
+              json(res, 400, { error: `Invalid regex: ${toErrorMessage(e)}` });
+              return;
+            }
+            const chunks = await client.search(regex, count);
+            const text = chunks
+              .map((c) => `[${c.timestamp.toISOString()}] ${c.message}`)
+              .join("\n");
+            json(res, 200, { stream, grep: grepPattern, text });
+            return;
+          }
+
           const chunks = await client.top(count);
           const text = chunks
             .map((c) => `[${c.timestamp.toISOString()}] ${c.message}`)

@@ -15,16 +15,16 @@ import { registerProcessTools } from "./tools/process.js";
 import { registerProcessLogTools } from "./tools/process-logs.js";
 import { registerGrepLogsTools } from "./tools/grep-logs.js";
 import { registerProcmCommandsTools } from "./tools/procm-commands.js";
+import { isClientCommand, runClient, clientHelp } from "./cli-client.js";
 
 const DEFAULT_SERVER_PORT = 7331;
 
 // Minimal CLI flag parsing. Supports:
 //   --server            Run as an HTTP-only backend (no MCP stdio transport)
-//   --port <number>     Dashboard port (with --server, or to override PROCM_HTTP_PORT)
-// Minimal CLI flag parsing. Supports:
-//   --server            Run as an HTTP-only backend (no MCP stdio transport)
-//   --port <number>     Dashboard port (with --server, or to override PROCM_HTTP_PORT)
+//   --port <number>     Dashboard port (with --server, client --port, or override PROCM_HTTP_PORT)
 //   --allow-all         Skip the allow-start-process gate (DANGEROUS — see README)
+// Client subcommands (ps/info/logs/grep/start/restart/stop/ping) are detected
+// separately and connect to a running backend instead of starting one.
 function parseArgs(argv: string[]) {
   const flags = { server: false, port: NaN as number, allowAll: false };
   for (let i = 0; i < argv.length; i++) {
@@ -79,6 +79,17 @@ try {
       "\n  procm-mcp: WARNING — allow-start-process gate is DISABLED.\n" +
         "  Any process may be started without confirmation. Only run this in trusted environments.\n",
     );
+  }
+
+  // Client mode: if the first positional arg is a client command (ps/info/...),
+  // connect to a running backend over HTTP and run it, then exit. This does NOT
+  // start a backend, so it takes precedence over --server / stdio modes.
+  const firstPositional = process.argv
+    .slice(2)
+    .find((a) => !a.startsWith("-") || a === "-");
+  if (isClientCommand(firstPositional)) {
+    await runClient(process.argv.slice(2));
+    exitProcess(0);
   }
 
   // --server: run as a standalone HTTP backend (no MCP stdio transport).

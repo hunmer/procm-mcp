@@ -20,7 +20,13 @@
     "inspect": "npx @modelcontextprotocol/inspector inspect",
     "start:server": "node ./build/index.js --server",
     "start:server:port": "node ./build/index.js --server --port",
-    "link": "node ./scripts/link-global.mjs"
+    "link": "node ./scripts/link-global.mjs",
+    "test": "npm run build && node ./tests/run-all.mjs",
+    "test:lifecycle": "npm run build && node ./tests/lifecycle.mjs",
+    "test:logs": "npm run build && node ./tests/logs-grep.mjs",
+    "test:http": "npm run build && node ./tests/http-api.mjs",
+    "test:allow-x": "npm run build && node ./tests/allow-x.mjs",
+    "test:cli": "npm run build && node ./tests/cli-roundtrip.mjs"
   },
   "keywords": [],
   "dependencies": {
