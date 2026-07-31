@@ -16,11 +16,10 @@
   ],
   "main": "index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "npm run build:dashboard && tsc",
     "watch": "tsc -w",
     "build:dashboard": "npm --prefix dashboard run build",
     "dev:dashboard": "npm --prefix dashboard run dev",
-    "build:all": "npm run build:dashboard && npm run build",
     "inspect": "npx @modelcontextprotocol/inspector inspect",
     "start:server": "node ./build/index.js --server",
     "start:server:port": "node ./build/index.js --server --port",

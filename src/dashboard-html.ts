@@ -12,11 +12,12 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Resolve the dashboard dist directory.
-// From a built package, build/<this file> -> ../../dashboard/dist.
-// Also try process.cwd()-relative as a fallback for ad-hoc runs.
+// `build/` and `dashboard/` are sibling dirs under the package root, so from
+// build/<this file> the dist is one level up: ../dashboard/dist.
+// Also try process.cwd()-relative as a fallback for ad-hoc runs from a checkout.
 function resolveDashboardDist(): string | undefined {
   const candidates = [
-    path.resolve(__dirname, "..", "..", "dashboard", "dist"),
+    path.resolve(__dirname, "..", "dashboard", "dist"),
     path.resolve(process.cwd(), "dashboard", "dist"),
   ];
   for (const candidate of candidates) {
