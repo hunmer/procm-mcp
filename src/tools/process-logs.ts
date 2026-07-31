@@ -4,72 +4,117 @@ import { textResult, notFoundResult } from "../tool-helpers.js";
 import { logToolStart, logToolEnd, logToolError } from "../server-log.js";
 import { toErrorMessage } from "../error.js";
 import { getProcess } from "../process-manager.js";
+import { ProcessStdoutChunk } from "../process-stdout-client.js";
 
 export function registerProcessLogTools(server: McpServer) {
+  // Unified logs tool: tail recent stdout/stderr OR grep them with a regex.
+  //   - No `pattern`: tail the most recent chunks of a single stream
+  //     (stream defaults to "stdout", count defaults to 10).
+  //   - With `pattern`: regex-search. `stream` optional (omit = search both),
+  //     count defaults to 50, results newest-first.
   server.tool(
-    "get-process-stdout",
-    "Get the stdout of a process by ID",
+    "process-logs",
+    `Read a process's logs by ID.
+- Without "pattern": tail the most recent chunks of one stream (stream defaults to "stdout"; count defaults to 10).
+- With "pattern": regex-search the logs (results newest-first; stream optional, omit to search both stdout and stderr; count defaults to 50; set ignoreCase for a case-insensitive match).`,
     {
       id: z.string(),
-      chunkCount: z.number().optional(),
+      stream: z.enum(["stdout", "stderr"]).optional(),
+      pattern: z.string().optional(),
+      count: z.number().optional(),
+      ignoreCase: z.boolean().optional(),
     },
-    async ({ id, chunkCount = 10 }) => {
-      logToolStart("get-process-stdout", { id, chunkCount });
+    async ({
+      id,
+      stream,
+      pattern,
+      ignoreCase = false,
+      count,
+    }) => {
+      logToolStart("process-logs", { id, stream, pattern, ignoreCase, count });
 
       try {
-        const processMetadata = getProcess(id);
-        if (!processMetadata) {
-          return notFoundResult(id);
-        }
-        const stdoutLogs = await processMetadata.stdoutClient.top(chunkCount);
-        if (stdoutLogs.length === 0) {
-          return textResult(`No stdout found for process with ID ${id}.`);
-        }
-        const stdout = stdoutLogs
-          .map((log) => `[${log.timestamp.toISOString()}] ${log.message}`)
-          .join("\n");
-
-        logToolEnd("get-process-stdout", { id, chunkCount });
-
-        return textResult(stdout);
-      } catch (error) {
-        logToolError("get-process-stdout", error);
-        return textResult(`Error getting process stdout: ${toErrorMessage(error)}`);
-      }
-    },
-  );
-
-  server.tool(
-    "get-process-stderr",
-    "Get the stderr of a process by ID",
-    {
-      id: z.string(),
-      chunkCount: z.number().optional(),
-    },
-    async ({ id, chunkCount = 10 }) => {
-      logToolStart("get-process-stderr", { id, chunkCount });
-
-      try {
-        const processMetadata = getProcess(id);
-        if (!processMetadata) {
+        const meta = getProcess(id);
+        if (!meta) {
           return notFoundResult(id);
         }
 
-        const stderrLogs = await processMetadata.stderrClient.top(chunkCount);
-        if (stderrLogs.length === 0) {
-          return textResult(`No stderr logs found for process with ID ${id}.`);
+        // ---- grep mode -------------------------------------------------
+        if (pattern !== undefined) {
+          const limit = count ?? 50;
+
+          let regex: RegExp;
+          try {
+            regex = new RegExp(pattern, ignoreCase ? "i" : "");
+          } catch (error) {
+            return textResult(
+              `Invalid regular expression: ${toErrorMessage(error)}`,
+            );
+          }
+
+          type StreamResult = {
+            stream: "stdout" | "stderr";
+            chunk: ProcessStdoutChunk;
+          };
+          const streams: Array<"stdout" | "stderr"> = stream
+            ? [stream]
+            : ["stdout", "stderr"];
+
+          const collected: StreamResult[] = [];
+          for (const s of streams) {
+            const client = s === "stdout" ? meta.stdoutClient : meta.stderrClient;
+            const chunks = await client.search(regex, limit);
+            for (const chunk of chunks) {
+              collected.push({ stream: s, chunk });
+            }
+          }
+
+          if (collected.length === 0) {
+            return textResult(
+              `No matches found in process ${id} for pattern: ${pattern}`,
+            );
+          }
+
+          // Newest-first overall; each stream's results are already newest-first.
+          collected.sort(
+            (a, b) => b.chunk.timestamp.getTime() - a.chunk.timestamp.getTime(),
+          );
+          const trimmed = collected.slice(0, limit);
+
+          logToolEnd("process-logs", { id, mode: "grep", matches: trimmed.length });
+
+          const body = trimmed
+            .map(
+              (r) =>
+                `[${r.chunk.timestamp.toISOString()}] (${r.stream}) ${r.chunk.message}`,
+            )
+            .join("\n");
+
+          return textResult(
+            `${trimmed.length} match(es) for /${pattern}/ in process ${id}:\n${body}`,
+          );
         }
 
-        const stderr = stderrLogs
-          .map((log) => `[${log.timestamp.toISOString()}] ${log.message}`)
+        // ---- tail mode -------------------------------------------------
+        const s = stream ?? "stdout";
+        const limit = count ?? 10;
+        const client = s === "stderr" ? meta.stderrClient : meta.stdoutClient;
+        const chunks = await client.top(limit);
+
+        if (chunks.length === 0) {
+          return textResult(`No ${s} found for process with ID ${id}.`);
+        }
+
+        const text = chunks
+          .map((c) => `[${c.timestamp.toISOString()}] ${c.message}`)
           .join("\n");
 
-        logToolEnd("get-process-stderr", { id, chunkCount });
+        logToolEnd("process-logs", { id, mode: "tail", stream: s, count: chunks.length });
 
-        return textResult(stderr);
+        return textResult(text);
       } catch (error) {
-        logToolError("get-process-stderr", error);
-        return textResult(`Error getting process stderr: ${toErrorMessage(error)}`);
+        logToolError("process-logs", error);
+        return textResult(`Error reading process logs: ${toErrorMessage(error)}`);
       }
     },
   );

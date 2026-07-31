@@ -15,7 +15,6 @@ import { registerServerInfoTools } from "./tools/server-info.js";
 import { registerAllowedProcessTools } from "./tools/allowed-process.js";
 import { registerProcessTools } from "./tools/process.js";
 import { registerProcessLogTools } from "./tools/process-logs.js";
-import { registerGrepLogsTools } from "./tools/grep-logs.js";
 import { registerProcmCommandsTools } from "./tools/procm-commands.js";
 
 // Register every tool onto a fresh McpServer. Called once per request in
@@ -25,7 +24,6 @@ function registerAllTools(server: McpServer) {
   registerAllowedProcessTools(server);
   registerProcessTools(server);
   registerProcessLogTools(server);
-  registerGrepLogsTools(server);
   registerProcmCommandsTools(server);
 }
 

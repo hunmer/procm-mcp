@@ -10,127 +10,73 @@ import {
   getAllowedProcesses,
 } from "../allowed-process-creations.js";
 
+// Unified allow-x tool: allow / delete / list the process-creation whitelist.
+//   - allow / delete: require script (args/cwd optional, default to cwd).
+//   - list: optional cwd filter.
 export function registerAllowedProcessTools(server: McpServer) {
   server.tool(
-    "allow-start-process",
-    "Allow process creation",
+    "allowed-process",
+    `Manage the process-creation allow list (the allow-x gate that start-process / procm-command checks).
+- action "allow": allow a specific script/args/cwd to be started without further confirmation (requires script).
+- action "delete": remove an entry from the allow list (requires script).
+- action "list": list allowed entries (optional cwd to filter to one directory).`,
     {
-      script: z.string(),
+      action: z.enum(["allow", "delete", "list"]),
+      script: z.string().optional(),
       args: z.array(z.string()).optional(),
       cwd: z.string().optional(),
     },
-    async ({ script, args = [], cwd = process.cwd() }) => {
-      logToolStart("allow-start-process", {
-        script,
-        args,
-        cwd,
-      });
+    async ({ action, script, args = [], cwd = process.cwd() }) => {
+      logToolStart("allowed-process", { action, script, args, cwd });
 
       try {
-        const validateScriptError = validateScript(script);
-        if (validateScriptError) {
-          return textResult(validateScriptError);
+        // --- list -------------------------------------------------------
+        if (action === "list") {
+          const allowed = await getAllowedProcesses();
+          logToolEnd("allowed-process", { action: "list", count: allowed.length });
+          return textResult(
+            `Allowed processes:\n${allowed
+              .filter((x) => x.cwd === cwd)
+              .map((x) => `${x.script} ${x.args.join(" ")} in ${x.cwd}`)
+              .join("\n")}`,
+          );
         }
 
-        await allowProcessCreation({
-          script,
-          args,
-          cwd,
-        });
-
-        logToolEnd("allow-start-process", {
-          script,
-          args,
-          cwd,
-        });
-
-        return textResult(
-          `Process creation allowed for script: ${script} with args: ${args.join(
-            " ",
-          )} in cwd: ${cwd}.`,
-        );
-      } catch (error) {
-        logToolError("allow-start-process", error);
-        return textResult(
-          `Error allowing process creation: ${toErrorMessage(error)}`,
-        );
-      }
-    },
-  );
-
-  // list allowed processes
-  server.tool(
-    "list-allowed-processes-in-cwd",
-    "List allowed processes in current working directory",
-    {
-      cwd: z.string().optional(),
-    },
-    async ({ cwd = process.cwd() }) => {
-      try {
-        logToolStart("list-allowed-processes", {});
-
-        const allowedProcesses = await getAllowedProcesses();
-        return textResult(
-          `Allowed processes:\n${allowedProcesses
-            .filter((x) => x.cwd === cwd)
-            .map((x) => `${x.script} ${x.args.join(" ")} in ${x.cwd}`)
-            .join("\n")}`,
-        );
-      } catch (error) {
-        logToolError("list-allowed-processes", error);
-        return textResult(
-          `Error listing allowed processes: ${toErrorMessage(error)}`,
-        );
-      } finally {
-        logToolEnd("list-allowed-processes", {});
-      }
-    },
-  );
-
-  // delete allowed process
-  server.tool(
-    "delete-allowed-process",
-    "Delete an allowed process",
-    {
-      script: z.string(),
-      args: z.array(z.string()).optional(),
-      cwd: z.string().optional(),
-    },
-    async ({ script, args = [], cwd = process.cwd() }) => {
-      try {
-        logToolStart("delete-allowed-process", {
-          script,
-          args,
-          cwd,
-        });
+        // --- allow / delete both need a script --------------------------
+        if (!script) {
+          return textResult(
+            `Action "${action}" requires a "script".`,
+          );
+        }
 
         const validateScriptError = validateScript(script);
         if (validateScriptError) {
           return textResult(validateScriptError);
         }
 
-        await deleteAllowedProcessCreation({
-          script,
-          args,
-          cwd,
-        });
+        if (action === "allow") {
+          await allowProcessCreation({ script, args, cwd });
+          logToolEnd("allowed-process", { action: "allow", script, args, cwd });
+          return textResult(
+            `Process creation allowed for script: ${script} with args: ${args.join(
+              " ",
+            )} in cwd: ${cwd}.`,
+          );
+        }
 
+        // action === "delete"
+        await deleteAllowedProcessCreation({ script, args, cwd });
+        logToolEnd("allowed-process", { action: "delete", script, args, cwd });
         return textResult(
           `Allowed process deleted for script: ${script} with args: ${args.join(
             " ",
           )} in cwd: ${cwd}.`,
         );
       } catch (error) {
-        logToolError("delete-allowed-process", error);
+        logToolError("allowed-process", error);
         return textResult(
-          `Error deleting allowed process: ${toErrorMessage(error)}`,
+          `Error in allowed-process tool: ${toErrorMessage(error)}`,
         );
-      } finally {
-        logToolEnd("delete-allowed-process", {
-          script,
-          args,
-          cwd,
-        });
       }
     },
   );

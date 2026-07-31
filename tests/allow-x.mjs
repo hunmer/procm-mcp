@@ -1,5 +1,5 @@
 // allow-x gate on the MCP path:
-//   - start-process is blocked until allow-start-process permits the exact script/args/cwd
+//   - start-process is blocked until allowed-process (action: allow) permits the exact script/args/cwd
 //   - after allowing, the same combination starts
 //   - a different (unallowed) combination is blocked
 //   - --allow-all bypasses the gate
@@ -48,7 +48,7 @@ await runTest("allow then start succeeds (same args)", async () => {
         jsonrpc: "2.0",
         id: 1,
         method: "tools/call",
-        params: { name: "allow-start-process", arguments: { script, args: allowedArgs, cwd } },
+        params: { name: "allowed-process", arguments: { action: "allow", script, args: allowedArgs, cwd } },
       },
       {
         jsonrpc: "2.0",

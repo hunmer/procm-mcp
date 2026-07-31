@@ -1,7 +1,7 @@
 // MCP over HTTP (Streamable HTTP transport at /mcp):
 //   - initialize handshake works
-//   - tools/list returns the same 14 tools as stdio
-//   - tool calls work over HTTP (list-processes)
+//   - tools/list returns the same 6 tools as stdio
+//   - tool calls work over HTTP (process list)
 //   - the allow-x gate still applies on the MCP-HTTP path
 //   - state is shared with the REST API (process started via MCP is visible via REST)
 import {
@@ -52,18 +52,19 @@ await runTest("/mcp CORS preflight allows Inspector headers", async () => {
   assertEqual(res.headers.get("access-control-allow-origin"), "http://localhost:6274", "origin");
 });
 
-await runTest("tools/list returns 14 tools over HTTP", async () => {
+await runTest("tools/list returns 6 tools over HTTP", async () => {
   await mcpHttpHandshake(port);
   const r = await mcpHttp(port, 2, "tools/list", {});
   const names = r.result.tools.map((t) => t.name);
-  assertEqual(names.length, 14, "14 tools");
-  assert(names.includes("grep-process-logs"), "has grep-process-logs");
+  assertEqual(names.length, 6, "6 tools");
+  assert(names.includes("process-logs"), "has process-logs");
   assert(names.includes("start-process"), "has start-process");
+  assert(names.includes("process"), "has process");
 });
 
-await runTest("tool call works: list-processes", async () => {
-  const r = await mcpHttp(port, 3, "tools/call", { name: "list-processes", arguments: {} });
-  assert(/No processes|Running processes/.test(r.result.content[0].text), "list-processes answered");
+await runTest("tool call works: process list", async () => {
+  const r = await mcpHttp(port, 3, "tools/call", { name: "process", arguments: { action: "list" } });
+  assert(/No processes|Running processes/.test(r.result.content[0].text), "process list answered");
 });
 
 await runTest("allow-x gate applies on MCP-HTTP path", async () => {
@@ -85,8 +86,8 @@ await runTest("state shared with REST API", async () => {
   const uniq = `httpmcp-${Date.now()}`;
   const args = ["-e", uniq, "ok"];
   await mcpHttp(port, 5, "tools/call", {
-    name: "allow-start-process",
-    arguments: { script: "node", args, cwd: projectRoot },
+    name: "allowed-process",
+    arguments: { action: "allow", script: "node", args, cwd: projectRoot },
   });
   await sleep(150);
   const start = await mcpHttp(port, 6, "tools/call", {

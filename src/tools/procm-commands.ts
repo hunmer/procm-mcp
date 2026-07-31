@@ -65,59 +65,52 @@ async function readCommandsFile(
   return parsed as ProcmCommandsFile;
 }
 
+// Unified procm-command tool: list the commands defined in procm-commands.json
+// or start one by name. Still subject to allow-x.
 export function registerProcmCommandsTools(server: McpServer) {
   server.tool(
-    "get-procm-commands",
-    "Read procm-commands.json from the given project directory (defaults to the current working directory) and return its contents plus the list of available command names.",
+    "procm-command",
+    `Manage processes defined in procm-commands.json (in the project directory, defaults to the current working directory).
+- action "list": read the file and return its contents plus the available command names.
+- action "start": start a command by name (requires name). Still subject to allow-x: the script/args/cwd must be allowed first via the allowed-process tool.`,
     {
+      action: z.enum(["list", "start"]),
+      name: z.string().optional(),
       cwd: z.string().optional(),
     },
-    async ({ cwd = process.cwd() }) => {
-      logToolStart("get-procm-commands", { cwd });
+    async ({ action, name, cwd = process.cwd() }) => {
+      logToolStart("procm-command", { action, name, cwd });
 
       try {
-        const commandsFile = await readCommandsFile(cwd);
-        if (!commandsFile) {
+        // --- list -------------------------------------------------------
+        if (action === "list") {
+          const commandsFile = await readCommandsFile(cwd);
+          if (!commandsFile) {
+            return textResult(
+              `No ${COMMANDS_FILE} found in ${cwd}. Create one with a top-level "commands" object, e.g. {"commands":{"dev":{"script":"npm","args":["run","dev"]}}}.`,
+            );
+          }
+          const names = Object.keys(commandsFile.commands);
+          logToolEnd("procm-command", { action: "list", cwd, count: names.length });
           return textResult(
-            `No ${COMMANDS_FILE} found in ${cwd}. Create one with a top-level "commands" object, e.g. {"commands":{"dev":{"script":"npm","args":["run","dev"]}}}.`,
+            `${COMMANDS_FILE} in ${cwd}:\n\n${JSON.stringify(
+              commandsFile,
+              null,
+              2,
+            )}\n\nAvailable command names: ${
+              names.length ? names.join(", ") : "(none)"
+            }`,
           );
         }
 
-        const names = Object.keys(commandsFile.commands);
-        logToolEnd("get-procm-commands", { cwd, count: names.length });
+        // --- start ------------------------------------------------------
+        if (!name) {
+          return textResult(`Action "start" requires a "name".`);
+        }
 
-        return textResult(
-          `${COMMANDS_FILE} in ${cwd}:\n\n${JSON.stringify(
-            commandsFile,
-            null,
-            2,
-          )}\n\nAvailable command names: ${
-            names.length ? names.join(", ") : "(none)"
-          }`,
-        );
-      } catch (error) {
-        logToolError("get-procm-commands", error);
-        return textResult(`Error reading commands: ${toErrorMessage(error)}`);
-      }
-    },
-  );
-
-  server.tool(
-    "start-procm-command",
-    "Start a process defined in procm-commands.json by name. Still subject to allow-x: the script/args/cwd must be allowed first via allow-start-process.",
-    {
-      name: z.string(),
-      cwd: z.string().optional(),
-    },
-    async ({ name, cwd = process.cwd() }) => {
-      logToolStart("start-procm-command", { name, cwd });
-
-      try {
         const commandsFile = await readCommandsFile(cwd);
         if (!commandsFile) {
-          return textResult(
-            `No ${COMMANDS_FILE} found in ${cwd}.`,
-          );
+          return textResult(`No ${COMMANDS_FILE} found in ${cwd}.`);
         }
 
         const command = commandsFile.commands[name];
@@ -137,9 +130,7 @@ export function registerProcmCommandsTools(server: McpServer) {
 
         const args = command.args || [];
         // Resolve cwd relative to the project directory, fall back to it.
-        const resolvedCwd = command.cwd
-          ? path.resolve(cwd, command.cwd)
-          : cwd;
+        const resolvedCwd = command.cwd ? path.resolve(cwd, command.cwd) : cwd;
         const envs = command.envs || {};
 
         const isAllowed =
@@ -153,7 +144,7 @@ export function registerProcmCommandsTools(server: McpServer) {
           return textResult(
             `Process creation is not allowed for command "${name}" (script: ${command.script}, args: ${args.join(
               " ",
-            )}, cwd: ${resolvedCwd}). Please allow it first using the allow-start-process tool.`,
+            )}, cwd: ${resolvedCwd}). Please allow it first using the allowed-process tool.`,
           );
         }
 
@@ -170,7 +161,8 @@ export function registerProcmCommandsTools(server: McpServer) {
         );
         pushProcess(startedProcess);
 
-        logToolEnd("start-procm-command", {
+        logToolEnd("procm-command", {
+          action: "start",
           id: processId,
           name,
           script: command.script,
@@ -180,8 +172,8 @@ export function registerProcmCommandsTools(server: McpServer) {
 
         return textResult(`Process started: ${name} (${cmd}, ID: ${processId})`);
       } catch (error) {
-        logToolError("start-procm-command", error);
-        return textResult(`Error starting command: ${toErrorMessage(error)}`);
+        logToolError("procm-command", error);
+        return textResult(`Error in procm-command tool: ${toErrorMessage(error)}`);
       }
     },
   );

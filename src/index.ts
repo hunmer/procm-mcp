@@ -13,7 +13,6 @@ import { registerServerInfoTools } from "./tools/server-info.js";
 import { registerAllowedProcessTools } from "./tools/allowed-process.js";
 import { registerProcessTools } from "./tools/process.js";
 import { registerProcessLogTools } from "./tools/process-logs.js";
-import { registerGrepLogsTools } from "./tools/grep-logs.js";
 import { registerProcmCommandsTools } from "./tools/procm-commands.js";
 import { isClientCommand, runClient, clientHelp } from "./cli-client.js";
 
@@ -129,7 +128,6 @@ try {
     registerAllowedProcessTools(server);
     registerProcessTools(server);
     registerProcessLogTools(server);
-    registerGrepLogsTools(server);
     registerProcmCommandsTools(server);
 
     // Reconcile stale "running" records from a prior crashed backend before

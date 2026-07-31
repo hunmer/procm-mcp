@@ -107,7 +107,7 @@ Then point your MCP client at it:
 ```
 
 Notes:
-- The same 14 tools are available over `/mcp` as over stdio, and the **allow-x gate still applies** (the HTTP MCP path is treated like the LLM/MCP path, not like the human-driven dashboard).
+- The same 6 tools are available over `/mcp` as over stdio, and the **allow-x gate still applies** (the HTTP MCP path is treated like the LLM/MCP path, not like the human-driven dashboard).
 - Process state is shared: a process started via `/mcp` is visible in the dashboard and REST API, and vice versa.
 - If `PROCM_HTTP_TOKEN` is set, add it to the client config (`"headers": { "Authorization": "Bearer <token>" }`) where supported.
 - `/mcp` runs in **stateless** mode (no session ID) — each request is independent.
@@ -126,7 +126,7 @@ Define reusable named commands in a `procm-commands.json` file at the root of yo
 }
 ```
 
-The `get-procm-commands` tool returns the file's contents and the available command names. The `start-procm-command` tool starts one by name. Each command's `cwd` is resolved relative to the project directory (the directory containing `procm-commands.json`). Starting a command **still goes through the allow-x gate**, so you must allow the exact script/args/cwd first with `allow-start-process`.
+The `procm-command` tool (action `list`) returns the file's contents and the available command names. Use `procm-command` (action `start`) to start one by name. Each command's `cwd` is resolved relative to the project directory (the directory containing `procm-commands.json`). Starting a command **still goes through the allow-x gate**, so you must allow the exact script/args/cwd first with `allowed-process`.
 
 ## Installation
 
@@ -152,62 +152,54 @@ npm i -D procm-mcp
 
 You can permit LLMs to use `start-process` tool without confirmation, because procm-mcp only allow whitelisted process creations.
 
-LLMs will ask you to use `allow-start-process` tool to add specific process creation to the whitelist.
+LLMs will ask you to use the `allowed-process` tool (action `allow`) to add specific process creation to the whitelist.
 
 Once you allow a process creation, you don't have to confirming it anymore as long as the command and the working directory are the same.
 
 I call it "allow-x pattern", which can balances security and usability in MCP.
 
-**Warning: Do not permit LLMs to use `allow-start-process` without confirmation.That means "Do anything you want to".**
+**Warning: Do not permit LLMs to use `allowed-process` without confirmation.That means "Do anything you want to".**
 
 ### Disabling the gate (`--allow-all`)
 
-In trusted environments you can disable the gate entirely so `start-process` and `start-procm-command` run without pre-approval:
+In trusted environments you can disable the gate entirely so `start-process` and `procm-command` (action `start`) run without pre-approval:
 
 - CLI flag: `--allow-all`
 - Env var: `PROCM_ALLOW_ALL=1` (also accepts `true`/`yes`/`on`)
 
-When enabled, the server prints a `WARNING — allow-start-process gate is DISABLED` banner on startup. This flag only affects the **LLM/MCP** path (`start-process` / `start-procm-command`); the HTTP dashboard already starts processes without the gate since it is a human-driven UI.
+When enabled, the server prints a `WARNING — allow-start-process gate is DISABLED` banner on startup. This flag only affects the **LLM/MCP** path (`start-process` / `procm-command`); the HTTP dashboard already starts processes without the gate since it is a human-driven UI.
 
 > ⚠️ **Dangerous.** With `--allow-all`, an LLM can start any process without confirmation. Only use it in sandboxed, throwaway, or otherwise trusted environments — never expose it to untrusted clients or networks.
 
 ## Tools
 
-- `allow-start-process` Allow specific processes to be created
-  - `script` (required): The script/command to allow
-  - `args` (optional): Array of arguments
-  - `cwd` (optional): Working directory
 - `start-process` Start a new process with specified script and arguments
   - `script` (required): The script/command to execute
-  - `name` (optional): A friendly name for the process
-  - `args` (optional): Array of arguments to pass to the script
   - `cwd` (required): Working directory for the process
+  - `args` (optional): Array of arguments to pass to the script
+  - `name` (optional): A friendly name for the process
   - `envs` (optional): Environment variables to set for the process
-- `delete-process` Stop and remove a process by ID.The default signal is SIGTERM, but SIGKILL(force killing) will be sent after 10 seconds unless the process exits.
+  - `desc` (optional): A human-readable description
+- `process` Manage a process by ID, or list all processes
+  - `action` (required): `get` | `delete` | `restart` | `list`
+  - `id` (required for get/delete/restart): The process ID
+  - `delete` stops and removes a process by ID. The default signal is SIGTERM, but SIGKILL (force killing) is sent after 10 seconds unless the process exits.
+- `process-logs` Read a process's logs by ID (tail recent, or grep with a regex)
   - `id` (required): The process ID
-- `restart-process` Restart an existing process by ID
-  - `id` (required): The process ID
-- `get-process-info` Get detailed information about a process
-  - `id` (required): The process ID
-- `list-processes` List all currently managed processes
-  - No parameters required
-- `get-process-stdout` Retrieve stdout logs from a process
-  - `id` (required): The process ID
-  - `chunkCount` (optional): Number of recent log entries to retrieve (default: 10)
-- `get-process-stderr` Retrieve stderr logs from a process
-  - `id` (required): The process ID
-  - `chunkCount` (optional): Number of recent log entries to retrieve (default: 10)
-- `grep-process-logs` Search a single process's stdout/stderr logs with a regular expression (results newest-first)
-  - `id` (required): The process ID
-  - `pattern` (required): A regular expression to match against log messages
-  - `stream` (optional): `"stdout"` or `"stderr"`; omit to search both
+  - `pattern` (optional): A regular expression. If omitted, tails the most recent chunks instead of searching.
+  - `stream` (optional): `"stdout"` or `"stderr"`. Tail defaults to `"stdout"`; in grep mode, omit to search both.
+  - `count` (optional): Number of entries to return (tail default: 10, grep default: 50)
   - `ignoreCase` (optional): Case-insensitive matching (default: false)
-  - `count` (optional): Maximum number of matches to return (default: 50)
-- `get-procm-commands` Read `procm-commands.json` from a project directory
-  - `cwd` (optional): Project directory (default: current working directory)
-- `start-procm-command` Start a process defined in `procm-commands.json` by name (still subject to allow-x)
-  - `name` (required): The command name as defined in the file
+- `allowed-process` Manage the process-creation allow list (the allow-x gate)
+  - `action` (required): `allow` | `delete` | `list`
+  - `script` (required for allow/delete): The script/command
+  - `args` (optional): Array of arguments
+  - `cwd` (optional): Working directory (default: current working directory)
+- `procm-command` Manage processes defined in `procm-commands.json` (still subject to allow-x)
+  - `action` (required): `list` | `start`
+  - `name` (required for start): The command name as defined in the file
   - `cwd` (optional): Project directory containing `procm-commands.json` (default: current working directory)
+- `get-server-id` Get the server id (no parameters)
 
 ## License
 

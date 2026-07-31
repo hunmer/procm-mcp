@@ -56,7 +56,7 @@ Warning: Do not invoke background processes that will not exit automatically, an
           return textResult(
             `Process creation is not allowed for script: ${script} with args: ${args.join(
               " ",
-            )} in cwd: ${cwd}. Please allow it first using the allow-start-process tool.`,
+            )} in cwd: ${cwd}. Please allow it first using the allowed-process tool.`,
           );
         }
 
@@ -90,118 +90,84 @@ Warning: Do not invoke background processes that will not exit automatically, an
     },
   );
 
+  // Unified process tool: get / delete / restart / list. start stays separate
+  // (it has a different required-arg set: script/cwd/etc.). A single `action`
+  // selects the operation; get/delete/restart need `id`, list ignores it.
   server.tool(
-    "delete-process",
-    "Delete a process by ID",
+    "process",
+    `Manage a process by ID, or list all processes.
+- action "list": list all running processes (id ignored).
+- action "get": show details of a process (requires id).
+- action "delete": stop and remove a process by ID (requires id).
+- action "restart": restart a process by ID (requires id).`,
     {
-      id: z.string(),
+      action: z.enum(["get", "delete", "restart", "list"]),
+      id: z.string().optional(),
     },
-    async ({ id }) => {
-      logToolStart("delete-process", { id });
+    async ({ action, id }) => {
+      logToolStart("process", { action, id });
 
       try {
-        const removed = await removeProcess(id);
-        if (!removed) {
-          return notFoundResult(id);
+        // --- list -------------------------------------------------------
+        if (action === "list") {
+          const processes = listProcesses();
+          if (processes.length === 0) {
+            logToolEnd("process", { action: "list", count: 0 });
+            return textResult("No processes are currently running.");
+          }
+          const lines = processes.map(
+            (p) => `${p.id}: ${p.name} (${p.script} ${p.args.join(" ")})`,
+          );
+          logToolEnd("process", { action: "list", count: processes.length });
+          return textResult(`Running processes:\n${lines.join("\n")}`);
         }
 
-        logToolEnd("delete-process", { id });
+        // --- get / delete / restart all need an id ----------------------
+        if (!id) {
+          return textResult(
+            `Action "${action}" requires an "id". Provide the process ID.`,
+          );
+        }
 
-        return textResult(`Process with ID ${id} has been deleted.`);
-      } catch (error) {
-        logToolError("delete-process", error);
-        return textResult(`Error deleting process: ${toErrorMessage(error)}`);
-      }
-    },
-  );
+        if (action === "get") {
+          const p = getProcess(id);
+          if (!p) {
+            return notFoundResult(id);
+          }
+          logToolEnd("process", { action: "get", id: p.id, name: p.name });
+          return textResult(
+            `Process ID: ${p.id}\n` +
+              `Process PID: ${p.pid}\n` +
+              `Name: ${p.name}\n` +
+              `Script: ${p.script}\n` +
+              `Arguments: ${p.args.join(" ")}\n` +
+              `CWD: ${p.cwd}\n` +
+              `Status: ${p.status}\n` +
+              `Exit Code: ${p.exitCode ?? "N/A"}\n` +
+              `Error: ${p.error ?? "N/A"}`,
+          );
+        }
 
-  server.tool(
-    "restart-process",
-    "Restart a process by ID",
-    {
-      id: z.string(),
-    },
-    async ({ id }) => {
-      logToolStart("restart-process", { id });
+        if (action === "delete") {
+          const removed = await removeProcess(id);
+          if (!removed) {
+            return notFoundResult(id);
+          }
+          logToolEnd("process", { action: "delete", id });
+          return textResult(`Process with ID ${id} has been deleted.`);
+        }
 
-      try {
+        // action === "restart"
         const restarted = await restartProcess(id);
         if (!restarted) {
           return notFoundResult(id);
         }
-
-        logToolEnd("restart-process", { id });
-
+        logToolEnd("process", { action: "restart", id });
         return textResult(`Process with ID ${id} has been restarted.`);
       } catch (error) {
-        logToolError("restart-process", error);
-        return textResult(`Error restarting process: ${toErrorMessage(error)}`);
+        logToolError("process", error);
+        return textResult(`Error in process tool: ${toErrorMessage(error)}`);
       }
     },
   );
-
-  server.tool(
-    "get-process-info",
-    "Get information about a process by ID",
-    {
-      id: z.string(),
-    },
-    async ({ id }) => {
-      logToolStart("get-process-info", { id });
-
-      try {
-        const processMetadata = getProcess(id);
-        if (!processMetadata) {
-          return notFoundResult(id);
-        }
-
-        logToolEnd("get-process-info", {
-          id: processMetadata.id,
-          name: processMetadata.name,
-        });
-
-        return textResult(
-          `Process ID: ${processMetadata.id}\n` +
-            `Process PID: ${processMetadata.pid}\n` +
-            `Name: ${processMetadata.name}\n` +
-            `Script: ${processMetadata.script}\n` +
-            `Arguments: ${processMetadata.args.join(" ")}\n` +
-            `CWD: ${processMetadata.cwd}\n` +
-            `Status: ${processMetadata.status}\n` +
-            `Exit Code: ${processMetadata.exitCode ?? "N/A"}\n` +
-            `Error: ${processMetadata.error ?? "N/A"}`,
-        );
-      } catch (error) {
-        logToolError("get-process-info", error);
-        return textResult(`Error getting process info: ${toErrorMessage(error)}`);
-      }
-    },
-  );
-
-  server.tool("list-processes", "List all running processes", {}, async () => {
-    logToolStart("list-processes", {});
-
-    try {
-      const processes = listProcesses();
-      if (processes.length === 0) {
-        return textResult("No processes are currently running.");
-      }
-      const processList = processes.map((p) => ({
-        id: p.id,
-        name: p.name,
-        command: `${p.script} ${p.args.join(" ")}`,
-      }));
-
-      logToolEnd("list-processes", { count: processList.length });
-
-      return textResult(
-        `Running processes:\n${processList
-          .map((p) => `${p.id}: ${p.name} (${p.command})`)
-          .join("\n")}`,
-      );
-    } catch (error) {
-      logToolError("list-processes", error);
-      return textResult(`Error listing processes: ${toErrorMessage(error)}`);
-    }
-  });
 }
