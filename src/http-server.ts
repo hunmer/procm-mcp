@@ -1,5 +1,9 @@
 import http from "http";
-import { dashboardHtml } from "./dashboard-html.js";
+import {
+  dashboardNotBuiltHtml,
+  getDashboardServeState,
+  readDashboardAsset,
+} from "./dashboard-html.js";
 import { serverLog, serverId } from "./server-log.js";
 import {
   listProcesses,
@@ -32,6 +36,30 @@ function html(res: http.ServerResponse, status: number, body: string) {
     "Content-Length": Buffer.byteLength(body),
   });
   res.end(body);
+}
+
+function asset(
+  res: http.ServerResponse,
+  status: number,
+  body: Buffer,
+  contentType: string,
+) {
+  res.writeHead(status, {
+    "Content-Type": contentType,
+    "Content-Length": body.length,
+  });
+  res.end(body);
+}
+
+// Dashboard bundle state is resolved once per server start. If unavailable,
+// GET / falls back to the "not built" page; assets 404.
+const dashboardState = getDashboardServeState();
+if (dashboardState.available) {
+  serverLog(`Serving built dashboard from ${dashboardState.distDir}`);
+} else {
+  serverLog(
+    "Dashboard bundle not found (dashboard/dist). Run `npm run build:dashboard`. Serving fallback page at /.",
+  );
 }
 
 function toPublicView(p: ProcessMetadata) {
@@ -83,9 +111,30 @@ function createRequestHandler(token: string | undefined) {
       const method = req.method || "GET";
       const pathname = url.pathname;
 
-      // GET /  -> dashboard page
+      // GET /  -> built React dashboard, or a fallback page if not built yet.
       if (method === "GET" && pathname === "/") {
-        html(res, 200, dashboardHtml());
+        if (dashboardState.available && dashboardState.index) {
+          html(res, 200, dashboardState.index);
+        } else {
+          html(res, 200, dashboardNotBuiltHtml());
+        }
+        return;
+      }
+
+      // Static assets from the built dashboard (e.g. /assets/index-*.js|css).
+      // Only served when the bundle exists.
+      if (
+        method === "GET" &&
+        dashboardState.available &&
+        dashboardState.distDir &&
+        pathname.startsWith("/assets/")
+      ) {
+        const file = readDashboardAsset(dashboardState.distDir, pathname);
+        if (file) {
+          asset(res, 200, file.body, file.contentType);
+        } else {
+          json(res, 404, { error: "Asset not found" });
+        }
         return;
       }
 

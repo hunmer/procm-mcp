@@ -31,6 +31,16 @@ To undo: `npm unlink -g procm-mcp`.
 
 An optional web dashboard lets you view and manage running processes from a browser. It is **off by default** and, when enabled, binds only to `127.0.0.1` so it is not reachable from the network.
 
+The dashboard is a React + coss frontend (in `dashboard/`). It is served pre-built: the Node backend serves `dashboard/dist/index.html` and its `/assets/*` bundle. When you install procm-mcp from npm the built bundle ships inside the package. If you develop procm-mcp itself and run from source, build the dashboard first:
+
+```bash
+npm run build:dashboard   # builds dashboard/ -> dashboard/dist
+# or build everything (dashboard + backend):
+npm run build:all
+```
+
+If the bundle is missing, `GET /` returns a small "dashboard not built" page with the command to run instead of failing; the REST API still works.
+
 Enable it by setting `PROCM_HTTP_PORT` in the MCP server environment:
 
 ```json

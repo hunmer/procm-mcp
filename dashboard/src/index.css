@@ -1,0 +1,141 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Custom theme with explicit, deterministic color values (hex/rgb).
+ *
+ * Why: coss's official theme relies on color-mix() / oklch() / a custom
+ * --alpha() function. On some Chromium cores these resolve inconsistently
+ * (e.g. the whole page background tints blue because a color-mix fallback
+ * kicks in). To avoid that entirely, every token here is a plain hex/rgb
+ * value — no functional color notation — so rendering is identical across
+ * browsers. Dark theme mirrors the previous dashboard's dark palette.
+ */
+@theme inline {
+  --breakpoint-3xl: 1600px;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-heading: var(--font-heading);
+  --font-mono: var(--font-mono);
+
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+}
+
+/* Light theme (kept for completeness; the app defaults to dark). */
+:root {
+  --radius: 0.625rem;
+
+  --background: #ffffff;
+  --foreground: #262626; /* neutral-800 */
+  --card: #ffffff;
+  --card-foreground: #262626;
+  --popover: #ffffff;
+  --popover-foreground: #262626;
+  --primary: #262626;
+  --primary-foreground: #fafafa; /* neutral-50 */
+  --secondary: rgba(0, 0, 0, 0.04);
+  --secondary-foreground: #262626;
+  --muted: rgba(0, 0, 0, 0.04);
+  --muted-foreground: #525252; /* neutral-600 */
+  --accent: rgba(0, 0, 0, 0.04);
+  --accent-foreground: #262626;
+  --destructive: #ef4444; /* red-500 */
+  --destructive-foreground: #b91c1c; /* red-700 */
+  --info: #3b82f6; /* blue-500 */
+  --info-foreground: #1d4ed8; /* blue-700 */
+  --success: #10b981; /* emerald-500 */
+  --success-foreground: #047857; /* emerald-700 */
+  --warning: #f59e0b; /* amber-500 */
+  --warning-foreground: #b45309; /* amber-700 */
+  --border: rgba(0, 0, 0, 0.08);
+  --input: rgba(0, 0, 0, 0.1);
+  --ring: #a3a3a3; /* neutral-400 */
+}
+
+/* Dark theme — explicit hex/rgb, matches the previous dashboard's palette. */
+.dark {
+  --background: #0f1115;
+  --foreground: #e6e8eb;
+  --card: #171a21;
+  --card-foreground: #e6e8eb;
+  --popover: #171a21;
+  --popover-foreground: #e6e8eb;
+  --primary: #e6e8eb;
+  --primary-foreground: #0f1115;
+  --secondary: rgba(255, 255, 255, 0.04);
+  --secondary-foreground: #e6e8eb;
+  --muted: rgba(255, 255, 255, 0.04);
+  --muted-foreground: #8a93a3;
+  --accent: rgba(255, 255, 255, 0.06);
+  --accent-foreground: #e6e8eb;
+  --destructive: #f85149;
+  --destructive-foreground: #fda4a4;
+  --info: #3b82f6;
+  --info-foreground: #60a5fa;
+  --success: #3fb950;
+  --success-foreground: #56d364;
+  --warning: #d29922;
+  --warning-foreground: #e3b341;
+  --border: #2a2f3a;
+  --input: #1f232c;
+  --ring: #4f9dff;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI",
+      Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo,
+      Consolas, monospace;
+  }
+}
