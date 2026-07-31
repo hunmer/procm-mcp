@@ -137,6 +137,8 @@ export function ProcessList({
   ]);
   // Process awaiting delete confirmation in the alert dialog.
   const [pendingDelete, setPendingDelete] = useState<ProcessView | null>(null);
+  // Process awaiting stop confirmation in the alert dialog.
+  const [pendingStop, setPendingStop] = useState<ProcessView | null>(null);
 
   // Open the alert dialog to confirm deleting a process.
   function requestDelete(p: ProcessView) {
@@ -157,10 +159,19 @@ export function ProcessList({
     }
   }
 
-  // Stop (but keep as history) a running process.
-  async function handleStop(p: ProcessView) {
+  // Open the alert dialog to confirm stopping a process. Only running/spawning
+  // processes can be stopped; the caller (row button / context menu) is
+  // responsible for gating on `canStop`, but we double-check defensively.
+  function requestStop(p: ProcessView) {
     if (p.stoppedAt != null || p.status === "exited" || p.status === "error") return;
-    if (!window.confirm(`Stop process ${p.name} (${p.id})?`)) return;
+    setPendingStop(p);
+  }
+
+  // Actually stop the process (keeps its record as history).
+  async function confirmStop() {
+    const p = pendingStop;
+    if (!p) return;
+    setPendingStop(null);
     try {
       await stopProcess(p.id);
       onToast(`Stopped ${p.name}`);
@@ -345,7 +356,7 @@ export function ProcessList({
                 variant="ghost"
                 aria-label={`Stop ${p.name}`}
                 title="Stop (keeps the record)"
-                onClick={() => handleStop(p)}
+                onClick={() => requestStop(p)}
                 disabled={!canStop}
                 className="text-muted-foreground hover:text-warning"
               >
@@ -539,7 +550,7 @@ export function ProcessList({
                       <ContextMenuSeparator />
                       <ContextMenuItem
                         variant="destructive"
-                        onClick={() => handleStop(p)}
+                        onClick={() => requestStop(p)}
                         disabled={!canStop}
                       >
                         <SquareIcon aria-hidden="true" />
@@ -648,6 +659,36 @@ export function ProcessList({
               onClick={confirmDelete}
             >
               Delete
+            </AlertDialogClose>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+
+      {/* Stop confirmation. Triggered from the row action button or the
+          context menu (both call requestStop). Stopping keeps the record. */}
+      <AlertDialog
+        open={pendingStop != null}
+        onOpenChange={(open) => {
+          if (!open) setPendingStop(null);
+        }}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Stop process?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingStop &&
+                `This will stop “${pendingStop.name}” (${pendingStop.id}). Its record and logs are kept as history.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="ghost" />}>
+              Cancel
+            </AlertDialogClose>
+            <AlertDialogClose
+              render={<Button variant="destructive" />}
+              onClick={confirmStop}
+            >
+              Stop
             </AlertDialogClose>
           </AlertDialogFooter>
         </AlertDialogPopup>
