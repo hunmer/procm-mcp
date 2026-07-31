@@ -14,6 +14,10 @@ export type ProcessStdoutChunk = {
 
 export type ProcessStdoutClient = {
   top: (count: number) => Promise<ProcessStdoutChunk[]>;
+  search: (
+    pattern: RegExp,
+    count?: number,
+  ) => Promise<ProcessStdoutChunk[]>;
   close: () => Promise<void>;
 };
 
@@ -77,6 +81,15 @@ export async function createProcessStdoutClient({
       await updateQueue.processing;
 
       const rows = await logsRepository.top(count);
+      return rows.map((row) => ({
+        timestamp: new Date(row.timestamp),
+        message: row.message,
+      }));
+    },
+    search: async (pattern: RegExp, count?: number) => {
+      await updateQueue.processing;
+
+      const rows = await logsRepository.search(pattern, count);
       return rows.map((row) => ({
         timestamp: new Date(row.timestamp),
         message: row.message,
