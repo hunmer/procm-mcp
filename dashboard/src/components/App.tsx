@@ -1,13 +1,31 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/registry/default/ui/button";
 import { Badge } from "@/registry/default/ui/badge";
-import { MoonIcon, PanelLeftOpenIcon, SunIcon } from "lucide-react";
-import { NewProcessDialog, ProcessDetailsDialog } from "./NewProcessDialog";
+import {
+  Tabs,
+  TabsIndicator,
+  TabsList,
+  TabsTab,
+} from "@/registry/default/ui/tabs";
+import { ListIcon, MoonIcon, PanelLeftOpenIcon, StarIcon, SunIcon } from "lucide-react";
+import {
+  FavoriteDialog,
+  NewProcessDialog,
+  ProcessDetailsDialog,
+} from "./NewProcessDialog";
 import { ProcessList } from "./ProcessList";
+import { FavoritesView } from "./FavoritesView";
 import { LogPanel } from "./LogPanel";
 import { Toast } from "./Toast";
 import { useTheme } from "@/lib/useTheme";
 import { useDashboardSocket } from "@/lib/ws";
+import { startProcess } from "@/lib/api";
+import {
+  favoriteSignature,
+  favoriteToStartBody,
+  useFavorites,
+  type Favorite,
+} from "@/lib/favorites";
 import type {
   ProcessListResponse,
   ProcessView,
@@ -35,7 +53,27 @@ export function App() {
   // Per-process unread log counters (incremented on live log push, cleared
   // when that process's log panel is open).
   const [unread, setUnread] = useState<Record<string, number>>({});
+  // Which list tab is shown: the live process table or the favorites grid.
+  const [activeTab, setActiveTab] = useState<"processes" | "favorites">(
+    "processes",
+  );
   const { theme, toggle } = useTheme();
+
+  // Favorites live entirely client-side (localStorage). They're a saved launch
+  // recipe + optional category, decoupled from the backend process records.
+  const {
+    favorites,
+    addFavorite,
+    removeFavorite,
+    updateFavorite,
+  } = useFavorites();
+
+  // The favorite editor dialog opens in one of two modes:
+  //   - adding a new favorite seeded from a process (star click on a row), or
+  //   - editing an existing favorite (pencil on a card).
+  const [favOpen, setFavOpen] = useState(false);
+  const [favSeedProcess, setFavSeedProcess] = useState<ProcessView | null>(null);
+  const [favSeedFavorite, setFavSeedFavorite] = useState<Favorite | null>(null);
 
   const { status, reconnectInMs, onProcessesMessage, onLogMessage } =
     useDashboardSocket();
@@ -116,6 +154,71 @@ export function App() {
     [],
   );
 
+  // Set of currently-favorited launch signatures, for the row star fill state.
+  const favoritedSignatures = useMemo(
+    () => new Set(favorites.map((f) => favoriteSignature(f))),
+    [favorites],
+  );
+
+  // Star on a process row: if already favorited, remove it; otherwise open the
+  // favorite dialog seeded from that process so the user can set a category.
+  const handleToggleFavorite = useCallback(
+    (p: ProcessView) => {
+      if (favoritedSignatures.has(favoriteSignature(p))) {
+        const sig = favoriteSignature(p);
+        const existing = favorites.find((f) => favoriteSignature(f) === sig);
+        if (existing) removeFavorite(existing.id);
+        showToast(`Removed “${p.name}” from favorites`);
+      } else {
+        setFavSeedFavorite(null);
+        setFavSeedProcess(p);
+        setFavOpen(true);
+      }
+    },
+    [favorites, favoritedSignatures, removeFavorite, showToast],
+  );
+
+  // Save a brand-new favorite coming out of the dialog. Avoids duplicates by
+  // launch signature (the hook de-dupes too, but we toast accordingly).
+  function handleCreateFavorite(fav: Favorite) {
+    if (favoritedSignatures.has(favoriteSignature(fav))) {
+      showToast(`Already in favorites: ${fav.name ?? fav.script}`, true);
+      return;
+    }
+    addFavorite(fav);
+    showToast(`Added “${fav.name ?? fav.script}” to favorites`);
+  }
+
+  function handleEditFavorite(fav: Favorite) {
+    updateFavorite(fav);
+    showToast(`Updated “${fav.name ?? fav.script}”`);
+  }
+
+  function handleRemoveFavorite(id: string) {
+    const f = favorites.find((x) => x.id === id);
+    removeFavorite(id);
+    showToast(`Removed “${f?.name ?? f?.script ?? "favorite"}”`);
+  }
+
+  // Launch a favorite as a real process via the backend. On success, jump to
+  // the Processes tab so the user sees it appear in the live list.
+  async function handleLaunchFavorite(fav: Favorite) {
+    try {
+      const r = await startProcess(favoriteToStartBody(fav));
+      showToast(`Started: ${r.id}`);
+      setActiveTab("processes");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : String(err), true);
+    }
+  }
+
+  // Open the editor on an existing favorite (from a card's pencil button).
+  function handleEditFavoriteCard(fav: Favorite) {
+    setFavSeedProcess(null);
+    setFavSeedFavorite(fav);
+    setFavOpen(true);
+  }
+
   const processes = data?.processes ?? [];
   // Live (non-stopped, running) processes — shown as a badge in the header.
   const runningCount = processes.filter(
@@ -183,33 +286,67 @@ export function App() {
       <div className="flex min-h-0 flex-1">
         <main className="flex min-w-0 flex-1 flex-col gap-4 p-5">
           <div className="bg-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
-            <div className="flex shrink-0 items-center justify-between border-b px-4 py-3">
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-semibold">Processes</h2>
-                {processes.length > 0 && (
-                  <span className="text-muted-foreground text-xs">
-                    ({processes.length})
-                  </span>
-                )}
-              </div>
-              {runningCount > 0 && (
+            <div className="flex shrink-0 items-center justify-between border-b px-4 py-2.5">
+              {/* Tabs double as the section title: 进程 (Processes) / 收藏
+                  (Favorites). Switching is purely client-side — favorites are
+                  persisted in localStorage, independent of the backend. */}
+              <Tabs
+                value={activeTab}
+                onValueChange={(v) =>
+                  setActiveTab(v === "favorites" ? "favorites" : "processes")
+                }
+              >
+                <TabsList className="relative">
+                  <TabsTab value="processes">
+                    <ListIcon className="size-3.5" />
+                    Processes
+                    {processes.length > 0 && (
+                      <span className="text-muted-foreground text-xs">
+                        ({processes.length})
+                      </span>
+                    )}
+                  </TabsTab>
+                  <TabsTab value="favorites">
+                    <StarIcon className="size-3.5" />
+                    Favorites
+                    {favorites.length > 0 && (
+                      <span className="text-muted-foreground text-xs">
+                        ({favorites.length})
+                      </span>
+                    )}
+                  </TabsTab>
+                  <TabsIndicator />
+                </TabsList>
+              </Tabs>
+              {activeTab === "processes" && runningCount > 0 && (
                 <Badge variant="success" className="gap-1.5">
                   <span className="inline-block size-1.5 rounded-full bg-current" />
                   {runningCount} running
                 </Badge>
               )}
             </div>
-            <ProcessList
-              processes={processes}
-              selectedId={selected?.id ?? null}
-              unread={unread}
-              onSelectLogs={openLogFor}
-              onView={(p) => {
-                setViewing(p);
-                setDetailsOpen(true);
-              }}
-              onToast={showToast}
-            />
+            {activeTab === "processes" ? (
+              <ProcessList
+                processes={processes}
+                selectedId={selected?.id ?? null}
+                unread={unread}
+                favoritedSignatures={favoritedSignatures}
+                onToggleFavorite={handleToggleFavorite}
+                onSelectLogs={openLogFor}
+                onView={(p) => {
+                  setViewing(p);
+                  setDetailsOpen(true);
+                }}
+                onToast={showToast}
+              />
+            ) : (
+              <FavoritesView
+                favorites={favorites}
+                onLaunch={handleLaunchFavorite}
+                onEdit={handleEditFavoriteCard}
+                onRemove={handleRemoveFavorite}
+              />
+            )}
           </div>
         </main>
 
@@ -254,6 +391,15 @@ export function App() {
         open={detailsOpen}
         onOpenChange={setDetailsOpen}
         viewProcess={viewing}
+      />
+
+      <FavoriteDialog
+        open={favOpen}
+        onOpenChange={setFavOpen}
+        seedProcess={favSeedProcess}
+        seedFavorite={favSeedFavorite}
+        onCreate={handleCreateFavorite}
+        onEdit={handleEditFavorite}
       />
     </div>
   );

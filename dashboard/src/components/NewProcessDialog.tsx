@@ -19,8 +19,10 @@ import {
   FieldLabel,
 } from "@/registry/default/ui/field";
 import { PlusIcon, ZapIcon } from "lucide-react";
-import { parseEnvs, startProcess } from "@/lib/api";
+import { parseEnvs, startProcess, stringifyEnvs } from "@/lib/api";
 import { applyPreset, useProcessPresets } from "@/lib/presets";
+import type { Favorite } from "@/lib/favorites";
+import { makeFavoriteId } from "@/lib/favorites";
 import type { ProcessView } from "@/lib/types";
 
 interface NewProcessDialogProps {
@@ -185,7 +187,135 @@ export function ProcessDetailsDialog({
   );
 }
 
-// Shared form body for both new-process and read-only detail views.
+// Favorite editor dialog. Reuses the same ProcessForm layout as the new-process
+// and details dialogs (per the task: "复用编辑对话框"), and adds a Category
+// field. Operates in two modes:
+//   - "create": seeded from a live process (`seedProcess`) → saves a NEW
+//     favorite via onCreate. Triggered by the star toggle on a process row.
+//   - "edit": seeded from an existing favorite (`seedFavorite`) → updates it
+//     in place via onEdit. Triggered from the favorites cards.
+export interface FavoriteDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  // Exactly one of these is set when opened.
+  seedProcess?: ProcessView | null;
+  seedFavorite?: Favorite | null;
+  onCreate: (fav: Favorite) => void;
+  onEdit: (fav: Favorite) => void;
+}
+
+export function FavoriteDialog({
+  open,
+  onOpenChange,
+  seedProcess,
+  seedFavorite,
+  onCreate,
+  onEdit,
+}: FavoriteDialogProps) {
+  const isEdit = seedFavorite != null;
+  const [fields, setFields] = useState({
+    name: "",
+    script: "",
+    args: "",
+    cwd: "",
+    desc: "",
+    envs: "",
+    category: "",
+  });
+
+  // Seed the form whenever the dialog opens to a fresh target.
+  useEffect(() => {
+    if (!open) return;
+    if (seedFavorite) {
+      setFields({
+        name: seedFavorite.name ?? "",
+        script: seedFavorite.script,
+        args: seedFavorite.args.join(" "),
+        cwd: seedFavorite.cwd,
+        desc: seedFavorite.desc ?? "",
+        envs: stringifyEnvs(seedFavorite.envs),
+        category: seedFavorite.category ?? "",
+      });
+    } else if (seedProcess) {
+      // Favoriting a process: envs aren't exposed by the public API, so they
+      // start empty (the user can re-add them before saving).
+      setFields({
+        name: seedProcess.name,
+        script: seedProcess.script,
+        args: seedProcess.args.join(" "),
+        cwd: seedProcess.cwd,
+        desc: seedProcess.desc ?? "",
+        envs: "",
+        category: "",
+      });
+    }
+  }, [open, seedFavorite, seedProcess]);
+
+  function set<K extends keyof typeof fields>(key: K, v: string) {
+    setFields((f) => ({ ...f, [key]: v }));
+  }
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!fields.script.trim() || !fields.cwd.trim()) return;
+    const fav: Favorite = {
+      id: seedFavorite?.id ?? makeFavoriteId(),
+      name: fields.name.trim() || undefined,
+      desc: fields.desc.trim() || undefined,
+      script: fields.script.trim(),
+      args: fields.args.trim() ? fields.args.trim().split(/\s+/) : [],
+      cwd: fields.cwd.trim(),
+      envs: parseEnvs(fields.envs),
+      category: fields.category.trim(),
+      createdAt: seedFavorite?.createdAt ?? Date.now(),
+    };
+    if (isEdit) onEdit(fav);
+    else onCreate(fav);
+    onOpenChange(false);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogPopup>
+        <DialogHeader>
+          <DialogTitle>
+            {isEdit ? "Edit favorite" : "Add to favorites"}
+          </DialogTitle>
+          <DialogDescription>
+            {isEdit
+              ? "Update the launch recipe and category for this favorite."
+              : "Save this process as a favorite you can re-launch any time."}
+          </DialogDescription>
+        </DialogHeader>
+        <ProcessForm
+          name={fields.name}
+          script={fields.script}
+          args={fields.args}
+          cwd={fields.cwd}
+          desc={fields.desc}
+          envs={fields.envs}
+          category={fields.category}
+          setters={{
+            setName: (v) => set("name", v),
+            setScript: (v) => set("script", v),
+            setArgs: (v) => set("args", v),
+            setCwd: (v) => set("cwd", v),
+            setDesc: (v) => set("desc", v),
+            setEnvs: (v) => set("envs", v),
+            setCategory: (v) => set("category", v),
+          }}
+          presets={[]}
+          submitting={false}
+          onSubmit={handleSubmit}
+        />
+      </DialogPopup>
+    </Dialog>
+  );
+}
+
+// Shared form body for both new-process and read-only detail views. When
+// `category` is provided it also renders the category input — used by the
+// favorite editor (see FavoriteDialog) which groups saved launches.
 interface ProcessFormProps {
   name: string;
   script: string;
@@ -193,6 +323,7 @@ interface ProcessFormProps {
   cwd: string;
   desc: string;
   envs: string;
+  category?: string;
   setters: {
     setName: (v: string) => void;
     setScript: (v: string) => void;
@@ -200,6 +331,7 @@ interface ProcessFormProps {
     setCwd: (v: string) => void;
     setDesc: (v: string) => void;
     setEnvs: (v: string) => void;
+    setCategory?: (v: string) => void;
   };
   presets: ReturnType<typeof useProcessPresets>;
   readOnly?: boolean;
@@ -214,6 +346,7 @@ function ProcessForm({
   cwd,
   desc,
   envs,
+  category,
   setters,
   presets,
   readOnly,
@@ -306,6 +439,24 @@ function ProcessForm({
             Shown in the process list to help identify it.
           </FieldDescription>
         </Field>
+        {/* Category only renders for the favorite editor (setters.setCategory
+            is wired only there). It's the grouping key for the favorites view. */}
+        {setters.setCategory && (
+          <Field className="mt-4">
+            <FieldLabel htmlFor="f-category">Category (optional)</FieldLabel>
+            <Input
+              id="f-category"
+              placeholder="e.g. Dev servers"
+              value={category ?? ""}
+              onChange={(e) => setters.setCategory!(e.target.value)}
+              readOnly={readOnly}
+            />
+            <FieldDescription>
+              Groups this favorite in the favorites list. Leave blank for
+              “Uncategorized”.
+            </FieldDescription>
+          </Field>
+        )}
         <Field className="mt-4">
           <FieldLabel htmlFor="f-envs">
             Environment variables (KEY=VALUE per line)

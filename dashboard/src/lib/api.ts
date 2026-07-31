@@ -180,3 +180,13 @@ export function parseEnvs(text: string): Record<string, string> {
   }
   return envs;
 }
+
+// Inverse of parseEnvs: render an env object back into the KEY=VALUE-per-line
+// textarea format. Keys are sorted for a stable, diffable representation.
+export function stringifyEnvs(envs?: Record<string, string>): string {
+  if (!envs) return "";
+  return Object.keys(envs)
+    .sort()
+    .map((k) => `${k}=${envs[k]}`)
+    .join("\n");
+}

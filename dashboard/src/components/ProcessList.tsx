@@ -44,12 +44,15 @@ import {
   CopyIcon,
   EyeIcon,
   InboxIcon,
+  RotateCwIcon,
   SearchIcon,
   SquareIcon,
+  StarIcon,
   TrashIcon,
 } from "lucide-react";
 import { StatusBadge } from "./StatusBadge";
 import { deleteProcessCall, restartProcess, stopProcess } from "@/lib/api";
+import { favoriteSignature } from "@/lib/favorites";
 import type { ProcessStatus, ProcessView } from "@/lib/types";
 import {
   ContextMenu,
@@ -80,6 +83,10 @@ interface ProcessListProps {
   selectedId: string | null;
   // Per-process unread log counts, keyed by process id.
   unread: Record<string, number>;
+  // Set of favorited launch signatures, so rows show the filled star.
+  favoritedSignatures: Set<string>;
+  // Toggle favorite for a process: open the favorite dialog when adding.
+  onToggleFavorite: (p: ProcessView) => void;
   onSelectLogs: (p: ProcessView) => void;
   onView: (p: ProcessView) => void;
   onToast: (message: string, isError?: boolean) => void;
@@ -112,6 +119,8 @@ export function ProcessList({
   processes,
   selectedId,
   unread,
+  favoritedSignatures,
+  onToggleFavorite,
   onSelectLogs,
   onView,
   onToast,
@@ -295,36 +304,80 @@ export function ProcessList({
           // Expired (stopped) processes can't be restarted, but their logs are
           // still browsable (click the row) and the record can be deleted.
           const isExpired = p.stoppedAt != null;
+          // Whether the process can currently be stopped — mirrors the
+          // context-menu Stop item (running/spawning only).
+          const canStop =
+            p.stoppedAt == null &&
+            p.status !== "exited" &&
+            p.status !== "error";
           return (
             <div
-              className="flex justify-end gap-2"
+              className="flex justify-end gap-1.5"
               // Prevent row-click (open logs) when interacting with an action.
               onClick={(e) => e.stopPropagation()}
             >
               <Button
-                size="sm"
-                variant="outline"
-                onClick={() => handleRestart(p.id)}
-                disabled={isExpired}
+                size="icon-sm"
+                variant="ghost"
+                aria-label={
+                  favoritedSignatures.has(favoriteSignature(p))
+                    ? `Remove ${p.name} from favorites`
+                    : `Add ${p.name} to favorites`
+                }
+                title={
+                  favoritedSignatures.has(favoriteSignature(p))
+                    ? "Remove from favorites"
+                    : "Add to favorites"
+                }
+                onClick={() => onToggleFavorite(p)}
+                className={favoritedSignatures.has(favoriteSignature(p)) ? "text-warning" : "text-muted-foreground"}
               >
-                Restart
+                <StarIcon
+                  className={
+                    favoritedSignatures.has(favoriteSignature(p))
+                      ? "fill-current"
+                      : undefined
+                  }
+                />
               </Button>
               <Button
-                size="sm"
-                variant="destructive-outline"
+                size="icon-sm"
+                variant="ghost"
+                aria-label={`Stop ${p.name}`}
+                title="Stop (keeps the record)"
+                onClick={() => handleStop(p)}
+                disabled={!canStop}
+                className="text-muted-foreground hover:text-warning"
+              >
+                <SquareIcon />
+              </Button>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-label={`Restart ${p.name}`}
+                title="Restart"
+                onClick={() => handleRestart(p.id)}
+                disabled={isExpired}
+                className="text-muted-foreground"
+              >
+                <RotateCwIcon />
+              </Button>
+              <Button
+                size="icon-sm"
+                variant="ghost"
                 aria-label={`Delete ${p.name}`}
                 title="Delete (stops the process if running)"
                 onClick={() => requestDelete(p)}
+                className="text-muted-foreground hover:text-destructive"
               >
                 <TrashIcon />
-                Delete
               </Button>
             </div>
           );
         },
       },
     ],
-    [selectedId, unread, onSelectLogs, onToast],
+    [selectedId, unread, favoritedSignatures, onToggleFavorite, onSelectLogs, onToast],
   );
 
   // Client-side filtering by status and name. "expired" is a UI-only filter
