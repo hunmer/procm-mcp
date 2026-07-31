@@ -23,12 +23,10 @@ procm-mcp/
 │   ├── sleep.ts               # sleep(ms)
 │   ├── tool-helpers.ts        # textResult / notFoundResult
 │   └── tools/
-│       ├── server-info.ts     # get-server-id
-│       ├── allowed-process.ts # allow-start-process / list-allowed... / delete-allowed...
-│       ├── process.ts         # start/delete/restart/get-info/list
-│       ├── process-logs.ts    # get-process-stdout / get-process-stderr
-│       ├── grep-logs.ts       # grep-process-logs
-│       └── procm-commands.ts  # get-procm-commands / start-procm-command
+│       ├── allowed-process.ts # allowed-process (action: allow/delete/list)
+│       ├── process.ts         # start-process / process (action: get/delete/restart/list)
+│       ├── process-logs.ts    # process-logs (tail 或 grep)
+│       └── procm-commands.ts  # procm-command (action: list/start)
 ├── tests/
 │   ├── _helpers.mjs           # 断言 + startBackend/http/mcpCalls/mcpHttp
 │   ├── run-all.mjs            # 串行跑 6 套

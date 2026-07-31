@@ -107,7 +107,7 @@ Then point your MCP client at it:
 ```
 
 Notes:
-- The same 6 tools are available over `/mcp` as over stdio, and the **allow-x gate still applies** (the HTTP MCP path is treated like the LLM/MCP path, not like the human-driven dashboard).
+- The same 5 tools are available over `/mcp` as over stdio, and the **allow-x gate still applies** (the HTTP MCP path is treated like the LLM/MCP path, not like the human-driven dashboard).
 - Process state is shared: a process started via `/mcp` is visible in the dashboard and REST API, and vice versa.
 - If `PROCM_HTTP_TOKEN` is set, add it to the client config (`"headers": { "Authorization": "Bearer <token>" }`) where supported.
 - `/mcp` runs in **stateless** mode (no session ID) — each request is independent.
@@ -199,7 +199,6 @@ When enabled, the server prints a `WARNING — allow-start-process gate is DISAB
   - `action` (required): `list` | `start`
   - `name` (required for start): The command name as defined in the file
   - `cwd` (optional): Project directory containing `procm-commands.json` (default: current working directory)
-- `get-server-id` Get the server id (no parameters)
 
 ## License
 

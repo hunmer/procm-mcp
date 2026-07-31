@@ -7,7 +7,7 @@
 Node16 ESM 要求 import 路径带 `.js` 后缀，**即便源文件是 `.ts`**。写 `import { x } from "./foo.js"`（对应 `foo.ts`）。
 
 ## Q3: `start-process` 总被拒绝？
-检查：(1) 是否开了 `--allow-all`；(2) `allow-start-process` 放行的三元组是否与启动请求**完全一致**——`script` 全等、`args` 逐位全等、`cwd` 全等。`start-procm-command` 的 `cwd` 是相对项目目录解析后的**绝对路径**，要按它去 allow。
+检查：(1) 是否开了 `--allow-all`；(2) `allowed-process`（action `allow`）放行的三元组是否与启动请求**完全一致**——`script` 全等、`args` 逐位全等、`cwd` 全等。`procm-command`（action `start`）的 `cwd` 是相对项目目录解析后的**绝对路径**，要按它去 allow。
 
 ## Q4: `.mcp.json` 里的 `--secure` 是什么？
 仓库根 `.mcp.json` 示例写了 `"args": ["./build/index.js", "--secure"]`，但 `index.ts` 的 `parseArgs` **不识别 `--secure`**（会静默忽略，无报错也无效果）。当前有效的安全 flag 是 `--allow-all`（反向，关闭 gate）。若需 token 鉴权用 `PROCM_HTTP_TOKEN`。这是一个文档/示例与实现不一致的点，改动时注意。
@@ -25,7 +25,7 @@ Node16 ESM 要求 import 路径带 `.js` 后缀，**即便源文件是 `.ts`**�
 `start-process` 工具描述明确警告：不要启动「不会自动退出」的后台进程且期望捕获输出——实际上子进程 stdout/stderr 是会被 `ProcessStdoutClient` 捕获的；该警告更像是提示「别启动失控的长寿进程」。若确实没日志，检查子进程是否把输出重定向走了、或缓冲（pipe 未 flush）。
 
 ## Q9: `/mcp` 和 stdio 的工具有区别吗？
-**没有**，都是同样 14 个工具，由同一组 `register*Tools` 注册。`/mcp` 是 stateless（每请求新建 transport+server），但状态在模块单例里，所以与 stdio/REST/dashboard 一致。allow-x 在 `/mcp` 上**同样生效**（与 dashboard 不同）。
+**没有**，都是同样 5 个工具，由同一组 `register*Tools` 注册。`/mcp` 是 stateless（每请求新建 transport+server），但状态在模块单例里，所以与 stdio/REST/dashboard 一致。allow-x 在 `/mcp` 上**同样生效**（与 dashboard 不同）。
 
 ## Q10: 日志怎么清理？
 当前**无自动清理/轮转**。日志文件在 `<tmpdir>/procm-mcp/<serverId>/processes/`，随 server 重启会换新 `serverId`（旧目录残留）。长期运行高输出进程会让 lowdb JSON 膨胀（每次 top/search 读全文件）。需要时手动删该目录。

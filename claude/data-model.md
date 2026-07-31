@@ -42,7 +42,7 @@ type ProcessCreation = { script: string; args: string[]; cwd: string };
 
 ### allow-all 开关
 
-模块级 `let allowAll = false`（`process-manager.ts`），启动时由 `setAllowAll` 设置。为 true 时 `start-process`/`start-procm-command` 跳过白名单查询。
+模块级 `let allowAll = false`（`process-manager.ts`），启动时由 `setAllowAll` 设置。为 true 时 `start-process`/`procm-command`（action `start`）跳过白名单查询。
 
 ### `ProcessStdoutClient`
 

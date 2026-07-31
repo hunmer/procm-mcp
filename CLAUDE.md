@@ -2,7 +2,7 @@
 
 一个用于**进程管理**的 Model Context Protocol (MCP) 服务器。让 LLM 与人类操作者通过统一接口启动、监控、重启、停止子进程，并读取其 stdout/stderr 日志。纯 Node.js + TypeScript（ESM），前端 dashboard 是独立的 React + Vite 工程。
 
-核心是 **allow-x 模式**：模型要启动进程，须先用 `allow-start-process` 把「script+args+cwd」三元组加入白名单（此步需人类确认），之后相同三元组即可免确认执行——以此在安全与易用之间取得平衡。后端有三种形态（stdio MCP / `--server` HTTP 后端 / CLI 客户端）共享同一套模块级状态，并额外在 HTTP 端口暴露 stateless 的 `/mcp` 端点与一个仅绑定 `127.0.0.1` 的 dashboard。
+核心是 **allow-x 模式**：模型要启动进程，须先用 `allowed-process`（action `allow`）把「script+args+cwd」三元组加入白名单（此步需人类确认），之后相同三元组即可免确认执行——以此在安全与易用之间取得平衡。后端有三种形态（stdio MCP / `--server` HTTP 后端 / CLI 客户端）共享同一套模块级状态，并额外在 HTTP 端口暴露 stateless 的 `/mcp` 端点与一个仅绑定 `127.0.0.1` 的 dashboard。
 
 技术栈：Node.js（ESM/Node16）、`@modelcontextprotocol/sdk`、`zod`、`lowdb`、`tree-kill`、`nanoid`。
 
@@ -13,7 +13,7 @@
 - 新增 MCP 工具要在 `index.ts` **和** `mcp-http.ts` 的 `registerAllTools` 两处都注册。
 - 进程能力统一在 `src/process-manager.ts`，MCP 工具层与 HTTP 层都调它。
 - stdio 模式下**不要往 stdout 打业务日志**（stdout 是协议通道），用 `serverLog()` 或 `console.error`。
-- allow-x 只守 LLM 路径（`start-process`/`start-procm-command`）；dashboard/CLI 的人类驱动启动故意绕过。
+- allow-x 只守 LLM 路径（`start-process`/`procm-command`）；dashboard/CLI 的人类驱动启动故意绕过。
 
 详见 [claude/conventions.md](claude/conventions.md)。
 
@@ -25,7 +25,7 @@
 | [claude/conventions.md](claude/conventions.md) | 构建/测试命令、代码风格、禁止事项、新增工具检查清单 | 改代码前 |
 | [claude/module-responsibilities.md](claude/module-responsibilities.md) | 每个 `src/*.ts` 文件的职责与分层 | 定位实现时 |
 | [claude/entrypoints.md](claude/entrypoints.md) | 入口、三模式启动流程、信号处理、构建/CI | 理解启动与生命周期时 |
-| [claude/public-interfaces.md](claude/public-interfaces.md) | 14 个 MCP 工具、REST API、CLI 子命令、procm-commands.json | 对接接口时 |
+| [claude/public-interfaces.md](claude/public-interfaces.md) | 5 个 MCP 工具、REST API、CLI 子命令、procm-commands.json | 对接接口时 |
 | [claude/dependencies-and-config.md](claude/dependencies-and-config.md) | 依赖、配置文件、环境变量、运行时数据落点 | 排查环境/依赖时 |
 | [claude/data-model.md](claude/data-model.md) | ProcessMetadata、状态机、日志/白名单持久化 | 改进程或日志逻辑时 |
 | [claude/testing-and-quality.md](claude/testing-and-quality.md) | 测试命令、自建框架、覆盖情况、质量风险 | 写测试/评估质量时 |

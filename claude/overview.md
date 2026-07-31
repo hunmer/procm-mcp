@@ -6,8 +6,8 @@ procm-mcp 是一个 **进程管理 MCP 服务器**：让 LLM（以及人类操�
 
 LLM 在辅助开发时常需要启动长期运行的进程（dev server、docker-compose、test watcher）。直接让模型调用 shell 不安全——无法收敛可执行的命令范围。procm-mcp 用 **allow-x 模式** 平衡安全与易用：
 
-- 模型想启动某进程时，先调用 `allow-start-process` 把「script + args + cwd」三元组加入白名单（**此步需要人类确认**）。
-- 一旦放行，后续相同三元组的 `start-process` / `start-procm-command` 无需再确认即可执行。
+- 模型想启动某进程时，先调用 `allowed-process`（action `allow`）把「script + args + cwd」三元组加入白名单（**此步需要人类确认**）。
+- 一旦放行，后续相同三元组的 `start-process` / `procm-command`（action `start`）无需再确认即可执行。
 
 ## 关键设计取舍
 
@@ -24,7 +24,7 @@ LLM 在辅助开发时常需要启动长期运行的进程（dev server、docker
 进程列表（`processes: ProcessMetadata[]`）、allow-all 开关、server id 都是模块级变量。因此 stdio MCP、HTTP REST、`/mcp` HTTP、dashboard 四条路径看到的是**同一份**进程状态——一个进程在任意路径启动后，其余路径立即可见。`/mcp` 之所以选 **stateless**（每请求新建 transport+server），正是因为状态不依赖会话。
 
 ### 3. allow-x 只守 LLM 路径
-- `start-process` / `start-procm-command`（MCP 工具）→ 受 allow-x 约束。
+- `start-process` / `procm-command`（action `start`，MCP 工具）→ 受 allow-x 约束。
 - dashboard 的 `POST /api/processes`、CLI 客户端的 `start` → **故意绕过** allow-x，因为它们是人类驱动的本地 UI/CLI，等价于你在终端敲命令。
 - `--allow-all` / `PROCM_ALLOW_ALL=1` 可在受信任环境整体关闭 allow-x（仅影响 LLM 路径）。
 

@@ -26,7 +26,7 @@ npm run test:cli           # CLI 客户端往返
 
 - 每套起一个**随机端口**（`20000 + rand*10000`）的 `--server` 后端，等 `/api/processes` 200 就绪（最多 8s），测完 `SIGTERM` 拆。
 - 用 `tests/example-process.js` 作为「长寿无操作子进程」替身。
-- MCP-stdio 测试**串行**发请求（一次一个等响应），注释明确说明：并发请求会被 SDK 并行 dispatch，导致 `allow-start-process` 后 `start-process` 竞态。**永远不关 stdin**（关 stdin 触发 cleanup+exit），用 `SIGKILL` 收尾。
+- MCP-stdio 测试**串行**发请求（一次一个等响应），注释明确说明：并发请求会被 SDK 并行 dispatch，导致 `allowed-process`（action `allow`）后 `start-process` 竞态。**永远不关 stdin**（关 stdin 触发 cleanup+exit），用 `SIGKILL` 收尾。
 - `tests/docker-compose.yml` + `nginx-test.conf` 提供可选的真实服务进程用于手工验证。
 
 ## 类型检查

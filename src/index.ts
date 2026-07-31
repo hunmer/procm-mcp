@@ -9,7 +9,6 @@ import {
   startHttpServer,
   startHttpServerIfConfigured,
 } from "./http-server.js";
-import { registerServerInfoTools } from "./tools/server-info.js";
 import { registerAllowedProcessTools } from "./tools/allowed-process.js";
 import { registerProcessTools } from "./tools/process.js";
 import { registerProcessLogTools } from "./tools/process-logs.js";
@@ -124,7 +123,6 @@ try {
       version: "1.0.0",
     });
 
-    registerServerInfoTools(server);
     registerAllowedProcessTools(server);
     registerProcessTools(server);
     registerProcessLogTools(server);

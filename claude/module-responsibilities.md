@@ -27,12 +27,10 @@
 | `allowed-process-creations.ts` | **allow-x 白名单持久化**。在 `tmpdir/procm-mcp/allowed-process-creations.json` 上 CRUD，按 `{script,args,cwd}` 三元组精确匹配。 |
 | `process-stdout-client.ts` | **日志消费**。绑定子进程 stdout/stderr readable，每 chunk 双写（lowdb JSON + 文本 log），经串行 `updateQueue`；提供 `top`/`search`/`close`。 |
 | `logs-repository.ts` | **日志存储**（基于 lowdb）。`insert/top(按时间倒序取 N)/search(正则过滤)/close`。 |
-| `tools/server-info.ts` | `get-server-id` 工具。 |
-| `tools/allowed-process.ts` | `allow-start-process` / `list-allowed-processes-in-cwd` / `delete-allowed-process` 工具。 |
-| `tools/process.ts` | `start-process`（含 allow-x 校验）/ `delete-process` / `restart-process` / `get-process-info` / `list-processes` 工具。 |
-| `tools/process-logs.ts` | `get-process-stdout` / `get-process-stderr` 工具（取最近 N 条）。 |
-| `tools/grep-logs.ts` | `grep-process-logs` 工具（正则搜，可单/双流，结果按时间倒序）。 |
-| `tools/procm-commands.ts` | `get-procm-commands` / `start-procm-command` 工具；读项目根 `procm-commands.json`，按名启动（仍走 allow-x）。 |
+| `tools/allowed-process.ts` | `allowed-process` 工具（`action` ∈ allow/delete/list，管理 allow-x 白名单）。 |
+| `tools/process.ts` | `start-process`（含 allow-x 校验）/ `process`（`action` ∈ get/delete/restart/list）工具。 |
+| `tools/process-logs.ts` | `process-logs` 工具（无 pattern=取最近 N 条；有 pattern=正则搜，可单/双流，结果按时间倒序）。 |
+| `tools/procm-commands.ts` | `procm-command` 工具（`action` ∈ list/start）；读项目根 `procm-commands.json`，按名启动（仍走 allow-x）。 |
 | `server-log.ts` | 生成 `serverId`(nanoid 6) / `logServerId`；`serverLog` 写文件；`logToolStart/End/Error` 包裹。 |
 | `logger.ts` | `log()` 向 `<serverDir>/debug.log` 追加带时间戳的行（同步 appendFileSync）。 |
 | `procm-mcp-dir.ts` | 返回 `tmpdir/procm-mcp`（运行时数据根）。 |
@@ -47,5 +45,5 @@
 - **入口与协议**：`index.ts`、`cli-client.ts`、`mcp-http.ts`、`http-server.ts`、`dashboard-html.ts`。
 - **进程领域**：`process-manager.ts`、`allowed-process-creations.ts`、`types.ts`。
 - **日志领域**：`process-stdout-client.ts`、`logs-repository.ts`。
-- **MCP 工具**：`tools/*.ts`（6 个文件，对应 6 组注册函数，共 14 个工具）。
+- **MCP 工具**：`tools/*.ts`（4 个文件，对应 4 组注册函数，共 5 个工具）。
 - **基础设施**：`server-log.ts`、`logger.ts`、`procm-mcp-dir.ts`、`server-dir.ts`、`error.ts`、`sleep.ts`、`tool-helpers.ts`。

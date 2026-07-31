@@ -13,7 +13,7 @@
    - `--server`（HTTP 后端模式）：确定端口（`--port` > `PROCM_HTTP_PORT` > `7331`），校验端口范围，`startHttpServer(port)`，打印 banner，`installSignalHandlers()`。**不建 stdio MCP transport**。
    - 否则（stdio MCP 模式）：
      - `new McpServer({name:"procm-mcp", version:"1.0.0"})`。
-     - 依次注册 6 组工具：`server-info`、`allowed-process`、`process`、`process-logs`、`grep-logs`、`procm-commands`。
+     - 依次注册 4 组工具：`allowed-process`、`process`、`process-logs`、`procm-commands`。
      - `installSignalHandlers({onStdinClose: true})`。
      - 可选 dashboard：`--port` 直接 `startHttpServer(cli.port)`，否则 `startHttpServerIfConfigured()`（读 `PROCM_HTTP_PORT`）。
      - `new StdioServerTransport()` + `server.connect(transport)`。
