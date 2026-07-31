@@ -4,7 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { toErrorMessage } from "./error.js";
 import { serverLog, serverId } from "./server-log.js";
-import { cleanup, setAllowAll } from "./process-manager.js";
+import { cleanup, reconcileStaleProcesses, setAllowAll } from "./process-manager.js";
 import {
   startHttpServer,
   startHttpServerIfConfigured,
@@ -105,6 +105,11 @@ try {
       exitProcess(1);
     }
 
+    // Reconcile any "running" records left behind by a previous backend that
+    // exited without cleanup (crash/SIGKILL): kill orphan PIDs and mark them
+    // exited before the dashboard starts serving.
+    await reconcileStaleProcesses();
+
     await startHttpServer(port);
     consoleBanner(
       `procm-mcp backend (HTTP) ready`,
@@ -126,6 +131,10 @@ try {
     registerProcessLogTools(server);
     registerGrepLogsTools(server);
     registerProcmCommandsTools(server);
+
+    // Reconcile stale "running" records from a prior crashed backend before
+    // the dashboard (if any) starts serving. Same rationale as --server mode.
+    await reconcileStaleProcesses();
 
     installSignalHandlers({ onStdinClose: true });
 

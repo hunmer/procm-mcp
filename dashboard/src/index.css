@@ -129,11 +129,46 @@
       Roboto, Helvetica, Arial, sans-serif;
     line-height: 1.5;
     margin: 0;
-    /* Hide scrollbars on the page body while keeping it scrollable. */
-    scrollbar-width: none;
   }
-  body::-webkit-scrollbar {
-    display: none;
+
+  /*
+   * Global custom scrollbar styling.
+   *
+   * Why: the previous version hid the body scrollbar entirely. A slim,
+   * themed scrollbar gives users a scroll affordance without the chunky
+   * native default. Firefox uses scrollbar-* properties; WebKit/Blink use
+   * ::-webkit-scrollbar pseudo-elements. Both are set so the look is
+   * consistent across browsers and respects the active theme tokens.
+   */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--muted-foreground) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--muted-foreground);
+    border-radius: 9999px;
+    /* Transparent border creates a gap between thumb and content, and keeps
+       the thumb visually 4px wide against a transparent track. */
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--foreground);
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: transparent;
   }
 
   /*

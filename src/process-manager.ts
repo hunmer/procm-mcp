@@ -45,6 +45,69 @@ async function ensureRepository(): Promise<ProcessesRepository> {
   return processesRepoPromise;
 }
 
+// Check whether a PID still refers to a live process. Uses signal 0, which
+// performs no actual signal delivery — it only probes liveness. Cross-platform:
+// works on Windows too. ESRCH = no such process; any other throw (e.g. EPERM)
+// implies the process exists but we lack permission, so treat it as alive.
+function isPidAlive(pid: number | null | undefined): boolean {
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code !== "ESRCH";
+  }
+}
+
+// On startup, reconcile persisted records left in the "running" state by a
+// previous backend that exited without cleanup (crash / SIGKILL). For each such
+// record: if its PID is still alive (an orphan), kill the tree; in either case
+// mark the record exited so the dashboard no longer shows stale "running" rows.
+// Idempotent and safe on an empty/clean store. Never throws — failures are
+// logged so a storage hiccup can't block startup.
+export async function reconcileStaleProcesses(): Promise<void> {
+  try {
+    const repo = await ensureRepository();
+    const records = await repo.getAll();
+    const stale = records.filter((r) => r.status === "running");
+    if (stale.length === 0) return;
+
+    serverLog(`Reconciling ${stale.length} stale running process record(s) from a previous run...`);
+    const stoppedAt = Date.now();
+    for (const r of stale) {
+      const alive = isPidAlive(r.pid);
+      if (alive && r.pid) {
+        try {
+          // tree-kill takes down the whole tree (e.g. cmd /c children on
+          // Windows). We don't wait for exit at startup — the signal has been
+          // sent and the record is marked exited regardless.
+          await killTreeById(r.pid);
+          serverLog(`Reconciled stale process ${r.name} (id=${r.id}, pid=${r.pid}): was still alive, killed.`);
+        } catch (err) {
+          serverLog(`Reconcile: failed to kill orphan ${r.name} (id=${r.id}, pid=${r.pid}): ${toErrorMessage(err)}. Marking exited anyway.`);
+        }
+      } else {
+        serverLog(`Reconciled stale process ${r.name} (id=${r.id}, pid=${r.pid ?? "n/a"}): already dead.`);
+      }
+      await repo.upsert({ ...r, status: "exited", exitCode: null, stoppedAt });
+    }
+    dashboardEvents.emitProcessChange();
+  } catch (err) {
+    serverLog(`Error during stale process reconciliation: ${toErrorMessage(err)}`);
+  }
+}
+
+// tree-kill wrapper that doesn't require a ProcessMetadata (used by reconcile
+// where we only have a persisted record). On Windows SIGTERM is unsupported, so
+// always use SIGKILL — consistent with killProcessTree above.
+function killTreeById(pid: number, force = false): Promise<void> {
+  const signal =
+    process.platform === "win32" ? "SIGKILL" : force ? "SIGKILL" : "SIGTERM";
+  return new Promise((resolve, reject) => {
+    kill(pid, signal, (err) => (err ? reject(err) : resolve()));
+  });
+}
+
 // Map an in-memory ProcessMetadata to its durable record shape. `stoppedAt`
 // defaults to null — it's only set when the process is removed from the list.
 function toRecord(meta: ProcessMetadata, stoppedAt: number | null = null): ProcessRecord {
