@@ -73,6 +73,35 @@ node ./node_modules/procm-mcp/build/index.js --server --port 8080
 
 `--port <number>` also works in the default (stdio) mode to start the dashboard without setting `PROCM_HTTP_PORT`. It takes precedence over `PROCM_HTTP_PORT`.
 
+### Connect over HTTP (`type: "http"`)
+
+When procm-mcp runs with an HTTP port (`--server`, or `--port`/`PROCM_HTTP_PORT`), it exposes a real MCP endpoint at **`/mcp`** using the Streamable HTTP transport. This lets you connect a client that only speaks MCP-over-HTTP instead of stdio.
+
+First run the backend (e.g. in a separate terminal / as a service):
+
+```bash
+node ./node_modules/procm-mcp/build/index.js --server --port 7331
+```
+
+Then point your MCP client at it:
+
+```json
+{
+  "mcpServers": {
+    "procm-mcp": {
+      "type": "http",
+      "url": "http://127.0.0.1:7331/mcp"
+    }
+  }
+}
+```
+
+Notes:
+- The same 14 tools are available over `/mcp` as over stdio, and the **allow-x gate still applies** (the HTTP MCP path is treated like the LLM/MCP path, not like the human-driven dashboard).
+- Process state is shared: a process started via `/mcp` is visible in the dashboard and REST API, and vice versa.
+- If `PROCM_HTTP_TOKEN` is set, add it to the client config (`"headers": { "Authorization": "Bearer <token>" }`) where supported.
+- `/mcp` runs in **stateless** mode (no session ID) — each request is independent.
+
 ## procm-commands.json
 
 Define reusable named commands in a `procm-commands.json` file at the root of your project:

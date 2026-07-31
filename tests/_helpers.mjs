@@ -166,6 +166,53 @@ export async function mcpCalls(requests, { allowAll = false } = {}) {
   return results;
 }
 
+// ---- MCP-over-HTTP client helper ----
+// Talks to the /mcp Streamable HTTP endpoint on a running backend. Each call is
+// a fresh POST (stateless server). Parses SSE "data:" lines for the response.
+export async function mcpHttp(port, id, method, params) {
+  const res = await fetch(`http://127.0.0.1:${port}/mcp`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream",
+      "MCP-Protocol-Version": "2025-06-18",
+    },
+    body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
+  });
+  const text = await res.text();
+  const dataLines = text
+    .split("\n")
+    .filter((l) => l.startsWith("data: "))
+    .map((l) => {
+      try {
+        return JSON.parse(l.slice(6));
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+  return dataLines[0];
+}
+
+// One-time MCP-over-HTTP handshake (initialize + initialized) — needed before
+// the server answers tool calls.
+export async function mcpHttpHandshake(port) {
+  await mcpHttp(port, "__hs", "initialize", {
+    protocolVersion: "2025-06-18",
+    capabilities: {},
+    clientInfo: { name: "test", version: "1.0" },
+  });
+  await fetch(`http://127.0.0.1:${port}/mcp`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream",
+      "MCP-Protocol-Version": "2025-06-18",
+    },
+    body: JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }),
+  });
+}
+
 // ---- test runner ----
 export async function runTest(name, fn) {
   console.log(`\n▶ ${name}`);

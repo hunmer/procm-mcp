@@ -25,6 +25,7 @@
     "test:lifecycle": "npm run build && node ./tests/lifecycle.mjs",
     "test:logs": "npm run build && node ./tests/logs-grep.mjs",
     "test:http": "npm run build && node ./tests/http-api.mjs",
+    "test:mcp": "npm run build && node ./tests/mcp-http.mjs",
     "test:allow-x": "npm run build && node ./tests/allow-x.mjs",
     "test:cli": "npm run build && node ./tests/cli-roundtrip.mjs"
   },

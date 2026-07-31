@@ -13,6 +13,7 @@ import {
 } from "./process-manager.js";
 import { toErrorMessage } from "./error.js";
 import { ProcessMetadata } from "./types.js";
+import { handleMcpRequest } from "./mcp-http.js";
 
 const HOST = "127.0.0.1";
 
@@ -85,6 +86,11 @@ function createRequestHandler(token: string | undefined) {
       // GET /  -> dashboard page
       if (method === "GET" && pathname === "/") {
         html(res, 200, dashboardHtml());
+        return;
+      }
+
+      // /mcp -> MCP Streamable HTTP transport (real MCP protocol endpoint).
+      if (await handleMcpRequest(req, res)) {
         return;
       }
 
