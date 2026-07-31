@@ -15,7 +15,6 @@ interface ProcessListProps {
   processes: ProcessView[];
   selectedId: string | null;
   onSelectLogs: (p: ProcessView) => void;
-  onChanged: () => void;
   onToast: (message: string, isError?: boolean) => void;
 }
 
@@ -23,7 +22,6 @@ export function ProcessList({
   processes,
   selectedId,
   onSelectLogs,
-  onChanged,
   onToast,
 }: ProcessListProps) {
   async function handleStop(id: string) {
@@ -31,7 +29,8 @@ export function ProcessList({
     try {
       await stopProcess(id);
       onToast(`Stopped ${id}`);
-      onChanged();
+      // The backend emits a process-change event once the removal completes,
+      // which arrives over WebSocket and refreshes the list automatically.
     } catch (err) {
       onToast(err instanceof Error ? err.message : String(err), true);
     }
@@ -41,7 +40,7 @@ export function ProcessList({
     try {
       await restartProcess(id);
       onToast(`Restarted ${id}`);
-      onChanged();
+      // Same as stop: the WebSocket push handles the list refresh.
     } catch (err) {
       onToast(err instanceof Error ? err.message : String(err), true);
     }

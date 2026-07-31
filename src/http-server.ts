@@ -18,6 +18,7 @@ import {
 import { toErrorMessage } from "./error.js";
 import { ProcessMetadata } from "./types.js";
 import { handleMcpRequest } from "./mcp-http.js";
+import { attachWebsocketServer } from "./websocket-server.js";
 
 const HOST = "127.0.0.1";
 
@@ -330,6 +331,9 @@ export function startHttpServer(port: number): Promise<http.Server> {
         `Dashboard HTTP server listening on http://${HOST}:${port}` +
           (token ? " (token protected)" : ""),
       );
+      // Attach the WebSocket endpoint on the same server/port so the dashboard
+      // can receive real-time process + log updates instead of polling.
+      attachWebsocketServer(server, token, { serverId, pid: process.pid });
       resolve(server);
     });
   });

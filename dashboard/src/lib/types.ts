@@ -32,3 +32,27 @@ export interface StartProcessBody {
   cwd: string;
   envs?: Record<string, string>;
 }
+
+// ---- WebSocket messages (mirrors src/websocket-server.ts envelope) ----
+
+export type ProcessStream = "stdout" | "stderr";
+
+// Server -> client: full process list snapshot or live update.
+export interface WsProcessesMessage {
+  type: "processes";
+  serverId?: string;
+  pid?: number;
+  data: ProcessView[];
+  snapshot?: boolean;
+}
+
+// Server -> client: a single new log line for a process/stream.
+export interface WsLogMessage {
+  type: "log";
+  processId: string;
+  stream: ProcessStream;
+  timestamp: number;
+  message: string;
+}
+
+export type WsServerMessage = WsProcessesMessage | WsLogMessage;

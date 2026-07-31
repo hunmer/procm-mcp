@@ -40,11 +40,13 @@
     "mkdirp": "^3.0.1",
     "nanoid": "^5.1.5",
     "tree-kill": "^1.2.2",
+    "ws": "^8.21.1",
     "zod": "^3.25.64"
   },
   "devDependencies": {
     "@modelcontextprotocol/inspector": "^0.16.1",
     "@types/node": "^24.0.1",
+    "@types/ws": "^8.18.1",
     "typescript": "^5.8.3"
   }
 }

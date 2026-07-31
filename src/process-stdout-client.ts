@@ -6,6 +6,7 @@ import { mkdirp } from "mkdirp";
 import { log } from "./logger.js";
 import { toErrorMessage } from "./error.js";
 import { createLogsRepository } from "./logs-repository.js";
+import { dashboardEvents } from "./events.js";
 
 export type ProcessStdoutChunk = {
   timestamp: Date;
@@ -45,6 +46,13 @@ export async function createProcessStdoutClient({
   const onData = (chunk: Buffer) => {
     const message = chunk.toString().trim();
     const timestamp = Date.now();
+
+    // Broadcast the new log line to live subscribers (e.g. the WebSocket
+    // broadcaster) immediately and independently of disk/db persistence — the
+    // UI should never wait on lowdb's full read+write cycle.
+    if (message) {
+      dashboardEvents.emitLog({ processId: id, stream: type, timestamp, message });
+    }
 
     updateQueue.unshift(async () => {
       try {

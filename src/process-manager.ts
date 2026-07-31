@@ -6,6 +6,7 @@ import {
 } from "./process-stdout-client.js";
 import { toErrorMessage } from "./error.js";
 import { serverLog, logServerId } from "./server-log.js";
+import { dashboardEvents } from "./events.js";
 import { ProcessMetadata, ProcessStatus } from "./types.js";
 
 // Module-level singleton, shared by MCP tools and the HTTP dashboard.
@@ -98,6 +99,10 @@ export async function startProcess(
         processMetadata.pid = pid;
         processMetadata.exitCode = exitCode;
         processMetadata.error = processError;
+        // Notify subscribers (e.g. the WebSocket broadcaster) that the process
+        // list view has changed. Note: this only fires after the metadata
+        // object is registered; pre-spawn changes are covered by pushProcess.
+        dashboardEvents.emitProcessChange();
       }
     };
 
@@ -223,6 +228,7 @@ export async function removeProcess(id: string): Promise<boolean> {
 
   await killProcess(processMetadata);
   processes.splice(processIndex, 1);
+  dashboardEvents.emitProcessChange();
   return true;
 }
 
@@ -245,6 +251,7 @@ export async function restartProcess(id: string): Promise<ProcessMetadata | null
     processMetadata.envs,
   );
   processes[processIndex] = newProcess;
+  dashboardEvents.emitProcessChange();
   return newProcess;
 }
 
@@ -304,4 +311,5 @@ async function killProcessTree(
 // Internal helper for pushing a freshly started process onto the list.
 export function pushProcess(metadata: ProcessMetadata) {
   processes.push(metadata);
+  dashboardEvents.emitProcessChange();
 }

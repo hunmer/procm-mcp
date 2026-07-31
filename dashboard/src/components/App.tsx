@@ -1,18 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/registry/default/ui/button";
-import { MoonIcon, PanelLeftOpenIcon, RefreshCwIcon, SunIcon } from "lucide-react";
+import { MoonIcon, PanelLeftOpenIcon, SunIcon } from "lucide-react";
 import { NewProcessDialog } from "./NewProcessDialog";
 import { ProcessList } from "./ProcessList";
 import { LogPanel } from "./LogPanel";
 import { Toast } from "./Toast";
-import { listProcesses } from "@/lib/api";
 import { useTheme } from "@/lib/useTheme";
+import { useDashboardSocket } from "@/lib/ws";
 import type { ProcessListResponse, ProcessView } from "@/lib/types";
 
 export function App() {
   const [data, setData] = useState<ProcessListResponse | null>(null);
   const [meta, setMeta] = useState("loading…");
-  const [auto, setAuto] = useState(false);
   const [selected, setSelected] = useState<ProcessView | null>(null);
   // The log panel collapses/expands independently of which process is selected,
   // so closing it keeps the selection and lets you reopen to the same logs.
@@ -24,23 +23,32 @@ export function App() {
   } | null>(null);
   const { theme, toggle } = useTheme();
 
-  const autoTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { status, reconnectInMs, onProcessesMessage, onLogMessage } =
+    useDashboardSocket();
 
-  const refresh = useCallback(async () => {
-    try {
-      const d = await listProcesses();
-      setData(d);
-      setMeta(
-        `server ${d.serverId}${d.pid ? ` (pid ${d.pid})` : ""} · ${new Date().toLocaleTimeString()}`,
-      );
-      // Keep the selected log target in sync with the latest process view.
-      setSelected((cur) =>
-        cur ? d.processes.find((p) => p.id === cur.id) ?? null : null,
-      );
-    } catch (err) {
-      setMeta(`error: ${err instanceof Error ? err.message : String(err)}`);
+  // Live updates from the backend: replace the process list and keep the
+  // selected log target in sync with the latest view. This replaces the old
+  // 3s polling loop.
+  onProcessesMessage((m) => {
+    setData({
+      serverId: m.serverId ?? data?.serverId ?? "",
+      pid: m.pid ?? data?.pid ?? 0,
+      processes: m.data,
+    });
+    setMeta(
+      `server ${m.serverId ?? ""}${m.pid ? ` (pid ${m.pid})` : ""} · ${new Date().toLocaleTimeString()}`,
+    );
+    setSelected((cur) =>
+      cur ? m.data.find((p) => p.id === cur.id) ?? null : null,
+    );
+  });
+
+  // Drop the selected process if it no longer exists (e.g. after being stopped).
+  useEffect(() => {
+    if (selected && data && !data.processes.some((p) => p.id === selected.id)) {
+      setSelected(null);
     }
-  }, []);
+  }, [data, selected]);
 
   const showToast = useCallback(
     (message: string, isError?: boolean) =>
@@ -48,26 +56,16 @@ export function App() {
     [],
   );
 
-  // Initial load.
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  // Auto-refresh toggle.
-  useEffect(() => {
-    if (auto) {
-      autoTimer.current = setInterval(() => void refresh(), 3000);
-      void refresh();
-    }
-    return () => {
-      if (autoTimer.current) {
-        clearInterval(autoTimer.current);
-        autoTimer.current = null;
-      }
-    };
-  }, [auto, refresh]);
-
   const processes = data?.processes ?? [];
+
+  const statusMeta =
+    status === "open"
+      ? "connected"
+      : status === "connecting"
+        ? "connecting…"
+        : reconnectInMs != null
+          ? `reconnecting in ${Math.ceil(reconnectInMs / 1000)}s`
+          : "reconnecting…";
 
   return (
     <div className="flex h-full flex-col">
@@ -78,16 +76,9 @@ export function App() {
         </div>
         <div className="flex items-center gap-2">
           <NewProcessDialog
-            onStarted={(id) => {
-              showToast(`Started: ${id}`);
-              void refresh();
-            }}
+            onStarted={(id) => showToast(`Started: ${id}`)}
             onError={(m) => showToast(m, true)}
           />
-          <Button variant="outline" onClick={() => void refresh()}>
-            <RefreshCwIcon />
-            Refresh
-          </Button>
           <Button
             variant="outline"
             size="icon"
@@ -96,14 +87,24 @@ export function App() {
           >
             {theme === "dark" ? <SunIcon /> : <MoonIcon />}
           </Button>
-          <label className="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
-            <input
-              type="checkbox"
-              checked={auto}
-              onChange={(e) => setAuto(e.target.checked)}
+          {/* Live connection indicator: green=open, yellow=connecting,
+              red=closed/reconnecting. Replaces the old "auto (3s)" poll toggle. */}
+          <span
+            className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs text-muted-foreground"
+            title={statusMeta}
+          >
+            <span
+              className={
+                "inline-block size-2 rounded-full " +
+                (status === "open"
+                  ? "bg-green-500"
+                  : status === "connecting"
+                    ? "bg-yellow-500"
+                    : "bg-red-500")
+              }
             />
-            auto (3s)
-          </label>
+            {statusMeta}
+          </span>
         </div>
       </header>
 
@@ -129,7 +130,6 @@ export function App() {
                 setSelected(p);
                 setLogCollapsed(false);
               }}
-              onChanged={() => void refresh()}
               onToast={showToast}
             />
           </div>
@@ -140,6 +140,7 @@ export function App() {
             <LogPanel
               process={selected}
               onClose={() => setLogCollapsed(true)}
+              onLogMessage={onLogMessage}
             />
           </div>
         )}
