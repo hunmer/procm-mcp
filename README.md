@@ -42,6 +42,20 @@ HTTP API (same origin):
 - `POST /api/processes/:id/stop` → stop and delete
 - `POST /api/processes/:id/restart` → restart
 
+### Backend mode (`--server`)
+
+By default procm-mcp runs as an MCP server over stdio (with the dashboard optional via `PROCM_HTTP_PORT`). Pass `--server` to run it as a **standalone HTTP backend**: no MCP stdio transport, the dashboard always starts, and the process stays alive to serve it. Useful for running procm-mcp as a long-lived background service that you (or another tool) drive purely over HTTP.
+
+```bash
+# Dashboard on the default port 7331
+node ./node_modules/procm-mcp/build/index.js --server
+
+# Or pick a port
+node ./node_modules/procm-mcp/build/index.js --server --port 8080
+```
+
+`--port <number>` also works in the default (stdio) mode to start the dashboard without setting `PROCM_HTTP_PORT`. It takes precedence over `PROCM_HTTP_PORT`.
+
 ## procm-commands.json
 
 Define reusable named commands in a `procm-commands.json` file at the root of your project:

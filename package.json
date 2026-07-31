@@ -17,7 +17,9 @@
   "scripts": {
     "build": "tsc && chmod 755 build/index.js",
     "watch": "tsc -w",
-    "inspect": "npx @modelcontextprotocol/inspector inspect"
+    "inspect": "npx @modelcontextprotocol/inspector inspect",
+    "start:server": "node ./build/index.js --server",
+    "start:server:port": "node ./build/index.js --server --port"
   },
   "keywords": [],
   "dependencies": {

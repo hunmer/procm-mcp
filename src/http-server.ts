@@ -63,22 +63,9 @@ function readBody(req: http.IncomingMessage): Promise<string> {
   });
 }
 
-// Start the dashboard HTTP server if PROCM_HTTP_PORT is set.
-// Bound to 127.0.0.1 only. If PROCM_HTTP_TOKEN is set, requests must carry
-// `Authorization: Bearer <token>`.
-export function startHttpServerIfConfigured(): http.Server | undefined {
-  const portStr = process.env.PROCM_HTTP_PORT;
-  if (!portStr) {
-    return undefined;
-  }
-  const port = Number(portStr);
-  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
-    serverLog(`Invalid PROCM_HTTP_PORT "${portStr}", HTTP dashboard disabled.`);
-    return undefined;
-  }
-  const token = process.env.PROCM_HTTP_TOKEN;
-
-  const server = http.createServer(async (req, res) => {
+// Build the request handler. Shared by both modes (MCP+HTTP and HTTP-only).
+function createRequestHandler(token: string | undefined) {
+  return async (req: http.IncomingMessage, res: http.ServerResponse) => {
     try {
       const url = new URL(req.url || "/", "http://localhost");
 
@@ -236,7 +223,15 @@ export function startHttpServerIfConfigured(): http.Server | undefined {
         res.end();
       }
     }
-  });
+  };
+}
+
+// Create and start the dashboard HTTP server on a given port.
+// Bound to 127.0.0.1 only. If PROCM_HTTP_TOKEN is set, requests must carry
+// `Authorization: Bearer <token>`.
+export function startHttpServer(port: number): http.Server {
+  const token = process.env.PROCM_HTTP_TOKEN;
+  const server = http.createServer(createRequestHandler(token));
 
   server.listen(port, HOST, () => {
     serverLog(
@@ -246,4 +241,18 @@ export function startHttpServerIfConfigured(): http.Server | undefined {
   });
 
   return server;
+}
+
+// Start the dashboard HTTP server if PROCM_HTTP_PORT is set.
+export function startHttpServerIfConfigured(): http.Server | undefined {
+  const portStr = process.env.PROCM_HTTP_PORT;
+  if (!portStr) {
+    return undefined;
+  }
+  const port = Number(portStr);
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+    serverLog(`Invalid PROCM_HTTP_PORT "${portStr}", HTTP dashboard disabled.`);
+    return undefined;
+  }
+  return startHttpServer(port);
 }
