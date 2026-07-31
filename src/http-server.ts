@@ -229,30 +229,46 @@ function createRequestHandler(token: string | undefined) {
 // Create and start the dashboard HTTP server on a given port.
 // Bound to 127.0.0.1 only. If PROCM_HTTP_TOKEN is set, requests must carry
 // `Authorization: Bearer <token>`.
-export function startHttpServer(port: number): http.Server {
+// Resolves once listening; rejects (with a friendly message on EADDRINUSE) on
+// failure so the caller can surface it instead of letting it reach
+// `uncaughtException`.
+export function startHttpServer(port: number): Promise<http.Server> {
   const token = process.env.PROCM_HTTP_TOKEN;
   const server = http.createServer(createRequestHandler(token));
 
-  server.listen(port, HOST, () => {
-    serverLog(
-      `Dashboard HTTP server listening on http://${HOST}:${port}` +
-        (token ? " (token protected)" : ""),
-    );
-  });
+  return new Promise<http.Server>((resolve, reject) => {
+    server.once("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "EADDRINUSE") {
+        reject(
+          new Error(
+            `Port ${port} is already in use. Choose another with --port <number> or PROCM_HTTP_PORT, or stop the process holding port ${port}.`,
+          ),
+        );
+      } else {
+        reject(err);
+      }
+    });
 
-  return server;
+    server.listen(port, HOST, () => {
+      serverLog(
+        `Dashboard HTTP server listening on http://${HOST}:${port}` +
+          (token ? " (token protected)" : ""),
+      );
+      resolve(server);
+    });
+  });
 }
 
 // Start the dashboard HTTP server if PROCM_HTTP_PORT is set.
-export function startHttpServerIfConfigured(): http.Server | undefined {
+export function startHttpServerIfConfigured(): Promise<http.Server | undefined> {
   const portStr = process.env.PROCM_HTTP_PORT;
   if (!portStr) {
-    return undefined;
+    return Promise.resolve(undefined);
   }
   const port = Number(portStr);
   if (!Number.isInteger(port) || port <= 0 || port > 65535) {
     serverLog(`Invalid PROCM_HTTP_PORT "${portStr}", HTTP dashboard disabled.`);
-    return undefined;
+    return Promise.resolve(undefined);
   }
   return startHttpServer(port);
 }

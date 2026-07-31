@@ -4,7 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { toErrorMessage } from "./error.js";
 import { serverLog, serverId } from "./server-log.js";
-import { cleanup } from "./process-manager.js";
+import { cleanup, setAllowAll } from "./process-manager.js";
 import {
   startHttpServer,
   startHttpServerIfConfigured,
@@ -21,8 +21,12 @@ const DEFAULT_SERVER_PORT = 7331;
 // Minimal CLI flag parsing. Supports:
 //   --server            Run as an HTTP-only backend (no MCP stdio transport)
 //   --port <number>     Dashboard port (with --server, or to override PROCM_HTTP_PORT)
+// Minimal CLI flag parsing. Supports:
+//   --server            Run as an HTTP-only backend (no MCP stdio transport)
+//   --port <number>     Dashboard port (with --server, or to override PROCM_HTTP_PORT)
+//   --allow-all         Skip the allow-start-process gate (DANGEROUS — see README)
 function parseArgs(argv: string[]) {
-  const flags = { server: false, port: NaN as number };
+  const flags = { server: false, port: NaN as number, allowAll: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--server") {
@@ -32,10 +36,12 @@ function parseArgs(argv: string[]) {
       i++;
     } else if (a.startsWith("--port=")) {
       flags.port = Number(a.slice("--port=".length));
+    } else if (a === "--allow-all") {
+      flags.allowAll = true;
     } else if (a === "--help" || a === "-h") {
       process.stdout.write(
         [
-          "Usage: procm-mcp [--server] [--port <number>]",
+          "Usage: procm-mcp [--server] [--port <number>] [--allow-all]",
           "",
           "Modes:",
           "  (default)         MCP server over stdio. Optional HTTP dashboard if PROCM_HTTP_PORT is set.",
@@ -43,6 +49,9 @@ function parseArgs(argv: string[]) {
           "",
           "Options:",
           "  --port <number>   Dashboard port (default: 7331, or PROCM_HTTP_PORT).",
+          "  --allow-all       Skip the allow-start-process (allow-x) gate for start-process /",
+          "                    start-procm-command. DANGEROUS: only use in trusted environments.",
+          "                    Equivalent env var: PROCM_ALLOW_ALL=1.",
           "  -h, --help        Show this help.",
         ].join("\n") + "\n",
       );
@@ -52,8 +61,25 @@ function parseArgs(argv: string[]) {
   return flags;
 }
 
+// Truthy PROCM_ALLOW_ALL (1/true/yes/on) also enables allow-all.
+function envFlag(name: string): boolean {
+  const v = (process.env[name] || "").trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes" || v === "on";
+}
+
 try {
   const cli = parseArgs(process.argv.slice(2));
+
+  // allow-all: skip the allow-x gate. CLI flag takes precedence; PROCM_ALLOW_ALL also enables it.
+  const allowAll = cli.allowAll || envFlag("PROCM_ALLOW_ALL");
+  if (allowAll) {
+    setAllowAll(true);
+    serverLog("WARNING: allow-x gate is DISABLED (--allow-all / PROCM_ALLOW_ALL).");
+    console.error(
+      "\n  procm-mcp: WARNING — allow-start-process gate is DISABLED.\n" +
+        "  Any process may be started without confirmation. Only run this in trusted environments.\n",
+    );
+  }
 
   // --server: run as a standalone HTTP backend (no MCP stdio transport).
   // The dashboard is always started; the process stays alive to serve it.
@@ -64,10 +90,15 @@ try {
         : Number(process.env.PROCM_HTTP_PORT) || DEFAULT_SERVER_PORT;
     if (!Number.isInteger(port) || port <= 0 || port > 65535) {
       serverLog(`Invalid port "${port}".`);
+      console.error(`procm-mcp: invalid port "${port}".`);
       exitProcess(1);
     }
 
-    startHttpServer(port);
+    await startHttpServer(port);
+    consoleBanner(
+      `procm-mcp backend (HTTP) ready`,
+      `Dashboard: http://127.0.0.1:${port}  (PID ${process.pid})`,
+    );
     serverLog(
       `Server started with ID: ${serverId}, PID: ${process.pid} (HTTP backend mode on port ${port}).`,
     );
@@ -89,9 +120,19 @@ try {
 
     // Optional HTTP dashboard (enabled via PROCM_HTTP_PORT), overridden by --port.
     if (Number.isFinite(cli.port) && cli.port > 0) {
-      startHttpServer(cli.port);
+      await startHttpServer(cli.port);
+      consoleBanner(
+        `procm-mcp dashboard ready`,
+        `Dashboard: http://127.0.0.1:${cli.port}`,
+      );
     } else {
-      startHttpServerIfConfigured();
+      const httpServer = await startHttpServerIfConfigured();
+      if (httpServer) {
+        consoleBanner(
+          `procm-mcp dashboard ready`,
+          `Dashboard: http://127.0.0.1:${process.env.PROCM_HTTP_PORT}`,
+        );
+      }
     }
 
     const transport = new StdioServerTransport();
@@ -101,6 +142,9 @@ try {
   }
 } catch (error) {
   serverLog(`Error starting server: ${toErrorMessage(error)}`);
+  // Surface startup errors to the console (e.g. port in use) so they aren't
+  // only buried in the log file.
+  console.error(`procm-mcp: ${toErrorMessage(error)}`);
   exitProcess(1);
 }
 
@@ -143,4 +187,11 @@ function installSignalHandlers(opts: { onStdinClose?: boolean } = {}) {
 function exitProcess(code: number) {
   serverLog(`Exiting process with code: ${code}`);
   process.exit(code);
+}
+
+// Print a short banner to the console so an operator can see the server is up
+// and where to reach it. Goes to stderr to keep stdout clean (stdio MCP mode
+// reserves stdout for the protocol).
+function consoleBanner(title: string, detail: string) {
+  console.error(`\n  ${title}\n  ${detail}\n`);
 }

@@ -10,6 +10,23 @@ A Model Context Protocol (MCP) server for process management.
 
 Using these features, LLMs start processes like development servers, docker-compose, or test watchers and check their outputs to fix bugs automatically.
 
+## Install globally (for development)
+
+If you're developing procm-mcp itself and want the `procm-mcp` command available in **any** terminal pointing at your working copy, run:
+
+```bash
+npm run link
+```
+
+This builds the project and registers it globally via `npm link`. The global command is a link (junction) to this checkout, so every `npm run build` (or `npm run link`) is automatically reflected — no reinstall needed. If the npm global bin directory isn't on your PATH, the script attempts to add it (User PATH on Windows; prints instructions on other platforms). Open a **new** terminal afterwards, then:
+
+```bash
+procm-mcp --help
+procm-mcp --server            # run as an HTTP backend
+```
+
+To undo: `npm unlink -g procm-mcp`.
+
 ## Dashboard (HTTP)
 
 An optional web dashboard lets you view and manage running processes from a browser. It is **off by default** and, when enabled, binds only to `127.0.0.1` so it is not reachable from the network.
@@ -103,6 +120,17 @@ Once you allow a process creation, you don't have to confirming it anymore as lo
 I call it "allow-x pattern", which can balances security and usability in MCP.
 
 **Warning: Do not permit LLMs to use `allow-start-process` without confirmation.That means "Do anything you want to".**
+
+### Disabling the gate (`--allow-all`)
+
+In trusted environments you can disable the gate entirely so `start-process` and `start-procm-command` run without pre-approval:
+
+- CLI flag: `--allow-all`
+- Env var: `PROCM_ALLOW_ALL=1` (also accepts `true`/`yes`/`on`)
+
+When enabled, the server prints a `WARNING — allow-start-process gate is DISABLED` banner on startup. This flag only affects the **LLM/MCP** path (`start-process` / `start-procm-command`); the HTTP dashboard already starts processes without the gate since it is a human-driven UI.
+
+> ⚠️ **Dangerous.** With `--allow-all`, an LLM can start any process without confirmation. Only use it in sandboxed, throwaway, or otherwise trusted environments — never expose it to untrusted clients or networks.
 
 ## Tools
 

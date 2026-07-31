@@ -15,11 +15,12 @@
   ],
   "main": "index.js",
   "scripts": {
-    "build": "tsc && chmod 755 build/index.js",
+    "build": "tsc",
     "watch": "tsc -w",
     "inspect": "npx @modelcontextprotocol/inspector inspect",
     "start:server": "node ./build/index.js --server",
-    "start:server:port": "node ./build/index.js --server --port"
+    "start:server:port": "node ./build/index.js --server --port",
+    "link": "node ./scripts/link-global.mjs"
   },
   "keywords": [],
   "dependencies": {

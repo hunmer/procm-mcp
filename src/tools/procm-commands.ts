@@ -11,6 +11,7 @@ import {
   generateProcessId,
   startProcess,
   pushProcess,
+  isAllowAll,
 } from "../process-manager.js";
 import { checkProcessCreationAllowed } from "../allowed-process-creations.js";
 
@@ -140,11 +141,13 @@ export function registerProcmCommandsTools(server: McpServer) {
           : cwd;
         const envs = command.envs || {};
 
-        const isAllowed = await checkProcessCreationAllowed({
-          script: command.script,
-          args,
-          cwd: resolvedCwd,
-        });
+        const isAllowed =
+          isAllowAll() ||
+          (await checkProcessCreationAllowed({
+            script: command.script,
+            args,
+            cwd: resolvedCwd,
+          }));
         if (!isAllowed) {
           return textResult(
             `Process creation is not allowed for command "${name}" (script: ${command.script}, args: ${args.join(

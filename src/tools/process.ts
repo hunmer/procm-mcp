@@ -13,6 +13,7 @@ import {
   getProcess,
   listProcesses,
   pushProcess,
+  isAllowAll,
 } from "../process-manager.js";
 import { checkProcessCreationAllowed } from "../allowed-process-creations.js";
 
@@ -42,11 +43,13 @@ Warning: Do not invoke background processes that will not exit automatically, an
           return textResult(validateScriptError);
         }
 
-        const isAllowed = await checkProcessCreationAllowed({
-          script,
-          args: args,
-          cwd: cwd,
-        });
+        const isAllowed =
+          isAllowAll() ||
+          (await checkProcessCreationAllowed({
+            script,
+            args: args,
+            cwd: cwd,
+          }));
         if (!isAllowed) {
           return textResult(
             `Process creation is not allowed for script: ${script} with args: ${args.join(

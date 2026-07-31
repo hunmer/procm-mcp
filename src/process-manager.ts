@@ -11,6 +11,19 @@ import { ProcessMetadata, ProcessStatus } from "./types.js";
 // Module-level singleton, shared by MCP tools and the HTTP dashboard.
 const processes: ProcessMetadata[] = [];
 
+// When true, the allow-x (allow-start-process) gate is skipped for the
+// start-process / start-procm-command tools. DANGEROUS: set only in trusted
+// environments. Configured at startup from --allow-all / PROCM_ALLOW_ALL.
+let allowAll = false;
+
+export function setAllowAll(value: boolean) {
+  allowAll = value;
+}
+
+export function isAllowAll(): boolean {
+  return allowAll;
+}
+
 export function listProcesses(): ProcessMetadata[] {
   return processes;
 }
