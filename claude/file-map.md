@@ -10,10 +10,14 @@ procm-mcp/
 │   ├── http-server.ts         # HTTP 服务器：REST + 静态资源 + /mcp 路由 + token 鉴权
 │   ├── mcp-http.ts            # /mcp Streamable HTTP transport（stateless）
 │   ├── dashboard-html.ts      # dashboard dist 解析 + /assets 服务 + 路径穿越防护
-│   ├── process-manager.ts     # ★ 进程生命周期核心（模块级单例 processes[]）
+│   ├── process-manager.ts     # ★ 进程生命周期核心（模块级单例 processes[] + 持久化）
 │   ├── allowed-process-creations.ts  # allow-x 白名单 JSON CRUD
-│   ├── process-stdout-client.ts      # 日志消费 + 双写 + updateQueue
+│   ├── processes-repository.ts      # 进程历史持久化（lowdb processes.json）
+│   ├── process-stdout-client.ts      # 日志消费 + 实时emit + 双写 + updateQueue
 │   ├── logs-repository.ts     # lowdb 日志存储（insert/top/search/close）
+│   ├── events.ts              # 进程内事件总线（emitProcessChange/emitLog）
+│   ├── websocket-server.ts    # /ws 实时推送（挂到 http.Server upgrade）
+│   ├── project-scanner.ts     # 扫描 package.json/pyproject.toml/Cargo.toml → favorites 候选
 │   ├── server-log.ts          # serverId/logServerId + serverLog/logTool*
 │   ├── logger.ts              # debug.log 追加
 │   ├── procm-mcp-dir.ts       # <tmpdir>/procm-mcp
@@ -40,7 +44,11 @@ procm-mcp/
 │   ├── docker-compose.yml     # 手工验证用
 │   └── nginx-test.conf        # 手工验证用
 ├── scripts/
-│   └── link-global.mjs        # build + npm link + 修 PATH
+│   ├── link-global.mjs        # build + npm link + 修 PATH
+│   └── demo/                  # 演示进程（dashboard presets 用）
+│       ├── counter.mjs        # 每秒自增计数（stdout）
+│       ├── slow-log.mjs       # stdout/stderr 交替
+│       └── http-server.mjs    # 微型 HTTP 服务器（记请求日志）
 ├── dashboard/                 # ★ 独立 React/Vite 工程（见 dashboard/CLAUDE.md）
 ├── .github/workflows/publish.yml   # npm + MCP Registry 发布
 ├── package.json               # bin/scripts/deps
@@ -68,6 +76,10 @@ procm-mcp/
 | 某条 REST 路由 | `src/http-server.ts` 的 `createRequestHandler` |
 | allow-x 校验逻辑 | `src/allowed-process-creations.ts` `checkProcessCreationAllowed` |
 | 日志怎么存/查 | `src/process-stdout-client.ts` + `src/logs-repository.ts` |
+| 进程历史持久化/跨重启 | `src/processes-repository.ts` + `process-manager.ts` 的 `persist`/`listProcessRecords` |
+| WebSocket 实时推送 | `src/websocket-server.ts` + `src/events.ts` |
+| dashboard 实时日志的数据流 | `process-stdout-client` → `events.emitLog` → `websocket-server` → `dashboard/src/lib/ws.ts` |
+| favorites 扫描 | `src/project-scanner.ts`（后端）+ `dashboard/src/lib/favorites.ts`（前端存储） |
 | 启动模式判定 | `src/index.ts` 的 `parseArgs` 与 try 块 |
 | CLI 子命令实现 | `src/cli-client.ts` |
 | 运行时数据落盘位置 | `src/procm-mcp-dir.ts` + `src/server-dir.ts` |

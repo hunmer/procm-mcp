@@ -3,13 +3,13 @@
 ## 构建命令
 
 ```bash
-npm run build              # tsc 编译 src/ -> build/（后端）
-npm run watch              # tsc -w 持续编译
-npm run build:dashboard    # 构建 dashboard/ -> dashboard/dist
-npm run build:all          # 先 dashboard 再后端，一次性全建
+npm run build              # 构建 dashboard 再 tsc 编译 src/ -> build/（一次性全建，见 package.json "build"）
+npm run watch              # tsc -w 持续编译（仅后端）
+npm run build:dashboard    # 仅构建 dashboard/ -> dashboard/dist
+npm run dev:dashboard      # dashboard 的 vite dev server（前端热更新）
 ```
 
-> 改了 TypeScript 源码后必须 `npm run build`，因为运行入口是 `./build/index.js`。
+> 注意：根 `package.json` 的 `build` 脚本是 `npm run build:dashboard && tsc`——**先建前端再建后端**，没有独立的 `build:all`。改了 TypeScript 源码后必须 `npm run build`，因为运行入口是 `./build/index.js`。
 
 ## 测试命令
 

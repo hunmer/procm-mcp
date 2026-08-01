@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogClose,
@@ -61,6 +62,7 @@ export function ImportFavoritesDialog({
   onImport,
   onToast,
 }: ImportFavoritesDialogProps) {
+  const { t } = useTranslation();
   // Folder path being typed / scanned. `scannedPath` freezes the path that the
   // currently-displayed candidates came from, so the category label is stable
   // even if the user edits the input after a scan.
@@ -102,7 +104,7 @@ export function ImportFavoritesDialog({
       // Default to everything ticked so a one-click "import all" is possible.
       setSelected(found.map((_, i) => String(i)));
       if (found.length === 0) {
-        onToast("No project commands found in that folder");
+        onToast(t("importDialog.toastNoCommands"));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -131,11 +133,9 @@ export function ImportFavoritesDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPopup>
         <DialogHeader>
-          <DialogTitle>Import from folder</DialogTitle>
+          <DialogTitle>{t("importDialog.title")}</DialogTitle>
           <DialogDescription>
-            Scan a folder for project commands (package.json, pyproject.toml,
-            Cargo.toml) and import the ones you want as favorites. The folder
-            path becomes the favorites category.
+            {t("importDialog.description")}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -150,11 +150,11 @@ export function ImportFavoritesDialog({
         >
           <DialogPanel>
             <Field>
-              <FieldLabel htmlFor="imp-path">Folder path</FieldLabel>
+              <FieldLabel htmlFor="imp-path">{t("importDialog.folderLabel")}</FieldLabel>
               <div className="flex gap-2 w-full">
                 <Input
                   id="imp-path"
-                  placeholder="/path/to/project"
+                  placeholder={t("importDialog.folderPlaceholder")}
                   value={path}
                   onChange={(e) => setPath(e.target.value)}
                   className="font-mono text-xs min-w-0 flex-1"
@@ -169,11 +169,11 @@ export function ImportFavoritesDialog({
                   disabled={!path.trim() || scanning}
                 >
                   <SearchIcon />
-                  Scan
+                  {t("importDialog.scan")}
                 </Button>
               </div>
               <FieldDescription>
-                Only the folder&apos;s top level is scanned.
+                {t("importDialog.scanHelp")}
               </FieldDescription>
             </Field>
 
@@ -185,15 +185,15 @@ export function ImportFavoritesDialog({
               <div className="mt-4">
                 <div className="text-muted-foreground mb-2 flex items-center justify-between text-xs">
                   <span>
-                    {candidates.length} command
-                    {candidates.length === 1 ? "" : "s"} found
+                    {t("importDialog.commandsFound", { count: candidates.length })}
                     {scannedPath && (
-                      <>
-                        {" "}in{" "}
-                        <code className="text-foreground/80 break-all">
-                          {scannedPath}
-                        </code>
-                      </>
+                      <Trans
+                        i18nKey="importDialog.commandsFoundInSuffix"
+                        components={[
+                          <code className="text-foreground/80 break-all" />,
+                        ]}
+                        values={{ path: scannedPath }}
+                      />
                     )}
                   </span>
                   <button
@@ -201,7 +201,7 @@ export function ImportFavoritesDialog({
                     onClick={() => toggleAll(!allSelected)}
                     className="hover:text-foreground underline-offset-2 hover:underline"
                   >
-                    {allSelected ? "Clear all" : "Select all"}
+                    {allSelected ? t("importDialog.clearSelection") : t("importDialog.select")}
                   </button>
                 </div>
                 <CheckboxGroup
@@ -223,7 +223,7 @@ export function ImportFavoritesDialog({
                       }
                     />
                     <span className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
-                      {selected.length} selected
+                      {t("importDialog.selected", { count: selected.length })}
                     </span>
                   </Label>
                   {candidates.map((c, i) => {
@@ -262,10 +262,9 @@ export function ImportFavoritesDialog({
                       <EmptyMedia variant="icon">
                         <InboxIcon />
                       </EmptyMedia>
-                      <EmptyTitle>No commands found</EmptyTitle>
+                      <EmptyTitle>{t("importDialog.noCommandsTitle")}</EmptyTitle>
                       <EmptyDescription>
-                        This folder has no recognized project manifest, or its
-                        manifest defines no scripts.
+                        {t("importDialog.noCommandsDesc")}
                       </EmptyDescription>
                     </EmptyHeader>
                   </Empty>
@@ -274,14 +273,16 @@ export function ImportFavoritesDialog({
           </DialogPanel>
           <DialogFooter>
             <DialogClose render={<Button variant="ghost" />}>
-              Cancel
+              {t("common.cancel")}
             </DialogClose>
             <Button
               type="button"
               onClick={handleSubmit}
               disabled={selected.length === 0 || !scannedPath}
             >
-              Import {selected.length > 0 ? `(${selected.length})` : ""}
+              {selected.length > 0
+                ? t("importDialog.importCount", { count: selected.length })
+                : t("importDialog.import")}
             </Button>
           </DialogFooter>
         </form>

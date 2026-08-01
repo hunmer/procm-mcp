@@ -41,12 +41,34 @@ stdio MCP 与 HTTP `/mcp` 暴露**完全相同**的 5 个工具。`/mcp` 走 Str
 | POST/GET/DELETE | `/mcp` | MCP Streamable HTTP 端点（stateless） |
 | GET | `/api/processes` | `{serverId, pid, processes:[ProcessView]}` |
 | GET | `/api/processes/:id` | 单进程 `ProcessView` |
-| GET | `/api/processes/:id/logs?stream=stdout\|stderr&count=200[&grep=...&ignoreCase=1]` | 日志；带 `grep` 走正则搜索 |
-| POST | `/api/processes` | body `{script,name?,args?[],cwd,envs?{}}` → `{id,name}`；**绕过 allow-x**（人类驱动） |
+| GET | `/api/processes/:id/logs?stream=stdout\|stderr&count=200[&grep=...&ignoreCase=1]` | 日志；带 `grep` 走正则搜索。停止/过期进程从磁盘 `.log`/`.json` 读 |
+| POST | `/api/processes` | body `{script,name?,args?[],cwd,envs?,desc?}` → `{id,name}`；**绕过 allow-x**（人类驱动） |
+| DELETE | `/api/processes` | 批量删除（clear all）。body `{ids?:string[]}`，省略则删全部。单次读写存储避免 lowdb 竞态 |
 | POST | `/api/processes/:id/stop` | 停止并删除 |
 | POST | `/api/processes/:id/restart` | 重启 |
+| DELETE | `/api/processes/:id` | 停止（若运行中）并擦除持久化记录 |
+| GET | `/api/processes/:id/log-files` | 该进程两个 `.log` 文件的绝对路径（`{stdoutPath,stderrPath}`，可能为 null） |
+| GET | `/api/processes/:id/log-download` | 合并、按时间排序的日志作为附件下载 |
+| GET | `/api/processes/:id/command` | 单行可粘贴的复现命令（`cd … && ENV=val script args`，按后端 OS 格式化） |
 
-`ProcessView`（`toPublicView`）：`{id,name,script,args,cwd,status,pid,exitCode,error}`——**不含** ChildProcess 与 stdoutClient 等内部字段。
+`ProcessRecord`（`toPublicRecord`，含生命周期时间戳）：`{id,name,script,args,cwd,status,pid,exitCode,error,desc,startedAt,stoppedAt}`。`GET /api/processes` 返回**内存活进程 + 持久化历史记录**的合并视图（活进程优先，停止/退出的仍可见）。`ProcessView`（`toPublicView`，单进程）少 `startedAt`/`stoppedAt`。两者都**不含** ChildProcess / stdoutClient 等内部字段。
+
+### 辅助路由
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/meta` | `{serverId,pid,cwd,startedAt}`——dashboard 用于自动填充 cwd 等 |
+| POST | `/api/favorites/scan` | body `{path}`，扫描目录顶层 `package.json`/`pyproject.toml`/`Cargo.toml`，返回候选启动命令 `{candidates:ScanCandidate[]}`（纯建议，后端不存 favorites） |
+| POST | `/api/open-folder` | body `{path}`，用 explorer/open/xdg-open 在文件管理器打开目录（校验存在且为目录） |
+
+## WebSocket `/ws`
+
+与 REST 同源、同端口。`attachWebsocketServer` 在 `server.on("upgrade")` 里接管 `/ws` 路径（其他 upgrade 路径如 dev HMR 不处理）。token 鉴权同 REST：`?token=<token>` 查询串或 `sec-websocket-protocol: bearer.<token>` 子协议。
+
+- 连接即推一份完整进程快照（`{type:"processes",snapshot:true,...}`）。
+- 进程状态变更（经 `dashboardEvents.emitProcessChange`，微任务内合并）→ 推 `{type:"processes",data:[...]}`。
+- 每条新日志（经 `dashboardEvents.emitLog`）→ 推 `{type:"log",processId,stream,timestamp,message}`。
+- dashboard 客户端用指数退避自动重连（`dashboard/src/lib/ws.ts`）。
 
 ## CLI 子命令（客户端模式）
 

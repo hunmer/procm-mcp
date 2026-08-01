@@ -1,17 +1,18 @@
 # procm-mcp dashboard
 
-procm-mcp 的 Web 管理界面，由后端在 `GET /` 静态托管（构建产物 `dist/` 打包进 npm 包）。独立的 React + Vite 工程，经同源 REST `/api/*` 与后端通信，提供进程列表、日志查看（stdout/stderr）、启动/停止/重启。默认暗色，支持亮/暗切换与 3s 自动刷新。
+procm-mcp 的 Web 管理界面，由后端在 `GET /` 静态托管（构建产物 `dist/` 打包进 npm 包）。独立的 React + Vite 工程，经同源 **WebSocket `/ws`**（实时进程/日志推送，自动重连）+ REST `/api/*`（操作与历史）与后端通信。提供进程列表（双流日志查看/grep/下载）、收藏夹（纯 localStorage 启动配方，支持文件夹导入）、批量管理。默认暗色，支持亮/暗切换。
 
-技术栈：**React 19** + **Vite 6** + **Tailwind CSS v4** + **coss**（基于 `@base-ui/react`）+ `lucide-react`。
+技术栈：**React 19** + **Vite 6** + **Tailwind CSS v4** + **coss**（基于 `@base-ui/react`）+ `@tanstack/react-table` + `lucide-react`。
 
 ## 约定（高优先级）
 
-- 改完跑 `npm run build`（在 `dashboard/`）或项目根 `npm run build:dashboard`——`tsc -b` 类型检查 + `vite build`。
+- 改完跑 `npm run build`（在 `dashboard/`）或项目根 `npm run build:dashboard`——`tsc -b` 类型检查 + `vite build`。注意根 `build` = `build:dashboard && tsc`，**没有** `build:all`。
 - **主题 token 必须用显式 hex/rgb**，不要用 `color-mix()`/`oklch()`/`--alpha()`（`src/index.css` 刻意如此，避免 Chromium 偏色）。
 - coss 组件 vendored 在 `src/registry/default/ui/`，经 `@/registry/default/ui/<name>` 导入；新增需连传递依赖一起拷贝。
 - **form-in-dialog 不变量**：`DialogHeader` 在 form 外，`<form className="contents">` 包 `DialogPanel`+`DialogFooter`。
 - 后端 `ProcessView` 字段变动时，同步改 `src/lib/types.ts`。
-- dev 模式跨域：`vite.config.ts` 未配 proxy，推荐 build 后由后端托管来开发。
+- 实时数据：WS 回调用 `onProcessesMessage`/`onLogMessage` 注册（内部存 ref，不重订阅）；收藏是纯前端 localStorage（`lib/favorites.ts`）。
+- dev 模式：`vite.config.ts` **已配 proxy**（`/api`、`/mcp`、`/assets`、`/ws` → `PROCM_DEV_BACKEND`），先 `npm run start:server` 再 `npm run dev:dashboard`。
 
 详见 [claude/conventions.md](claude/conventions.md)。
 
@@ -33,7 +34,7 @@ procm-mcp 的 Web 管理界面，由后端在 `GET /` 静态托管（构建产�
 
 ## 扫描状态
 
-- **更新时间**：2026-07-31
-- **已扫描**：`src/main.tsx`、`src/index.css`、`src/components/*.tsx`(6)、`src/lib/*.ts`(3)、`registry/default/lib/utils.ts`、`index.html`、`package.json`、`tsconfig.json`、`vite.config.ts`、`README.md`。
-- **未详读**：`registry/default/ui/*.tsx`(11 个 vendored coss 组件，已归纳用法)；`node_modules/`、`dist/`、`tsconfig.tsbuildinfo`。
-- **缺口**：零自动化测试；dev 跨域未配 proxy；未适配后端 token 鉴权。详见 [claude/changelog.md](claude/changelog.md)。
+- **更新时间**：2026-08-01
+- **已扫描**：`src/main.tsx`、`src/components/*.tsx`(8)、`src/lib/*.ts`(7：api/ws/types/favorites/presets/cwd/useTheme)、`registry/default/lib/utils.ts`、`index.html`、`package.json`、`tsconfig.json`、`vite.config.ts`。
+- **未详读**：`src/registry/default/ui/*.tsx`(22 个 vendored coss 组件，已归纳用法)；`node_modules/`、`dist/`、`tsconfig.tsbuildinfo`、`src/index.css`（已归纳主题 token 策略）。
+- **缺口**：零自动化测试；REST 客户端未支持 token 注入（受保护后端 dashboard 的 REST 会 401）。详见 [claude/changelog.md](claude/changelog.md)。

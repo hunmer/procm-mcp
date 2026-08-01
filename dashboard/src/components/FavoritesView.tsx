@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/registry/default/ui/button";
 import { Input } from "@/registry/default/ui/input";
 import { Badge } from "@/registry/default/ui/badge";
@@ -28,8 +29,16 @@ import {
 import {
   categoryLabel,
   groupByCategory,
+  UNCATEGORIZED,
   type Favorite,
 } from "@/lib/favorites";
+
+// Render a group's category label translated when it's the "Uncategorized"
+// bucket (the grouping identity is an English constant for stable Map keys),
+// otherwise show the raw category text the user entered.
+function displayGroupLabel(label: string, t: (k: string) => string): string {
+  return label === UNCATEGORIZED ? t("favorites.uncategorized") : label;
+}
 
 // Whether a category label looks like an absolute folder path that the backend
 // could open in the OS file manager. Matches Windows drive paths (C:\, C:/),
@@ -65,6 +74,7 @@ export function FavoritesView({
   onOpenFolder,
   onRemoveCategory,
 }: FavoritesViewProps) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
 
   // Client-side filter across name/script/desc/category. Grouping is computed
@@ -97,20 +107,20 @@ export function FavoritesView({
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filter favorites…"
+            placeholder={t("favorites.filterPlaceholder")}
             className="h-8 pl-8 text-xs"
           />
         </div>
         <span className="text-muted-foreground text-xs">
           {favorites.length === filtered.length
-            ? `${favorites.length} favorite${favorites.length === 1 ? "" : "s"}`
-            : `${filtered.length} of ${favorites.length}`}
+            ? t("favorites.count", { count: favorites.length })
+            : t("favorites.countFiltered", { shown: filtered.length, total: favorites.length })}
         </span>
         <Button
           size="icon-sm"
           variant="outline"
-          aria-label="Import from folder"
-          title="Import from folder"
+          aria-label={t("favorites.importAria")}
+          title={t("favorites.importTitle")}
           onClick={onImport}
         >
           <DownloadIcon />
@@ -127,13 +137,13 @@ export function FavoritesView({
               </EmptyMedia>
               <EmptyTitle>
                 {favorites.length === 0
-                  ? "No favorites yet"
-                  : "No favorites match the filter"}
+                  ? t("favorites.emptyNoFavorites")
+                  : t("favorites.emptyNoMatches")}
               </EmptyTitle>
               <EmptyDescription>
                 {favorites.length === 0
-                  ? "Star a process in the list to save it here for quick launch."
-                  : "Try a different search term."}
+                  ? t("favorites.emptyDescNoFavorites")
+                  : t("favorites.emptyDescNoMatches")}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -143,7 +153,7 @@ export function FavoritesView({
               <section key={group.label}>
                 <div className="mb-2.5 flex items-center gap-2">
                   <FolderIcon className="text-muted-foreground size-3.5" />
-                  <h3 className="text-sm font-semibold">{group.label}</h3>
+                  <h3 className="text-sm font-semibold">{displayGroupLabel(group.label, t)}</h3>
                   <Badge variant="secondary" className="tabular-nums">
                     {group.items.length}
                   </Badge>
@@ -152,8 +162,8 @@ export function FavoritesView({
                       <Button
                         size="icon-sm"
                         variant="ghost"
-                        aria-label={`Open folder ${group.label}`}
-                        title="Open in file manager"
+                        aria-label={t("favorites.openFolderAria", { label: group.label })}
+                        title={t("favorites.openFolderTitle")}
                         onClick={() => onOpenFolder(group.label)}
                         className="text-muted-foreground"
                       >
@@ -163,8 +173,8 @@ export function FavoritesView({
                     <Button
                       size="icon-sm"
                       variant="ghost"
-                      aria-label={`Delete group ${group.label}`}
-                      title="Delete group"
+                      aria-label={t("favorites.deleteGroupAria", { label: group.label })}
+                      title={t("favorites.deleteGroupTitle")}
                       onClick={() =>
                         onRemoveCategory(group.items.map((f) => f.id))
                       }
@@ -205,6 +215,7 @@ function FavoriteCard({
   onEdit: () => void;
   onRemove: () => void;
 }) {
+  const { t } = useTranslation();
   const f = favorite;
   const cmd = `${f.script}${f.args.length ? " " + f.args.join(" ") : ""}`;
   return (
@@ -229,8 +240,8 @@ function FavoriteCard({
           <Button
             size="icon-sm"
             variant="ghost"
-            aria-label="Edit favorite"
-            title="Edit"
+            aria-label={t("favorites.editAria")}
+            title={t("favorites.editTitle")}
             onClick={onEdit}
           >
             <PencilIcon />
@@ -238,8 +249,8 @@ function FavoriteCard({
           <Button
             size="icon-sm"
             variant="ghost"
-            aria-label="Remove favorite"
-            title="Remove"
+            aria-label={t("favorites.removeAria")}
+            title={t("favorites.removeTitle")}
             onClick={onRemove}
             className="text-muted-foreground hover:text-destructive"
           >
@@ -250,7 +261,7 @@ function FavoriteCard({
       <CardPanel className="flex flex-col gap-3 p-4">
         <div className="flex flex-col gap-1">
           <span className="text-muted-foreground text-[10px] uppercase tracking-wide">
-            Command
+            {t("favorites.cardCommand")}
           </span>
           <code className="text-foreground/90 line-clamp-2 break-all bg-transparent text-xs">
             {cmd}
@@ -258,7 +269,7 @@ function FavoriteCard({
         </div>
         <div className="flex flex-col gap-1">
           <span className="text-muted-foreground text-[10px] uppercase tracking-wide">
-            Working directory
+            {t("favorites.cardCwd")}
           </span>
           <span
             className="text-foreground/90 line-clamp-1 break-all font-mono text-xs"
@@ -270,7 +281,7 @@ function FavoriteCard({
         <div className="mt-1 flex items-center justify-end">
           <Button size="sm" onClick={onLaunch}>
             <PlayIcon />
-            Launch
+            {t("favorites.launch")}
           </Button>
         </div>
       </CardPanel>

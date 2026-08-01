@@ -12,6 +12,7 @@
 //   2. React Fiber _debugSource as a fallback (works without the babel plugin).
 
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Inspector, gotoServerEditor } from "react-dev-inspector";
 import { MousePointer2 } from "lucide-react";
 
@@ -75,6 +76,7 @@ function getCodeInfo(element: HTMLElement) {
 }
 
 export function DevInspector() {
+  const { t } = useTranslation();
   const [active, setActive] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -129,7 +131,7 @@ export function DevInspector() {
         type="button"
         onClick={() => setActive((value) => !value)}
         aria-pressed={active}
-        title={`Inspect React component source (${hotkey})`}
+        title={t("devInspector.title", { hotkey })}
         className="fixed bottom-3 right-3 z-[2147483647] flex h-8 w-8 items-center justify-center rounded border border-border bg-background shadow hover:bg-muted"
       >
         <MousePointer2

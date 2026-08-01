@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Badge } from "@/registry/default/ui/badge";
 import {
   PreviewCard,
@@ -16,6 +17,14 @@ const VARIANT: Record<
   error: "error",
 };
 
+// Map a status enum value to its translation key.
+const STATUS_LABEL_KEY: Record<ProcessStatus, string> = {
+  running: "status.running",
+  spawning: "status.spawning",
+  exited: "status.exited",
+  error: "status.error",
+};
+
 export function StatusBadge({
   status,
   error,
@@ -25,9 +34,10 @@ export function StatusBadge({
   // badge is wrapped in a hover/focus preview card that surfaces the message.
   error?: string | null;
 }) {
+  const { t } = useTranslation();
   const badge = (
-    <Badge variant={VARIANT[status]} className="capitalize">
-      {status}
+    <Badge variant={VARIANT[status]}>
+      {t(STATUS_LABEL_KEY[status])}
     </Badge>
   );
 
@@ -44,7 +54,7 @@ export function StatusBadge({
       <PreviewCardPopup className="max-w-xs">
         <div className="flex flex-col gap-1">
           <p className="text-destructive text-xs font-semibold">
-            {status === "error" ? "Process error" : "Details"}
+            {status === "error" ? t("status.processError") : t("status.details")}
           </p>
           <p className="text-popover-foreground break-words text-xs">
             {error}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/registry/default/ui/button";
 import { Input } from "@/registry/default/ui/input";
 import { Badge } from "@/registry/default/ui/badge";
@@ -78,6 +79,7 @@ const QUICK_FILTERS: {
 ];
 
 export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps) {
+  const { t } = useTranslation();
   // Merged (stdout+stderr) chronological log lines.
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -113,9 +115,9 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
   async function handleCopyId() {
     try {
       await navigator.clipboard.writeText(process.id);
-      onToast(`Copied ID: ${process.id}`);
+      onToast(t("logs.toastCopiedId", { id: process.id }));
     } catch {
-      onToast("Copy failed", true);
+      onToast(t("logs.toastCopyFailed"), true);
     }
   }
 
@@ -131,7 +133,7 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
   // they're select-none) so the copied text matches what's on screen.
   async function handleCopyText() {
     if (entries.length === 0) {
-      onToast("Nothing to copy");
+      onToast(t("logs.toastNothingToCopy"));
       return;
     }
     const text = entries
@@ -143,9 +145,9 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
       .join("\n");
     try {
       await navigator.clipboard.writeText(text);
-      onToast(`Copied ${entries.length} line${entries.length === 1 ? "" : "s"}`);
+      onToast(t("logs.toastCopiedLines", { count: entries.length }));
     } catch {
-      onToast("Copy failed", true);
+      onToast(t("logs.toastCopyFailed"), true);
     }
   }
 
@@ -159,14 +161,14 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
         (p): p is string => !!p,
       );
       if (paths.length === 0) {
-        onToast("No log file available", true);
+        onToast(t("logs.toastNoLogFile"), true);
         return;
       }
       await navigator.clipboard.writeText(paths.join("\n"));
-      onToast("Copied log file location");
+      onToast(t("logs.toastCopiedLocation"));
     } catch (err) {
       onToast(
-        err instanceof Error ? err.message : "Copy failed",
+        err instanceof Error ? err.message : t("logs.toastCopyFailed"),
         true,
       );
     }
@@ -252,7 +254,9 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
         const parts = [process.script, ...process.args];
         const invocation = parts.join(" ");
         setCommand(
-          process.cwd ? `${invocation}  (in ${process.cwd})` : invocation,
+          process.cwd
+            ? t("logs.commandIn", { cmd: invocation, cwd: process.cwd })
+            : invocation,
         );
       }
     }
@@ -376,7 +380,7 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="truncate text-sm font-semibold">
-              Logs: {process.name}
+              {t("logs.panelTitle", { name: process.name })}
             </h2>
             <div className="flex items-center gap-1.5">
               <p className="text-muted-foreground truncate font-mono text-xs">
@@ -384,8 +388,8 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
               </p>
               <button
                 type="button"
-                aria-label="Copy process ID"
-                title="Copy ID"
+                aria-label={t("logs.copyIdAria")}
+                title={t("logs.copyIdTitle")}
                 onClick={handleCopyId}
                 className="text-muted-foreground hover:text-foreground shrink-0"
               >
@@ -397,8 +401,8 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
             <Button
               size="icon-sm"
               variant="ghost"
-              aria-label="Clear displayed logs"
-              title="Clear logs"
+              aria-label={t("logs.clearLogsAria")}
+              title={t("logs.clearLogsTitle")}
               onClick={handleClearLogs}
             >
               <EraserIcon />
@@ -406,8 +410,8 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
             <Button
               size="icon-sm"
               variant="ghost"
-              aria-label="Collapse log panel"
-              title="Collapse"
+              aria-label={t("logs.collapseAria")}
+              title={t("logs.collapseTitle")}
               onClick={onClose}
             >
               <PanelRightCloseIcon />
@@ -422,13 +426,13 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search full log history (regex)…"
+            placeholder={t("logs.searchPlaceholder")}
             className="h-8 pl-8 pr-8 text-xs"
           />
           {search && (
             <button
               type="button"
-              aria-label="Clear search"
+              aria-label={t("logs.clearSearch")}
               onClick={() => setSearch("")}
               className="text-muted-foreground hover:text-foreground absolute right-2 top-1/2 -translate-y-1/2"
             >
@@ -447,7 +451,7 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
                 key={f.term}
                 type="button"
                 onClick={() => setSearch(active ? "" : f.term)}
-                title={`Filter by “${f.term}”`}
+                title={t("logs.filterByTerm", { term: f.term })}
                 aria-pressed={active}
               >
                 <Badge
@@ -473,7 +477,7 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
         >
           <SquareTerminalIcon className="mt-0.5 size-4 shrink-0" />
           <div className="min-w-0">
-            <AlertTitle className="text-xs">Command</AlertTitle>
+            <AlertTitle className="text-xs">{t("logs.commandLabel")}</AlertTitle>
             <AlertDescription className="text-foreground break-all font-mono text-xs">
               {command}
             </AlertDescription>
@@ -491,17 +495,16 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
             <Alert variant="warning" className="mb-3">
               <CircleOffIcon className="mt-0.5 size-4 shrink-0" />
               <div className="min-w-0">
-                <AlertTitle>进程已经关闭</AlertTitle>
+                <AlertTitle>{t("logs.closedNoticeTitle")}</AlertTitle>
                 <AlertDescription>
-                  This process is no longer running. Showing its last saved
-                  logs.
+                  {t("logs.closedNoticeDesc")}
                 </AlertDescription>
               </div>
             </Alert>
           )}
           {error ? (
             <pre className="m-0 whitespace-pre-wrap break-words text-xs leading-relaxed">
-              <span className="text-destructive">error: {error}</span>
+              <span className="text-destructive">{t("logs.errorPrefix", { message: error })}</span>
             </pre>
           ) : entries.length === 0 ? (
             <Empty className="min-h-[200px]">
@@ -510,12 +513,12 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
                   <FileTextIcon />
                 </EmptyMedia>
                 <EmptyTitle>
-                  {activeGrep ? "No matches" : "No logs yet"}
+                  {activeGrep ? t("logs.emptyNoMatches") : t("logs.emptyNoLogs")}
                 </EmptyTitle>
                 <EmptyDescription>
                   {activeGrep
-                    ? `Nothing matches “${activeGrep}”.`
-                    : "Log output will appear here in real time."}
+                    ? t("logs.emptyNoMatchesDesc", { grep: activeGrep })
+                    : t("logs.emptyNoLogsDesc")}
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>
@@ -543,8 +546,8 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
           <Button
             size="icon-sm"
             variant={showTime ? "default" : "ghost"}
-            aria-label={showTime ? "Hide timestamps" : "Show timestamps"}
-            title={showTime ? "Hide timestamps" : "Show timestamps"}
+            aria-label={showTime ? t("logs.hideTimestamps") : t("logs.showTimestamps")}
+            title={showTime ? t("logs.hideTimestamps") : t("logs.showTimestamps")}
             onClick={() => setShowTime((v) => !v)}
           >
             <ClockIcon />
@@ -553,10 +556,10 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
             size="icon-sm"
             variant={showLineNumbers ? "default" : "ghost"}
             aria-label={
-              showLineNumbers ? "Hide line numbers" : "Show line numbers"
+              showLineNumbers ? t("logs.hideLineNumbers") : t("logs.showLineNumbers")
             }
             title={
-              showLineNumbers ? "Hide line numbers" : "Show line numbers"
+              showLineNumbers ? t("logs.hideLineNumbers") : t("logs.showLineNumbers")
             }
             onClick={() => setShowLineNumbers((v) => !v)}
           >
@@ -565,8 +568,8 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
           <Button
             size="icon-sm"
             variant="ghost"
-            aria-label="Copy logs"
-            title="Copy logs"
+            aria-label={t("logs.copyLogsAria")}
+            title={t("logs.copyLogsTitle")}
             onClick={handleCopyText}
           >
             <CopyIcon />
@@ -576,11 +579,11 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
           <span className="text-muted-foreground px-1 text-[11px] tabular-nums">
             {activeGrep
               ? searching
-                ? "searching…"
-                : `${entries.length} match${entries.length === 1 ? "" : "es"}`
+                ? t("logs.countSearching")
+                : t("logs.countMatches", { count: entries.length })
               : loading
-                ? "loading…"
-                : `${entries.length} line${entries.length === 1 ? "" : "s"}`}
+                ? t("logs.countLoading")
+                : t("logs.countLines", { count: entries.length })}
           </span>
           <Menu>
             <MenuTrigger
@@ -588,8 +591,8 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
                 <Button
                   size="icon-sm"
                   variant="ghost"
-                  aria-label="More actions"
-                  title="More actions"
+                  aria-label={t("logs.moreActions")}
+                  title={t("logs.moreActions")}
                 />
               }
             >
@@ -598,11 +601,11 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
             <MenuPopup>
               <MenuItem onClick={handleCopyLocation}>
                 <FolderTreeIcon aria-hidden="true" />
-                复制日志文件位置
+                {t("logs.copyLocation")}
               </MenuItem>
               <MenuItem onClick={handleDownloadLog}>
                 <DownloadIcon aria-hidden="true" />
-                下载日志文件
+                {t("logs.downloadLog")}
               </MenuItem>
             </MenuPopup>
           </Menu>

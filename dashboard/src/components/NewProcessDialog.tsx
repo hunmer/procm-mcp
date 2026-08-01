@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogClose,
@@ -43,6 +44,7 @@ export interface ProcessDetailsDialogProps {
 // <form className="contents"> wraps DialogPanel + DialogFooter so the popup's
 // flex column still treats them as direct layout sections.
 export function NewProcessDialog({ onStarted, onError }: NewProcessDialogProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [name, setName] = useState("");
@@ -66,7 +68,7 @@ export function NewProcessDialog({ onStarted, onError }: NewProcessDialogProps) 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!script.trim() || !cwd.trim()) {
-      onError("script and working directory are required");
+      onError(t("dialogs.newProcess.validationError"));
       return;
     }
     setSubmitting(true);
@@ -93,15 +95,13 @@ export function NewProcessDialog({ onStarted, onError }: NewProcessDialogProps) 
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button />}>
         <PlusIcon />
-        New process
+        {t("header.newProcess")}
       </DialogTrigger>
       <DialogPopup>
         <DialogHeader>
-          <DialogTitle>Start a process</DialogTitle>
+          <DialogTitle>{t("dialogs.newProcess.title")}</DialogTitle>
           <DialogDescription>
-            The dashboard is a human-driven localhost UI. Starting a process
-            here bypasses the allow-x gate, equivalent to running the command
-            yourself in a terminal.
+            {t("dialogs.newProcess.description")}
           </DialogDescription>
         </DialogHeader>
         <ProcessForm
@@ -128,6 +128,7 @@ export function ProcessDetailsDialog({
   onOpenChange,
   viewProcess,
 }: ProcessDetailsDialogProps) {
+  const { t } = useTranslation();
   const [fields, setFields] = useState({
     name: "",
     script: "",
@@ -155,10 +156,10 @@ export function ProcessDetailsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPopup>
         <DialogHeader>
-          <DialogTitle>Process details</DialogTitle>
+          <DialogTitle>{t("dialogs.details.title")}</DialogTitle>
           <DialogDescription>
             {viewProcess
-              ? `${viewProcess.name} · ${viewProcess.id}`
+              ? t("dialogs.details.description", { name: viewProcess.name, id: viewProcess.id })
               : ""}
           </DialogDescription>
         </DialogHeader>
@@ -212,6 +213,7 @@ export function FavoriteDialog({
   onCreate,
   onEdit,
 }: FavoriteDialogProps) {
+  const { t } = useTranslation();
   const isEdit = seedFavorite != null;
   const [fields, setFields] = useState({
     name: "",
@@ -279,12 +281,12 @@ export function FavoriteDialog({
       <DialogPopup>
         <DialogHeader>
           <DialogTitle>
-            {isEdit ? "Edit favorite" : "Add to favorites"}
+            {isEdit ? t("dialogs.favorite.titleEdit") : t("dialogs.favorite.titleAdd")}
           </DialogTitle>
           <DialogDescription>
             {isEdit
-              ? "Update the launch recipe and category for this favorite."
-              : "Save this process as a favorite you can re-launch any time."}
+              ? t("dialogs.favorite.descEdit")
+              : t("dialogs.favorite.descAdd")}
           </DialogDescription>
         </DialogHeader>
         <ProcessForm
@@ -353,6 +355,7 @@ function ProcessForm({
   submitting,
   onSubmit,
 }: ProcessFormProps) {
+  const { t } = useTranslation();
   return (
     <form className="contents" onSubmit={onSubmit}>
       <DialogPanel>
@@ -362,18 +365,18 @@ function ProcessForm({
           <div className="mb-4">
             <div className="text-muted-foreground mb-2 flex items-center gap-1.5 text-xs">
               <ZapIcon className="size-3.5" />
-              Presets
+              {t("dialogs.form.presets")}
             </div>
             <div className="flex flex-wrap gap-2">
               {presets.map((p) => (
                 <button
                   key={p.id}
                   type="button"
-                  title={p.description}
+                  title={t(`presets.${p.id}.description`)}
                   onClick={() => applyPreset(p, setters)}
                   className="bg-muted hover:bg-accent inline-flex items-center rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors"
                 >
-                  {p.label}
+                  {t(`presets.${p.id}.label`)}
                 </button>
               ))}
             </div>
@@ -382,20 +385,20 @@ function ProcessForm({
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field>
-            <FieldLabel htmlFor="f-name">Name (optional)</FieldLabel>
+            <FieldLabel htmlFor="f-name">{t("dialogs.form.nameLabel")}</FieldLabel>
             <Input
               id="f-name"
-              placeholder="my-server"
+              placeholder={t("dialogs.form.namePlaceholder")}
               value={name}
               onChange={(e) => setters.setName(e.target.value)}
               readOnly={readOnly}
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="f-script">Script *</FieldLabel>
+            <FieldLabel htmlFor="f-script">{t("dialogs.form.scriptLabel")}</FieldLabel>
             <Input
               id="f-script"
-              placeholder="npm"
+              placeholder={t("dialogs.form.scriptPlaceholder")}
               value={script}
               onChange={(e) => setters.setScript(e.target.value)}
               required={!readOnly}
@@ -404,21 +407,21 @@ function ProcessForm({
           </Field>
           <Field>
             <FieldLabel htmlFor="f-args">
-              Args (space-separated)
+              {t("dialogs.form.argsLabel")}
             </FieldLabel>
             <Input
               id="f-args"
-              placeholder="run dev"
+              placeholder={t("dialogs.form.argsPlaceholder")}
               value={args}
               onChange={(e) => setters.setArgs(e.target.value)}
               readOnly={readOnly}
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="f-cwd">Working directory *</FieldLabel>
+            <FieldLabel htmlFor="f-cwd">{t("dialogs.form.cwdLabel")}</FieldLabel>
             <Input
               id="f-cwd"
-              placeholder="/path/to/project"
+              placeholder={t("dialogs.form.cwdPlaceholder")}
               value={cwd}
               onChange={(e) => setters.setCwd(e.target.value)}
               required={!readOnly}
@@ -427,43 +430,42 @@ function ProcessForm({
           </Field>
         </div>
         <Field className="mt-4">
-          <FieldLabel htmlFor="f-desc">Description (optional)</FieldLabel>
+          <FieldLabel htmlFor="f-desc">{t("dialogs.form.descLabel")}</FieldLabel>
           <Input
             id="f-desc"
-            placeholder="What this process is for"
+            placeholder={t("dialogs.form.descPlaceholder")}
             value={desc}
             onChange={(e) => setters.setDesc(e.target.value)}
             readOnly={readOnly}
           />
           <FieldDescription>
-            Shown in the process list to help identify it.
+            {t("dialogs.form.descHelp")}
           </FieldDescription>
         </Field>
         {/* Category only renders for the favorite editor (setters.setCategory
             is wired only there). It's the grouping key for the favorites view. */}
         {setters.setCategory && (
           <Field className="mt-4">
-            <FieldLabel htmlFor="f-category">Category (optional)</FieldLabel>
+            <FieldLabel htmlFor="f-category">{t("dialogs.form.categoryLabel")}</FieldLabel>
             <Input
               id="f-category"
-              placeholder="e.g. Dev servers"
+              placeholder={t("dialogs.form.categoryPlaceholder")}
               value={category ?? ""}
               onChange={(e) => setters.setCategory!(e.target.value)}
               readOnly={readOnly}
             />
             <FieldDescription>
-              Groups this favorite in the favorites list. Leave blank for
-              “Uncategorized”.
+              {t("dialogs.form.categoryHelp")}
             </FieldDescription>
           </Field>
         )}
         <Field className="mt-4">
           <FieldLabel htmlFor="f-envs">
-            Environment variables (KEY=VALUE per line)
+            {t("dialogs.form.envsLabel")}
           </FieldLabel>
           <Textarea
             id="f-envs"
-            placeholder={"NODE_ENV=development\nPORT=3000"}
+            placeholder={t("dialogs.form.envsPlaceholder")}
             value={envs}
             onChange={(e) => setters.setEnvs(e.target.value)}
             readOnly={readOnly}
@@ -471,18 +473,18 @@ function ProcessForm({
           />
           {!readOnly && (
             <FieldDescription>
-              Optional. One variable per line, written as KEY=VALUE.
+              {t("dialogs.form.envsHelp")}
             </FieldDescription>
           )}
         </Field>
       </DialogPanel>
       <DialogFooter>
         <DialogClose render={<Button variant="ghost" />}>
-          {readOnly ? "Close" : "Cancel"}
+          {readOnly ? t("common.close") : t("common.cancel")}
         </DialogClose>
         {!readOnly && (
           <Button type="submit" loading={submitting}>
-            Start process
+            {t("dialogs.newProcess.submit")}
           </Button>
         )}
       </DialogFooter>

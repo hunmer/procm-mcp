@@ -47,7 +47,7 @@ npm run test:cli           # CLI 客户端往返
 
 ## 质量风险 / 已知弱点
 
-- **无单元测试覆盖纯函数**（`validateScript`/`createCommand`/白名单匹配）——它们只通过端到端套件间接覆盖。
+- **无单元测试覆盖纯函数**（`validateScript`/`createCommand`/白名单匹配/`project-scanner` 的清单解析）——它们只通过端到端套件间接覆盖（`project-scanner` 完全无测试覆盖）。
 - **无 lint / formatter 配置**（仓库未发现 eslint/prettier），代码风格靠人工保持。
 - **日志文件无清理/轮转**：lowdb 全量 read/write 且每条都落盘，长期运行的高输出进程会让 JSON 文件膨胀。`top`/`search` 每次都读全文件进内存。
 - **`--secure` flag**：`.mcp.json` 示例里用了 `--secure`，但 `index.ts` 的 `parseArgs` 不识别它（会静默忽略）。见 FAQ。

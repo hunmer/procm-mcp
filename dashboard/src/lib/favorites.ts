@@ -53,10 +53,15 @@ export function favoriteToStartBody(f: Favorite): StartProcessBody {
   };
 }
 
+// The grouping identity for favorites without an explicit category. Kept as a
+// stable English constant so Map keys / sort comparisons are locale-independent;
+// it is translated only at the display site (FavoritesView).
+export const UNCATEGORIZED = "Uncategorized";
+
 // Normalized category label: blank/whitespace collapses to "Uncategorized".
 export function categoryLabel(c: string | undefined): string {
   const v = (c ?? "").trim();
-  return v.length ? v : "Uncategorized";
+  return v.length ? v : UNCATEGORIZED;
 }
 
 function makeId(): string {
@@ -208,8 +213,8 @@ export function groupByCategory(
       items: items.sort((a, b) => b.createdAt - a.createdAt),
     }))
     .sort((a, b) => {
-      if (a.label === "Uncategorized") return -1;
-      if (b.label === "Uncategorized") return 1;
+      if (a.label === UNCATEGORIZED) return -1;
+      if (b.label === UNCATEGORIZED) return 1;
       return a.label.localeCompare(b.label);
     });
 }

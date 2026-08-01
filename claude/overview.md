@@ -28,17 +28,24 @@ LLM 在辅助开发时常需要启动长期运行的进程（dev server、docker
 - dashboard 的 `POST /api/processes`、CLI 客户端的 `start` → **故意绕过** allow-x，因为它们是人类驱动的本地 UI/CLI，等价于你在终端敲命令。
 - `--allow-all` / `PROCM_ALLOW_ALL=1` 可在受信任环境整体关闭 allow-x（仅影响 LLM 路径）。
 
-### 4. 日志双写：结构化 JSON + 原始文本
-每个进程的 stdout/stderr 各自被一个 `ProcessStdoutClient` 消费：
+### 4. 日志三路分发：实时推送 + 结构化 JSON + 行分隔文本
+每个进程的 stdout/stderr 各自被一个 `ProcessStdoutClient` 消费，每条 chunk 经三路：
+- **实时** `dashboardEvents.emitLog()` 推 WebSocket（不等磁盘，UI 不被 lowdb 拖慢）。
 - **lowdb JSON 文件**（`<id>-<stdout|stderr>.json`）：结构化记录 `{timestamp, message}`，供 `top`(取最近 N 条) 与 `search`(正则) 查询。
-- **append 文本文件**（`<id>-<stdout|stderr>.log`）：原始文本，便于人工查看。
+- **append 文本文件**（`<id>-<stdout|stderr>.log`）：行分隔文本，供停止/过期进程的日志读取（优先 lowdb，回退 `.log`）与合并下载。
 - 写入经一个串行 `updateQueue`，保证顺序且 `top`/`search` 会等待队列排空（`await updateQueue.processing`）后再读，避免读到半截状态。
 
 ### 5. 进程树清理
 停止进程用 `tree-kill`。在 Windows 上 SIGTERM 不被支持，统一走 SIGKILL（映射到 `taskkill /T /F`），确保 `cmd /c` 衍生的子进程也被回收。默认先 SIGTERM，10 秒未退出则强制 SIGKILL（Windows 始终 SIGKILL）。进程退出时通过 `beforeExit`/`SIGINT`/`SIGTERM`/`uncaughtException`/stdin-close 触发幂等的 `cleanup()` 回收全部子进程。
 
 ### 6. 临时目录即数据目录
-运行时数据落在 `os.tmpdir()/procm-mcp/<serverId>/` 下，包含 `debug.log`、`allowed-process-creations.json`（在上级 `procm-mcp/` 目录）、以及每个进程的 `processes/<id>-*.json|log`。`serverId` 是启动时生成的 6 位 nanoid。
+运行时数据落在 `os.tmpdir()/procm-mcp/` 下：`allowed-process-creations.json`（白名单，全局）、`processes.json`（进程历史，全局，跨重启）在根级；`<serverId>/` 下有 `debug.log` 与每个进程的 `processes/<id>-*.json|log`。`serverId` 是启动时生成的 6 位 nanoid，每次重启变化（日志按实例隔离，历史全局共享）。
+
+### 7. 持久化历史 + 启动回收
+活进程状态每次变更都 fire-and-forget `persist()` 到全局 `processes.json`（`ProcessRecord` 形状，剥离内部字段加时间戳与日志路径）。`listProcessRecords()` 合并内存活进程与持久化历史，停止/退出的进程仍可见。后端启动时 `reconcileStaleProcesses()` 把上一轮残留的 `running` 记录回收（孤儿 PID 杀掉）并标记 exited，避免 dashboard 显示僵尸行。
+
+### 8. WebSocket 实时推送
+HTTP 服务器同端口挂 `/ws`（`attachWebsocketServer` 接管 `server.on("upgrade")`）。进程状态变更（`emitProcessChange`，微任务内合并 burst）和每条新日志（`emitLog`）实时推给所有 dashboard 客户端；连接即发进程快照。前端指数退避自动重连。REST API 仍可独立用。
 
 ## 运行时边界
 

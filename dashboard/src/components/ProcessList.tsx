@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   type ColumnDef,
   type Column,
@@ -110,13 +111,13 @@ const STATUS_DOT: Record<StatusFilter, string> = {
   expired: "bg-muted-foreground/30",
 };
 
-const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
-  { value: "all", label: "All statuses" },
-  { value: "running", label: "Running" },
-  { value: "spawning", label: "Spawning" },
-  { value: "exited", label: "Exited" },
-  { value: "error", label: "Error" },
-  { value: "expired", label: "Stopped (expired)" },
+const STATUS_OPTIONS: { value: StatusFilter; labelKey: string }[] = [
+  { value: "all", labelKey: "processes.filterAll" },
+  { value: "running", labelKey: "processes.filterRunning" },
+  { value: "spawning", labelKey: "processes.filterSpawning" },
+  { value: "exited", labelKey: "processes.filterExited" },
+  { value: "error", labelKey: "processes.filterError" },
+  { value: "expired", labelKey: "processes.filterExpired" },
 ];
 
 const PAGE_SIZE = 8;
@@ -131,6 +132,7 @@ export function ProcessList({
   onView,
   onToast,
 }: ProcessListProps) {
+  const { t } = useTranslation();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [nameFilter, setNameFilter] = useState("");
   const [pagination, setPagination] = useState<PaginationState>({
@@ -159,7 +161,7 @@ export function ProcessList({
     setPendingDelete(null);
     try {
       await deleteProcessCall(p.id);
-      onToast(`Deleted ${p.name}`);
+      onToast(t("processes.toastDeleted", { name: p.name }));
     } catch (err) {
       onToast(err instanceof Error ? err.message : String(err), true);
     }
@@ -180,7 +182,7 @@ export function ProcessList({
     setPendingStop(null);
     try {
       await stopProcess(p.id);
-      onToast(`Stopped ${p.name}`);
+      onToast(t("processes.toastStopped", { name: p.name }));
     } catch (err) {
       onToast(err instanceof Error ? err.message : String(err), true);
     }
@@ -189,9 +191,9 @@ export function ProcessList({
   async function handleCopyId(p: ProcessView) {
     try {
       await navigator.clipboard.writeText(p.id);
-      onToast(`Copied ID: ${p.id}`);
+      onToast(t("processes.toastCopiedId", { id: p.id }));
     } catch {
-      onToast("Copy failed", true);
+      onToast(t("processes.toastCopyFailed"), true);
     }
   }
 
@@ -204,7 +206,7 @@ export function ProcessList({
     try {
       const { command } = await getProcessCommand(p.id);
       await navigator.clipboard.writeText(command);
-      onToast("Copied command");
+      onToast(t("processes.toastCopiedCommand"));
     } catch (err) {
       onToast(err instanceof Error ? err.message : String(err), true);
     }
@@ -213,7 +215,7 @@ export function ProcessList({
   async function handleRestart(id: string) {
     try {
       await restartProcess(id);
-      onToast(`Restarted ${id}`);
+      onToast(t("processes.toastRestarted", { id }));
       // Same as delete: the WebSocket push handles the list refresh.
     } catch (err) {
       onToast(err instanceof Error ? err.message : String(err), true);
@@ -225,7 +227,7 @@ export function ProcessList({
       {
         accessorKey: "name",
         header: ({ column }) => (
-          <SortableHeader column={column}>Name</SortableHeader>
+          <SortableHeader column={column}>{t("processes.colName")}</SortableHeader>
         ),
         cell: ({ row }) => {
           const p = row.original;
@@ -234,7 +236,7 @@ export function ProcessList({
       },
       {
         id: "command",
-        header: "Command",
+        header: t("processes.colCommand"),
         cell: ({ row }) => {
           const p = row.original;
           const cmd = `${p.script}${p.args?.length ? " " + p.args.join(" ") : ""}`;
@@ -243,7 +245,7 @@ export function ProcessList({
       },
       {
         id: "desc",
-        header: "Description",
+        header: t("processes.colDescription"),
         cell: ({ row }) => {
           const desc = row.original.desc;
           return desc ? (
@@ -264,7 +266,7 @@ export function ProcessList({
         id: "createdAt",
         accessorFn: (p) => p.startedAt ?? 0,
         header: ({ column }) => (
-          <SortableHeader column={column}>Created</SortableHeader>
+          <SortableHeader column={column}>{t("processes.colCreated")}</SortableHeader>
         ),
         cell: ({ row }) => {
           const t = row.original.startedAt;
@@ -281,7 +283,7 @@ export function ProcessList({
       {
         accessorKey: "status",
         header: ({ column }) => (
-          <SortableHeader column={column}>Status</SortableHeader>
+          <SortableHeader column={column}>{t("processes.colStatus")}</SortableHeader>
         ),
         cell: ({ row }) => (
           <StatusBadge
@@ -292,7 +294,7 @@ export function ProcessList({
       },
       {
         accessorKey: "pid",
-        header: "PID",
+        header: t("processes.colPid"),
         cell: ({ row }) => (
           <span className="text-sm tabular-nums">
             {row.original.pid != null ? row.original.pid : "—"}
@@ -301,7 +303,7 @@ export function ProcessList({
       },
       {
         accessorKey: "exitCode",
-        header: "Exit",
+        header: t("processes.colExit"),
         cell: ({ row }) => (
           <span className="text-sm tabular-nums">
             {row.original.exitCode != null ? row.original.exitCode : "—"}
@@ -312,7 +314,7 @@ export function ProcessList({
         // Unread live-log count since the panel for this process was last open.
         // Shows a badge only when there are unseen lines.
         id: "unread",
-        header: "Logs",
+        header: t("processes.colLogs"),
         cell: ({ row }) => {
           const count = unread[row.original.id] ?? 0;
           return count > 0 ? (
@@ -326,7 +328,7 @@ export function ProcessList({
       },
       {
         id: "actions",
-        header: () => <div className="text-right">Actions</div>,
+        header: () => <div className="text-right">{t("processes.colActions")}</div>,
         cell: ({ row }) => {
           const p = row.original;
           // Expired (stopped) processes can't be restarted, but their logs are
@@ -349,13 +351,13 @@ export function ProcessList({
                 variant="ghost"
                 aria-label={
                   favoritedSignatures.has(favoriteSignature(p))
-                    ? `Remove ${p.name} from favorites`
-                    : `Add ${p.name} to favorites`
+                    ? t("processes.removeFavoriteAria", { name: p.name })
+                    : t("processes.addFavoriteAria", { name: p.name })
                 }
                 title={
                   favoritedSignatures.has(favoriteSignature(p))
-                    ? "Remove from favorites"
-                    : "Add to favorites"
+                    ? t("processes.removeFavoriteTitle")
+                    : t("processes.addFavoriteTitle")
                 }
                 onClick={() => onToggleFavorite(p)}
                 className={favoritedSignatures.has(favoriteSignature(p)) ? "text-warning" : "text-muted-foreground"}
@@ -372,8 +374,8 @@ export function ProcessList({
                 <Button
                   size="icon-sm"
                   variant="ghost"
-                  aria-label={`Stop ${p.name}`}
-                  title="Stop (keeps the record)"
+                  aria-label={t("processes.stopAria", { name: p.name })}
+                  title={t("processes.stopTitle")}
                   onClick={() => requestStop(p)}
                   className="text-muted-foreground hover:text-warning"
                 >
@@ -383,8 +385,8 @@ export function ProcessList({
                 <Button
                   size="icon-sm"
                   variant="ghost"
-                  aria-label={`Run ${p.name}`}
-                  title="Run"
+                  aria-label={t("processes.runAria", { name: p.name })}
+                  title={t("processes.runTitle")}
                   onClick={() => handleRestart(p.id)}
                   disabled={isExpired}
                   className="text-muted-foreground hover:text-success"
@@ -395,8 +397,8 @@ export function ProcessList({
               <Button
                 size="icon-sm"
                 variant="ghost"
-                aria-label={`Delete ${p.name}`}
-                title="Delete (stops the process if running)"
+                aria-label={t("processes.deleteAria", { name: p.name })}
+                title={t("processes.deleteTitle")}
                 onClick={() => requestDelete(p)}
                 className="text-muted-foreground hover:text-destructive"
               >
@@ -469,8 +471,9 @@ export function ProcessList({
                     STATUS_DOT[statusFilter]
                   }
                 />
-                {STATUS_OPTIONS.find((o) => o.value === statusFilter)?.label ??
-                  "All statuses"}
+                {STATUS_OPTIONS.find((o) => o.value === statusFilter)
+                  ? t(STATUS_OPTIONS.find((o) => o.value === statusFilter)!.labelKey)
+                  : t("processes.filterAll")}
               </span>
             </SelectValue>
             <SelectIcon />
@@ -479,14 +482,14 @@ export function ProcessList({
             {STATUS_OPTIONS.map((o) => (
               <SelectItem key={o.value} value={o.value}>
                 <SelectItemText>
-                  <span className="flex items-center gap-2">
+                    <span className="flex items-center gap-2">
                     <span
                       className={
                         "inline-block size-1.5 shrink-0 rounded-full " +
                         STATUS_DOT[o.value]
                       }
                     />
-                    {o.label}
+                    {t(o.labelKey)}
                   </span>
                 </SelectItemText>
               </SelectItem>
@@ -498,12 +501,12 @@ export function ProcessList({
           <Input
             value={nameFilter}
             onChange={(e) => setNameFilter(e.target.value)}
-            placeholder="Filter by name or command…"
+            placeholder={t("processes.filterPlaceholder")}
             className="h-8 pl-8 text-xs"
           />
         </div>
         <span className="text-muted-foreground text-xs">
-          {rowCount} of {processes.length}
+          {t("processes.countOfTotal", { shown: rowCount, total: processes.length })}
         </span>
       </div>
 
@@ -560,15 +563,15 @@ export function ProcessList({
                     <ContextMenuPopup>
                       <ContextMenuItem onClick={() => handleCopyId(p)}>
                         <CopyIcon aria-hidden="true" />
-                        Copy ID
+                        {t("processes.ctxCopyId")}
                       </ContextMenuItem>
                       <ContextMenuItem onClick={() => handleCopyCommand(p)}>
                         <SquareTerminalIcon aria-hidden="true" />
-                        复制命令
+                        {t("processes.ctxCopyCommand")}
                       </ContextMenuItem>
                       <ContextMenuItem onClick={() => onView(p)}>
                         <EyeIcon aria-hidden="true" />
-                        View
+                        {t("processes.ctxView")}
                       </ContextMenuItem>
                       <ContextMenuSeparator />
                       <ContextMenuItem
@@ -577,7 +580,7 @@ export function ProcessList({
                         disabled={!canStop}
                       >
                         <SquareIcon aria-hidden="true" />
-                        Stop
+                        {t("processes.ctxStop")}
                       </ContextMenuItem>
                     </ContextMenuPopup>
                   </ContextMenu>
@@ -593,13 +596,13 @@ export function ProcessList({
                     </EmptyMedia>
                     <EmptyTitle>
                       {processes.length === 0
-                        ? "No processes yet"
-                        : "No processes match the filters"}
+                        ? t("processes.emptyNoProcesses")
+                        : t("processes.emptyNoMatches")}
                     </EmptyTitle>
                     <EmptyDescription>
                       {processes.length === 0
-                        ? "Start a process to see it here."
-                        : "Try clearing the status filter or search."}
+                        ? t("processes.emptyDescNoProcesses")
+                        : t("processes.emptyDescNoMatches")}
                     </EmptyDescription>
                   </EmptyHeader>
                 </Empty>
@@ -614,12 +617,13 @@ export function ProcessList({
       {rowCount > 0 && (
         <div className="flex shrink-0 items-center justify-between gap-2 border-t px-4 py-2.5">
           <span className="text-muted-foreground whitespace-nowrap text-xs">
-            Viewing{" "}
-            <strong className="text-foreground font-medium">
-              {rangeStart}–{rangeEnd}
-            </strong>{" "}
-            of <strong className="text-foreground font-medium">{rowCount}</strong>
-            {pageCount > 1 && ` · page ${pageIndex + 1}/${pageCount}`}
+            {t("processes.paginationViewing", {
+              start: rangeStart,
+              end: rangeEnd,
+              total: rowCount,
+            })}
+            {pageCount > 1 &&
+              t("processes.paginationPage", { page: pageIndex + 1, pages: pageCount })}
           </span>
           <Pagination>
             <PaginationContent>
@@ -627,7 +631,7 @@ export function ProcessList({
                 <Button
                   size="icon-sm"
                   variant="outline"
-                  aria-label="Previous page"
+                  aria-label={t("processes.previousPage")}
                   disabled={!table.getCanPreviousPage()}
                   onClick={() => table.previousPage()}
                 >
@@ -638,7 +642,7 @@ export function ProcessList({
                 <Button
                   size="icon-sm"
                   variant="outline"
-                  aria-label="Next page"
+                  aria-label={t("processes.nextPage")}
                   disabled={!table.getCanNextPage()}
                   onClick={() => table.nextPage()}
                 >
@@ -660,7 +664,7 @@ export function ProcessList({
       >
         <AlertDialogPopup>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete process?</AlertDialogTitle>
+            <AlertDialogTitle>{t("processes.deleteQuestion")}</AlertDialogTitle>
             <AlertDialogDescription>
               {pendingDelete && (() => {
                 const running =
@@ -668,20 +672,20 @@ export function ProcessList({
                   pendingDelete.status !== "exited" &&
                   pendingDelete.status !== "error";
                 return running
-                  ? `This will stop “${pendingDelete.name}” (${pendingDelete.id}) and erase its record. This action cannot be undone.`
-                  : `This will erase the record for “${pendingDelete.name}” (${pendingDelete.id}). This action cannot be undone.`;
+                  ? t("processes.deleteDescriptionRunning", { name: pendingDelete.name, id: pendingDelete.id })
+                  : t("processes.deleteDescriptionStopped", { name: pendingDelete.name, id: pendingDelete.id });
               })()}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogClose render={<Button variant="ghost" />}>
-              Cancel
+              {t("common.cancel")}
             </AlertDialogClose>
             <AlertDialogClose
               render={<Button variant="destructive" />}
               onClick={confirmDelete}
             >
-              Delete
+              {t("common.delete")}
             </AlertDialogClose>
           </AlertDialogFooter>
         </AlertDialogPopup>
@@ -697,21 +701,21 @@ export function ProcessList({
       >
         <AlertDialogPopup>
           <AlertDialogHeader>
-            <AlertDialogTitle>Stop process?</AlertDialogTitle>
+            <AlertDialogTitle>{t("processes.stopQuestion")}</AlertDialogTitle>
             <AlertDialogDescription>
               {pendingStop &&
-                `This will stop “${pendingStop.name}” (${pendingStop.id}). Its record and logs are kept as history.`}
+                t("processes.stopDescription", { name: pendingStop.name, id: pendingStop.id })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogClose render={<Button variant="ghost" />}>
-              Cancel
+              {t("common.cancel")}
             </AlertDialogClose>
             <AlertDialogClose
               render={<Button variant="destructive" />}
               onClick={confirmStop}
             >
-              Stop
+              {t("common.stop")}
             </AlertDialogClose>
           </AlertDialogFooter>
         </AlertDialogPopup>

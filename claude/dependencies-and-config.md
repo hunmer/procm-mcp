@@ -5,10 +5,11 @@
 | 依赖 | 版本 | 用途 |
 |---|---|---|
 | `@modelcontextprotocol/sdk` | ^1.12.3 | MCP server、StdioServerTransport、StreamableHTTPServerTransport、类型 |
-| `lowdb` | ^7.0.1 | 日志 JSON 存储（`Low` + `JSONFile`） |
+| `lowdb` | ^7.0.1 | 进程历史 + 日志 JSON 存储（`Low` + `JSONFile`） |
 | `mkdirp` | ^3.0.1 | 创建运行时数据目录 |
 | `nanoid` | ^5.1.5 | serverId(6)、processId(8) |
 | `tree-kill` | ^1.2.2 | 进程树终止（Windows `taskkill /T /F`） |
+| `ws` | ^8.21.1 | WebSocket 服务器（dashboard `/ws` 实时推送） |
 | `zod` | ^3.25.64 | MCP 工具入参 schema |
 
 ## 开发依赖（后端）
@@ -17,7 +18,8 @@
 |---|---|---|
 | `typescript` | ^5.8.3 | 编译 |
 | `@types/node` | ^24.0.1 | Node 类型 |
-| `@modelcontextprotocol/inspector` | ^0.16.1 | `npm run inspect` 调试 |
+| `@modelcontextprotocol/inspector` | ^1.0.1 | `npm run inspect` 调试 |
+| `@types/ws` | ^8.18.1 | `ws` 类型 |
 
 > 后端**纯 Node.js**，无前端框架。运行需 Node 能力：`child_process.spawn`、`http`、`fs`、`os.tmpdir`、全局 `fetch`（Node 18+，CLI 客户端与测试均用到）。
 
@@ -62,11 +64,12 @@ React 19 + Vite 6 + Tailwind v4（`@tailwindcss/vite`）+ coss（基于 `@base-u
 ```
 <tmpdir>/procm-mcp/
   allowed-process-creations.json        # allow-x 白名单（全 server 共享）
+  processes.json                        # 进程历史记录（全 server 共享，跨重启）
   <serverId>/
     debug.log                           # server 日志
     processes/
-      <processId>-stdout.json           # lowdb 结构化日志
-      <processId>-stdout.log            # 原始文本
+      <processId>-stdout.json           # lowdb 结构化日志（带时间戳）
+      <processId>-stdout.log            # 行分隔文本
       <processId>-stderr.json
       <processId>-stderr.log
 ```

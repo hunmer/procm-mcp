@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/registry/default/ui/button";
 import { Badge } from "@/registry/default/ui/badge";
 import {
@@ -8,6 +9,7 @@ import {
   TabsTab,
 } from "@/registry/default/ui/tabs";
 import {
+  LanguagesIcon,
   ListIcon,
   MoonIcon,
   PanelLeftOpenIcon,
@@ -27,6 +29,8 @@ import { LogPanel } from "./LogPanel";
 import { Toast } from "./Toast";
 import { DevInspector } from "./DevInspector";
 import { useTheme } from "@/lib/useTheme";
+import { useLanguage } from "@/lib/useLanguage";
+import { LANGUAGES } from "@/i18n";
 import { useDashboardSocket } from "@/lib/ws";
 import { clearAllProcesses, openFolder, startProcess } from "@/lib/api";
 import {
@@ -76,6 +80,8 @@ export function App() {
     "processes",
   );
   const { theme, toggle } = useTheme();
+  const { language, changeLanguage } = useLanguage();
+  const { t } = useTranslation();
 
   // Favorites live entirely client-side (localStorage). They're a saved launch
   // recipe + optional category, decoupled from the backend process records.
@@ -164,6 +170,11 @@ export function App() {
     return () => clearInterval(t);
   }, []);
 
+  // Keep the document title in sync with the active language.
+  useEffect(() => {
+    document.title = t("app.title");
+  }, [t]);
+
   // Format the backend's uptime as e.g. "1h 02m 03s" / "02m 03s" / "03s".
   const uptime =
     serverStartedAt != null ? formatUptime(Math.max(0, now - serverStartedAt)) : null;
@@ -207,7 +218,7 @@ export function App() {
         const sig = favoriteSignature(p);
         const existing = favorites.find((f) => favoriteSignature(f) === sig);
         if (existing) removeFavorite(existing.id);
-        showToast(`Removed “${p.name}” from favorites`);
+        showToast(t("toasts.removedFromFavorites", { name: p.name }));
       } else {
         setFavSeedFavorite(null);
         setFavSeedProcess(p);
@@ -221,22 +232,22 @@ export function App() {
   // launch signature (the hook de-dupes too, but we toast accordingly).
   function handleCreateFavorite(fav: Favorite) {
     if (favoritedSignatures.has(favoriteSignature(fav))) {
-      showToast(`Already in favorites: ${fav.name ?? fav.script}`, true);
+      showToast(t("toasts.alreadyInFavorites", { name: fav.name ?? fav.script }), true);
       return;
     }
     addFavorite(fav);
-    showToast(`Added “${fav.name ?? fav.script}” to favorites`);
+    showToast(t("toasts.addedToFavorites", { name: fav.name ?? fav.script }));
   }
 
   function handleEditFavorite(fav: Favorite) {
     updateFavorite(fav);
-    showToast(`Updated “${fav.name ?? fav.script}”`);
+    showToast(t("toasts.updatedFavorite", { name: fav.name ?? fav.script }));
   }
 
   function handleRemoveFavorite(id: string) {
     const f = favorites.find((x) => x.id === id);
     removeFavorite(id);
-    showToast(`Removed “${f?.name ?? f?.script ?? "favorite"}”`);
+    showToast(t("toasts.removedFavorite", { name: f?.name ?? f?.script ?? "" }));
   }
 
   // Import a batch of scanned favorites (from the folder-import dialog). Each
@@ -249,11 +260,11 @@ export function App() {
     }
     const skipped = favs.length - added;
     if (skipped === 0) {
-      showToast(`Imported ${added} favorite${added === 1 ? "" : "s"}`);
+      showToast(t("toasts.importedAll", { count: added }));
     } else if (added === 0) {
-      showToast(`All ${skipped} already in favorites`, true);
+      showToast(t("toasts.allAlreadyInFavorites", { count: skipped }), true);
     } else {
-      showToast(`Imported ${added}, skipped ${skipped} already saved`);
+      showToast(t("toasts.importedSome", { added, skipped }));
     }
   }
 
@@ -273,7 +284,7 @@ export function App() {
   function handleRemoveCategory(ids: string[]) {
     const n = ids.length;
     for (const id of ids) removeFavorite(id);
-    if (n > 0) showToast(`Deleted ${n} favorite${n === 1 ? "" : "s"}`);
+    if (n > 0) showToast(t("toasts.deletedGroup", { count: n }));
   }
 
   // Launch a favorite as a real process via the backend. On success, jump to
@@ -283,7 +294,7 @@ export function App() {
     try {
       const r = await startProcess(favoriteToStartBody(fav));
       pendingSelectRef.current = r.id;
-      showToast(`Started: ${r.id}`);
+      showToast(t("toasts.started", { id: r.id }));
       setActiveTab("processes");
     } catch (err) {
       showToast(err instanceof Error ? err.message : String(err), true);
@@ -311,9 +322,9 @@ export function App() {
         snapshot.map((p) => p.id),
       );
       if (notFound.length === 0) {
-        showToast(`Cleared ${deleted.length} process${deleted.length === 1 ? "" : "es"}`);
+        showToast(t("toasts.cleared", { count: deleted.length }));
       } else {
-        showToast(`Cleared ${deleted.length}, ${notFound.length} not found`, true);
+        showToast(t("toasts.clearedPartial", { deleted: deleted.length, notFound: notFound.length }), true);
       }
     } catch (err) {
       showToast(err instanceof Error ? err.message : String(err), true);
@@ -328,12 +339,12 @@ export function App() {
 
   const statusMeta =
     status === "open"
-      ? "connected"
+      ? t("header.statusConnected")
       : status === "connecting"
-        ? "connecting…"
+        ? t("header.statusConnecting")
         : reconnectInMs != null
-          ? `reconnecting in ${Math.ceil(reconnectInMs / 1000)}s`
-          : "reconnecting…";
+          ? t("header.statusReconnectingIn", { n: Math.ceil(reconnectInMs / 1000) })
+          : t("header.statusReconnecting");
 
   return (
     <div className="flex h-full flex-col">
@@ -359,7 +370,7 @@ export function App() {
           {uptime && (
             <span
               className="text-muted-foreground font-mono text-xs tabular-nums"
-              title="Server uptime"
+              title={t("header.serverUptime")}
             >
               {uptime}
             </span>
@@ -368,13 +379,27 @@ export function App() {
         {/* Right: actions. */}
         <div className="flex items-center gap-2">
           <NewProcessDialog
-            onStarted={(id) => showToast(`Started: ${id}`)}
+            onStarted={(id) => showToast(t("toasts.started", { id }))}
             onError={(m) => showToast(m, true)}
           />
           <Button
             variant="outline"
             size="icon"
-            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+            aria-label={t("header.switchLanguage")}
+            title={t("header.switchLanguage")}
+            onClick={() => {
+              const idx = LANGUAGES.indexOf(language);
+              changeLanguage(LANGUAGES[(idx + 1) % LANGUAGES.length]);
+            }}
+          >
+            <LanguagesIcon />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label={t("header.switchToTheme", {
+              theme: theme === "dark" ? t("common.lightTheme") : t("common.darkTheme"),
+            })}
             onClick={toggle}
           >
             {theme === "dark" ? <SunIcon /> : <MoonIcon />}
@@ -400,7 +425,7 @@ export function App() {
                 <TabsList className="relative">
                   <TabsTab value="processes">
                     <ListIcon className="size-3.5" />
-                    Processes
+                    {t("header.tabProcesses")}
                     {processes.length > 0 && (
                       <span className="text-muted-foreground text-xs">
                         ({processes.length})
@@ -409,7 +434,7 @@ export function App() {
                   </TabsTab>
                   <TabsTab value="favorites">
                     <StarIcon className="size-3.5" />
-                    Favorites
+                    {t("header.tabFavorites")}
                     {favorites.length > 0 && (
                       <span className="text-muted-foreground text-xs">
                         ({favorites.length})
@@ -423,15 +448,15 @@ export function App() {
                 {activeTab === "processes" && runningCount > 0 && (
                   <Badge variant="success" className="gap-1.5">
                     <span className="inline-block size-1.5 rounded-full bg-current" />
-                    {runningCount} running
+                    {t("header.running", { count: runningCount })}
                   </Badge>
                 )}
                 {activeTab === "processes" && processes.length > 0 && (
                   <Button
                     size="icon-sm"
                     variant="ghost"
-                    aria-label="Clear all processes"
-                    title="Clear all processes"
+                    aria-label={t("header.clearAllTitle")}
+                    title={t("header.clearAllTitle")}
                     onClick={() => setClearAllOpen(true)}
                   >
                     <TrashIcon />
@@ -488,8 +513,8 @@ export function App() {
           type="button"
           onClick={() => setLogCollapsed(false)}
           className="bg-card hover:bg-accent fixed right-0 top-1/2 z-20 -translate-y-1/2 rounded-l-lg border-y border-l py-3 pl-1.5 pr-1 text-muted-foreground shadow-lg"
-          title={`Show logs: ${selected.name}`}
-          aria-label={`Show logs for ${selected.name}`}
+          title={t("header.showLogs", { name: selected.name })}
+          aria-label={t("header.showLogsFor", { name: selected.name })}
         >
           <PanelLeftOpenIcon className="size-4" />
         </button>
@@ -531,20 +556,20 @@ export function App() {
       <AlertDialog open={clearAllOpen} onOpenChange={setClearAllOpen}>
         <AlertDialogPopup>
           <AlertDialogHeader>
-            <AlertDialogTitle>Clear all processes?</AlertDialogTitle>
+            <AlertDialogTitle>{t("header.clearAllQuestion")}</AlertDialogTitle>
             <AlertDialogDescription>
-              {`This will stop and delete all ${processes.length} process${processes.length === 1 ? "" : "es"}. This action cannot be undone.`}
+              {t("header.clearAllDescription", { count: processes.length })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogClose render={<Button variant="ghost" />}>
-              Cancel
+              {t("common.cancel")}
             </AlertDialogClose>
             <AlertDialogClose
               render={<Button variant="destructive" />}
               onClick={handleClearAll}
             >
-              Clear all
+              {t("header.clearAll")}
             </AlertDialogClose>
           </AlertDialogFooter>
         </AlertDialogPopup>
