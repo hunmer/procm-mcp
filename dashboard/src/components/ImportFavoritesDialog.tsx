@@ -151,13 +151,13 @@ export function ImportFavoritesDialog({
           <DialogPanel>
             <Field>
               <FieldLabel htmlFor="imp-path">Folder path</FieldLabel>
-              <div className="flex gap-2">
+              <div className="flex gap-2 w-full">
                 <Input
                   id="imp-path"
                   placeholder="/path/to/project"
                   value={path}
                   onChange={(e) => setPath(e.target.value)}
-                  className="font-mono text-xs"
+                  className="font-mono text-xs min-w-0 flex-1"
                   spellCheck={false}
                   autoComplete="off"
                 />

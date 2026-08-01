@@ -254,12 +254,26 @@ export async function startProcess(
     childProcess.on("exit", (code) => {
       status = "exited";
       exitCode = code;
+      // Surface non-zero / unexpected exits to the console so an operator
+      // watching the backend notices the crash, not just the dashboard.
+      if (code !== 0) {
+        const label = name || script;
+        const msg = `Process "${label}" (ID: ${processId}) exited with code ${code}`;
+        serverLog(msg);
+        console.error(`procm-mcp: ${msg}`);
+      }
       applyProcessState();
     });
 
     childProcess.on("error", (error) => {
       status = "error";
       processError = error.message;
+      // Spawn/runtime failures (e.g. command not found) are surfaced to the
+      // console so they aren't only visible in the dashboard's status tooltip.
+      const label = name || script;
+      const msg = `Process "${label}" (ID: ${processId}) error: ${toErrorMessage(error)}`;
+      serverLog(msg);
+      console.error(`procm-mcp: ${msg}`);
       applyProcessState();
     });
 

@@ -47,11 +47,17 @@ import {
   PlayIcon,
   SearchIcon,
   SquareIcon,
+  SquareTerminalIcon,
   StarIcon,
   TrashIcon,
 } from "lucide-react";
 import { StatusBadge } from "./StatusBadge";
-import { deleteProcessCall, restartProcess, stopProcess } from "@/lib/api";
+import {
+  deleteProcessCall,
+  getProcessCommand,
+  restartProcess,
+  stopProcess,
+} from "@/lib/api";
 import { favoriteSignature } from "@/lib/favorites";
 import type { ProcessStatus, ProcessView } from "@/lib/types";
 import {
@@ -189,6 +195,20 @@ export function ProcessList({
     }
   }
 
+  // Copy a complete, paste-and-run terminal command for the process. Built on
+  // the backend (cd to cwd + env-var prefixes + `script args`), formatted for
+  // the backend's own OS. Only live processes resolve — historical records
+  // don't carry envs and 404; the menu item is disabled for those.
+  async function handleCopyCommand(p: ProcessView) {
+    try {
+      const { command } = await getProcessCommand(p.id);
+      await navigator.clipboard.writeText(command);
+      onToast("Copied command");
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : String(err), true);
+    }
+  }
+
   async function handleRestart(id: string) {
     try {
       await restartProcess(id);
@@ -262,7 +282,12 @@ export function ProcessList({
         header: ({ column }) => (
           <SortableHeader column={column}>Status</SortableHeader>
         ),
-        cell: ({ row }) => <StatusBadge status={row.original.status} />,
+        cell: ({ row }) => (
+          <StatusBadge
+            status={row.original.status}
+            error={row.original.error}
+          />
+        ),
       },
       {
         accessorKey: "pid",
@@ -535,6 +560,13 @@ export function ProcessList({
                       <ContextMenuItem onClick={() => handleCopyId(p)}>
                         <CopyIcon aria-hidden="true" />
                         Copy ID
+                      </ContextMenuItem>
+                      <ContextMenuItem
+                        onClick={() => handleCopyCommand(p)}
+                        disabled={!canStop}
+                      >
+                        <SquareTerminalIcon aria-hidden="true" />
+                        复制命令
                       </ContextMenuItem>
                       <ContextMenuItem onClick={() => onView(p)}>
                         <EyeIcon aria-hidden="true" />

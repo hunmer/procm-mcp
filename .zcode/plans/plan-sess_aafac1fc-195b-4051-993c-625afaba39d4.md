@@ -1,119 +1,77 @@
-# Plan: LogPanel footer — copy-text button + dropdown (copy path / download file)
+# Plan: 列表右键菜单增加「复制命令」
 
 ## Goal
-In `dashboard/src/components/LogPanel.tsx`, add to the footer toolbar:
-1. A **copy icon button** (left group) that copies the currently displayed log text to the clipboard.
-2. A **dots (overflow) icon button** (right group, next to the line-count text) that opens a dropdown menu with:
-   - **复制日志文件位置** (Copy log file location)
-   - **下载日志文件** (Download log file)
+In `dashboard/src/components/ProcessList.tsx`'s row context menu, add a **「复制命令」(Copy command)** item that copies a complete, paste-and-run terminal command to the clipboard. The command must include the `cd` to the working dir, the env-var prefixes, and `script args` — built **for the backend's own OS** so it runs when pasted into a matching shell (win32 → cmd.exe syntax; *nix → POSIX/bash syntax), per the user's choice.
 
-Because the browser can't know `os.tmpdir()` or read the on-disk `.log` files, add two backend endpoints (user chose "Backend endpoints").
+Key constraint discovered: `envs` lives **only** in the in-memory `ProcessMetadata`, never serialized to the client (deliberately omitted from `ProcessView`/`ProcessRecord`). So the full command (with envs) must be **built on the backend**, where `meta.envs` is available, and returned as a ready-to-copy string.
 
 ---
 
-## 1. Backend — expose file paths + serve the log file
+## 1. Backend — shell-quoting + command builder + route
 
-### `src/process-stdout-client.ts`
-- Add `textFilePath: string` to the `ProcessStdoutClient` type and return it from `createProcessStdoutClient` (it's already a local `const`, just expose it). Non-breaking addition.
+### `src/process-stdout-client.ts`? No — put helpers in `src/http-server.ts` (local to the route that uses them).
 
-### `src/http-server.ts`
-Extend the route regex to accept two new actions and add handlers. New regex:
-```
-/^\/api\/processes(?:\/([^/]+))?(?:\/(stop|restart|logs|log-files|log-download))?$/
-```
-- **`GET /api/processes/:id/log-files`** → `200 { stdoutPath, stderrPath }`. Reads `meta.stdoutClient.textFilePath` / `stderrClient.textFilePath`. 404 if process not found. Returns absolute paths so the frontend can copy the real location.
-- **`GET /api/processes/:id/log-download`** → streams the merged `.log` file as an attachment. Implementation:
-  - Build the merged text by reading both `meta.stdoutClient.textFilePath` and `stderrClient.textFilePath` with `fs/promises.readFile`. If a file is missing, treat as empty (catch ENOENT). Mirror the frontend's merge: parse each line's leading `[ISO]` timestamp and stable-sort by time, so the downloaded file matches what the dashboard shows. Reuse the existing `[ISO] message` line format.
-  - `Content-Disposition: attachment; filename="<name>-<id>.log"` (sanitize `name`), `Content-Type: text/plain; charset=utf-8`.
-  - This stays inside the `if (idParam)` block alongside the existing `logs`/`stop`/`restart` action handlers, reusing `getProcess` / `json` / `toErrorMessage`.
+Add two small quoting helpers at module scope in `src/http-server.ts` (next to `mergeLogText`):
+- `quoteWin(arg)` — for cmd.exe: wrap in double quotes, escape embedded `"` as `\"`? Actually cmd.exe uses `"` literally; safest portable approach for cmd is double-quoting the whole token and escaping internal `"` by doubling (`""`)? The robust, simple rule for cmd.exe: wrap token in `"..."` and replace any `"` with `\"` is NOT cmd-native. **Use the widely-correct heuristic:** wrap in double quotes, and replace `"` → `\"`. This matches how most tools emit cmd-safe argv. (Keep it simple; envs/args are operator-provided, not adversarial.)
+- `quotePosix(arg)` — POSIX single-quote wrapping: wrap token in `'...'` and escape embedded `'` as `'\''` (the standard, robust POSIX rule). This is safe for all shell metacharacters.
 
-> Streaming the actual `.log` file (vs re-querying the lowdb JSON) gives the user the true file, not a count-capped reconstruction.
+Then `buildCommand({ script, args, envs, cwd, platform })`:
+- `platform` = `process.platform` (captured once).
+- **win32 (cmd.exe):**
+  - `cd /d "<cwd>" &&`
+  - for each env `KEY=VALUE`: `set "KEY=<value>" && ` (value inline, no extra quotes — `set "K=V"` already handles spaces/spaces in V).
+  - `"<script>" "<arg1>" "<arg2>" …` (each token win-quoted).
+- **other (POSIX/bash/zsh):**
+  - `cd '<cwd>' &&`
+  - envs as inline prefixes: `KEY='<value>' KEY2='<value2>' ` (value posix-quoted).
+  - `'<script>' '<arg1>' '<arg2>' …` (each token posix-quoted).
+- Skip the `cd … &&` part when `cwd` is empty.
+- Join with single spaces → one line.
+
+### Route — `src/http-server.ts`
+- Extend the regex alternation: add `command`.
+  `/^\/api\/processes(?:\/([^/]+))?(?:\/(stop|restart|logs|log-files|log-download|command))?$/`
+- Add handler (mirror `log-files`):
+  - `GET /api/processes/:id/command` → `200 { command }`.
+  - `meta = getProcess(idParam)`; if missing → `404 { error: "Process not found" }`.
+  - Build the command from `meta.script`, `meta.args`, `meta.envs`, `meta.cwd`, `process.platform`.
+  - **Live-only note:** `getProcess` resolves live processes (envs in memory). Stopped/exited records (persisted) don't carry envs — for those, `getProcess` returns undefined and we 404. This matches "复制命令" being most meaningful for live processes; historical rows will show the item disabled/greyed (see frontend). Document this in a comment.
 
 ---
 
 ## 2. Frontend — API client
 
 ### `dashboard/src/lib/api.ts`
-Add two thin wrappers (reuse the existing `api<T>` helper):
-- `getLogFiles(id): Promise<{ stdoutPath: string; stderrPath: string }>` → `GET /api/processes/:id/log-files`
-- `downloadLogUrl(id, name): string` → builds the `/api/processes/:id/log-download` URL string. The caller sets it as an `<a download>` href (browser-native download, no body parsing needed). Note: if `PROCM_HTTP_TOKEN` is in use, append `?token=` from the same source `ws.ts` reads — but REST fetch in this codebase doesn't currently pass a token, so match existing behavior (no token query) to stay consistent. *(Will double-check `ws.ts` token source during implementation; if trivial to reuse, include it.)*
+- Add `getProcessCommand(id): Promise<{ command: string }>` → `GET /api/processes/:id/command` (reuse `api<T>`).
 
 ---
 
-## 3. Frontend — new `menu.tsx` primitive
+## 3. Frontend — context menu item
 
-There's no dropdown/Menu primitive in `dashboard/src/registry/default/ui/` (only `context-menu.tsx`). Base UI ships `@base-ui/react/menu`. Following the existing `context-menu.tsx` pattern, create:
-
-### `dashboard/src/registry/default/ui/menu.tsx`
-A styled thin wrapper around Base UI's `Menu` namespace, mirroring `context-menu.tsx`:
-- `Menu = MenuPrimitive.Root`
-- `MenuTrigger` (data-slot `menu-trigger`)
-- `MenuPopup` — auto-wrapped in `Menu.Portal` + `Menu.Positioner` (Base UI requires `Popup` inside a `Positioner`), styled identically to `context-menu-popup` (`bg-popover text-popover-foreground ... rounded-lg border p-1 shadow-md` + the same start/end-style transitions).
-- `MenuItem` — styled like `context-menu-item`, supports `variant?: "default" | "destructive"`, supports leading icons (`[&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0`). Base UI menu items close on click by default (no extra prop needed).
-- `MenuSeparator` (optional, include for parity; the dropdown has 2 items so a separator isn't required, but it's cheap and keeps parity with `context-menu.tsx`).
-
-Imports: `import { Menu as MenuPrimitive } from "@base-ui/react/menu"`. Uses `cn` from `@/registry/default/lib/utils`.
-
----
-
-## 4. Frontend — `LogPanel.tsx` changes
-
-### New imports
-- `CopyIcon` (already imported), `MoreVerticalIcon` (dots) / `EllipsisVerticalIcon`, `FolderTreeIcon` or `FileIcon` (for "copy location"), `DownloadIcon` — from `lucide-react`.
-- `Menu`, `MenuItem`, `MenuPopup`, `MenuTrigger` from `@/registry/default/ui/menu`.
-- `getLogFiles`, `downloadLogUrl` from `@/lib/api`.
-
-### New handlers
-- `handleCopyText()` — builds the displayed log text from `entries` (reuse the same line rendering: optional line number is `select-none` so it's excluded; include `[time]` and `[stderr]` prefixes to match the visible view via `formatTime`), then `navigator.clipboard.writeText(...)`, toast `Copied ${n} lines` / `Copy failed`. Edge case: empty entries → toast `Nothing to copy` and skip.
-- `handleCopyLocation()` — `await getLogFiles(process.id)`, write both paths joined by `\n` (or just stdout if you prefer single-line — will include both, clearer for the user) to clipboard, toast `Copied log file path`. On error, toast the error.
-- `handleDownloadLog()` — create a temporary `<a>`, `href = downloadLogUrl(process.id, process.name)`, set `download = \`${process.name}-${process.id}.log\``, append to body, `.click()`, then remove. (Browser-native download.) Optional toast on success.
-
-### Footer markup (replace the existing footer block, lines ~391–425)
-Keep the existing **left** group (time toggle, line-numbers toggle) **and add** the copy-text button to it (so order is: clock, line-numbers, copy-text). Reorganize so the count text and the dots button are both on the **right**:
-
-```
-[ClockIcon] [ListOrderedIcon] [CopyIcon]            N lines  [EllipsisVertical → dropdown]
-└── left group ──┘                                  └── right group ─────────────┘
-```
-
-- Copy button: `Button size="icon-sm" variant="ghost"`, `aria-label="Copy logs"`, `title="Copy logs"`, `onClick={handleCopyText}`, child `<CopyIcon />`. (Mirrors the existing footer toggle buttons.)
-- Dots button via `Menu`:
+### `dashboard/src/components/ProcessList.tsx`
+- New lucide import: `SquareTerminalIcon` (verified to exist). `CopyIcon` already imported.
+- New handler `handleCopyCommand(p: ProcessView)`:
+  - `try { const { command } = await getProcessCommand(p.id); await navigator.clipboard.writeText(command); onToast("Copied command"); } catch { onToast(err message, true) }`
+- Insert a new `ContextMenuItem` into the popup, right after **Copy ID** and before **View** (logical grouping — both copy actions together):
   ```tsx
-  <Menu>
-    <MenuTrigger
-      render={
-        <Button size="icon-sm" variant="ghost"
-          aria-label="More actions" title="More actions" />
-      }
-    >
-      <EllipsisVerticalIcon />
-    </MenuTrigger>
-    <MenuPopup>
-      <MenuItem onClick={handleCopyLocation}>
-        <FolderTreeIcon aria-hidden="true" /> 复制日志文件位置
-      </MenuItem>
-      <MenuItem onClick={handleDownloadLog}>
-        <DownloadIcon aria-hidden="true" /> 下载日志文件
-      </MenuItem>
-    </MenuPopup>
-  </Menu>
+  <ContextMenuItem onClick={() => handleCopyCommand(p)}>
+    <SquareTerminalIcon aria-hidden="true" />
+    复制命令
+  </ContextMenuItem>
   ```
-  - Using `render={<Button …/>}` follows the coss Menu pattern (`MenuTrigger render={<Button …/>}`). The button styling then comes from `buttonVariants` exactly like the footer's other buttons.
-  - Item labels are in Chinese per the request.
+- Gating: the command is only available for **live** processes (envs live in memory; stopped/exited records 404 the backend). Gate `disabled` on the row's lifecycle: `disabled={p.stoppedAt != null || p.status === "exited" || p.status === "error"}` (same predicate used elsewhere in the file for `canStop`-style checks). Disabled items in Base UI context menu render greyed and non-clickable. This avoids a confusing click→error-toast on historical rows.
 
 ---
 
-## 5. Verification
-- `npm run build` from repo root (runs `build:dashboard` + `tsc`), confirm no TS/lint errors. Focus areas: `noUnusedLocals`/`noUnusedParameters` are on, so don't leave unused imports; Base UI `Menu.*` prop types must line up.
-- Manual smoke check plan (documented, not necessarily run): open a process with logs → footer copy button copies text; dots → "复制日志文件位置" copies `<tmp>/procm-mcp/<serverId>(<pid>)/processes/<id>-stdout.log` + stderr; "下载日志文件" downloads `<name>-<id>.log` containing the merged chronologically-sorted log.
+## 4. Verification
+- `npm run build` from repo root (dashboard `tsc -b` + backend `tsc`); confirm no TS/lint errors. Watch: `noUnusedLocals`/`noUnusedParameters` are on — only add imports I use.
+- Manual smoke (documented): right-click a running process → 复制命令 → paste into a terminal matching the backend OS → runs with the right cwd + envs. Right-click a stopped/exited process → item greyed.
 
 ---
 
 ## Files touched
-- `src/process-stdout-client.ts` (expose `textFilePath`)
-- `src/http-server.ts` (2 new routes + regex)
-- `dashboard/src/lib/api.ts` (2 wrappers)
-- `dashboard/src/registry/default/ui/menu.tsx` (new primitive)
-- `dashboard/src/components/LogPanel.tsx` (footer buttons + handlers)
+- `src/http-server.ts` — regex + `command` route + `quoteWin`/`quotePosix`/`buildCommand` helpers.
+- `dashboard/src/lib/api.ts` — `getProcessCommand`.
+- `dashboard/src/components/ProcessList.tsx` — `SquareTerminalIcon` import, `handleCopyCommand`, context-menu item (gated on live).
 
-No DB schema or WS protocol changes. Existing endpoints/behaviors unchanged (the new regex is a superset of the old one).
+No DB schema change, no WS protocol change. `envs` stays server-side only (not added to `ProcessView`/wire) — the backend emits the final string, which also keeps secrets out of the dashboard's process-list payload. The one behavioral nuance (historical rows can't reconstruct envs) is surfaced as a disabled menu item rather than an error.

@@ -130,6 +130,20 @@ export function downloadLogUrl(id: string): string {
   return `/api/processes/${encodeURIComponent(id)}/log-download`;
 }
 
+// A single-line, paste-and-run terminal command reproducing how the process
+// was spawned (cd to cwd + env-var prefixes + `script args`), formatted for
+// the backend's own OS. Built server-side because envs live only in memory
+// and are never sent to the client. Only live processes resolve; historical
+// records 404.
+export function getProcessCommand(
+  id: string,
+): Promise<{ command: string }> {
+  return api<{ command: string }>(
+    "GET",
+    `/api/processes/${encodeURIComponent(id)}/command`,
+  );
+}
+
 // Parse the backend's `[ISO timestamp] message\n` text blob into structured
 // entries. Lines without a leading bracketed timestamp fall back to "now".
 export function parseLogText(text: string, stream: ProcessStream): LogEntry[] {

@@ -108,6 +108,12 @@ export function App() {
   // Forwarder for live log lines to the active LogPanel. The panel registers
   // its callback here; everything else increments the unread counter.
   const liveLogForwardRef = useRef<((m: WsLogMessage) => void) | null>(null);
+  // A process id that should be auto-selected (opening its log panel) as soon
+  // as it appears in a WS push. Set when launching a favorite so the panel
+  // opens automatically once the backend confirms the new process; cleared
+  // after it's consumed. The launch response returns before the WS delivers
+  // the row, so we can't select directly.
+  const pendingSelectRef = useRef<string | null>(null);
 
   // Live updates from the backend: replace the process list and keep the
   // selected log target in sync with the latest view. This replaces the old
@@ -119,6 +125,17 @@ export function App() {
       processes: m.data,
     });
     if (m.startedAt != null) setServerStartedAt(m.startedAt);
+    // If a launch is pending auto-select (e.g. from "Launch" on a favorite),
+    // open its log panel as soon as the backend reports it.
+    const pending = pendingSelectRef.current;
+    if (pending && m.data.some((p) => p.id === pending)) {
+      const started = m.data.find((p) => p.id === pending) ?? null;
+      pendingSelectRef.current = null;
+      if (started) {
+        openLogFor(started);
+        return;
+      }
+    }
     setSelected((cur) =>
       cur ? m.data.find((p) => p.id === cur.id) ?? null : null,
     );
@@ -241,10 +258,12 @@ export function App() {
   }
 
   // Launch a favorite as a real process via the backend. On success, jump to
-  // the Processes tab so the user sees it appear in the live list.
+  // the Processes tab and arm `pendingSelectRef` so the log panel auto-opens
+  // on this process the moment the WS push delivers its row.
   async function handleLaunchFavorite(fav: Favorite) {
     try {
       const r = await startProcess(favoriteToStartBody(fav));
+      pendingSelectRef.current = r.id;
       showToast(`Started: ${r.id}`);
       setActiveTab("processes");
     } catch (err) {

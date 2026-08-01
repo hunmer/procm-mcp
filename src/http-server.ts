@@ -159,6 +159,63 @@ function mergeLogText(
     .join("\n");
 }
 
+// Quote a single argv token for cmd.exe: wrap in double quotes and escape any
+// embedded double quote with `\"`. Good enough for operator-provided values
+// (not adversarial); values with spaces/special chars survive intact.
+function quoteWin(token: string): string {
+  return `"${token.replace(/"/g, '\\"')}"`;
+}
+
+// Quote a single argv token for POSIX shells (bash/zsh/sh): wrap in single
+// quotes and escape embedded single quotes via the standard `'\''` sequence.
+// This is robust against all shell metacharacters.
+function quotePosix(token: string): string {
+  return `'${token.replace(/'/g, "'\\''")}'`;
+}
+
+// Build a single-line, paste-and-run terminal command that reproduces how the
+// process was spawned: `cd` into the cwd, export the env vars, then run
+// `script args`. The syntax is chosen for the backend's own OS so the copied
+// string runs when pasted into the matching shell:
+//   - win32 → cmd.exe (`cd /d "..." && set "K=V" && "script" "args"`)
+//   - other → POSIX/bash (`cd '...' && K='V' 'script' 'args'`)
+// The `cd … &&` prefix is omitted when cwd is empty. envs are operator-set
+// launch values, not the process's full inherited environment.
+function buildCommand(opts: {
+  script: string;
+  args: string[];
+  envs: Record<string, string>;
+  cwd: string;
+  platform: string;
+}): string {
+  const { script, args, envs, cwd, platform } = opts;
+  const parts: string[] = [];
+
+  if (cwd) {
+    parts.push(
+      platform === "win32" ? `cd /d ${quoteWin(cwd)}` : `cd ${quotePosix(cwd)}`,
+    );
+  }
+
+  if (platform === "win32") {
+    // cmd.exe: each env var as `set "KEY=VALUE"`. The surrounding quotes make
+    // the value safe even with spaces / special chars.
+    for (const [k, v] of Object.entries(envs)) {
+      parts.push(`set "${k}=${v.replace(/"/g, '\\"')}"`);
+    }
+    parts.push([quoteWin(script), ...args.map(quoteWin)].join(" "));
+  } else {
+    // POSIX: env vars as inline `KEY='value'` assignments prefixing the command.
+    const envPrefix = Object.entries(envs)
+      .map(([k, v]) => `${k}=${quotePosix(v)}`)
+      .join(" ");
+    const invocation = [quotePosix(script), ...args.map(quotePosix)].join(" ");
+    parts.push(envPrefix ? `${envPrefix} ${invocation}` : invocation);
+  }
+
+  return parts.join(" && ");
+}
+
 // Build the request handler. Shared by both modes (MCP+HTTP and HTTP-only).
 function createRequestHandler(token: string | undefined) {
   return async (req: http.IncomingMessage, res: http.ServerResponse) => {
@@ -251,7 +308,7 @@ function createRequestHandler(token: string | undefined) {
 
       // /api/processes[/:id[/action]]
       const apiMatch = pathname.match(
-        /^\/api\/processes(?:\/([^/]+))?(?:\/(stop|restart|logs|log-files|log-download))?$/,
+        /^\/api\/processes(?:\/([^/]+))?(?:\/(stop|restart|logs|log-files|log-download|command))?$/,
       );
       if (apiMatch) {
         const [, idParam, action] = apiMatch;
@@ -375,6 +432,34 @@ function createRequestHandler(token: string | undefined) {
           json(res, 200, {
             stdoutPath: meta.stdoutClient.textFilePath,
             stderrPath: meta.stderrClient.textFilePath,
+          });
+          return;
+        }
+
+        // GET /api/processes/:id/command -> a single-line, paste-and-run
+        // terminal command that reproduces how the process was spawned (cd to
+        // cwd + env-var prefixes + `script args`), formatted for the backend's
+        // own OS. envs live only in the in-memory ProcessMetadata (never
+        // serialized to records), so this resolves live processes only;
+        // stopped/exited rows 404 and the UI greys out the action there.
+        if (action === "command") {
+          if (method !== "GET") {
+            json(res, 405, { error: "Method not allowed" });
+            return;
+          }
+          const meta = getProcess(idParam);
+          if (!meta) {
+            json(res, 404, { error: "Process not found" });
+            return;
+          }
+          json(res, 200, {
+            command: buildCommand({
+              script: meta.script,
+              args: meta.args,
+              envs: meta.envs,
+              cwd: meta.cwd,
+              platform: process.platform,
+            }),
           });
           return;
         }
