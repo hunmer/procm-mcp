@@ -16,6 +16,7 @@ import {
   EmptyTitle,
 } from "@/registry/default/ui/empty";
 import {
+  DownloadIcon,
   FolderIcon,
   PencilIcon,
   PlayIcon,
@@ -37,6 +38,8 @@ interface FavoritesViewProps {
   onEdit: (fav: Favorite) => void;
   // Remove a favorite by id.
   onRemove: (id: string) => void;
+  // Open the folder-import dialog (scan a project dir for commands).
+  onImport: () => void;
 }
 
 export function FavoritesView({
@@ -44,6 +47,7 @@ export function FavoritesView({
   onLaunch,
   onEdit,
   onRemove,
+  onImport,
 }: FavoritesViewProps) {
   const [query, setQuery] = useState("");
 
@@ -86,6 +90,15 @@ export function FavoritesView({
             ? `${favorites.length} favorite${favorites.length === 1 ? "" : "s"}`
             : `${filtered.length} of ${favorites.length}`}
         </span>
+        <Button
+          size="icon-sm"
+          variant="outline"
+          aria-label="Import from folder"
+          title="Import from folder"
+          onClick={onImport}
+        >
+          <DownloadIcon />
+        </Button>
       </div>
 
       {/* Scrollable card grid, grouped by category. */}

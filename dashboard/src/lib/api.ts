@@ -164,6 +164,30 @@ export function startProcess(body: StartProcessBody): Promise<{ id: string }> {
   return api<{ id: string; name: string }>("POST", "/api/processes", body);
 }
 
+// A launchable command the backend derived from a folder's project manifests
+// (package.json / pyproject.toml / Cargo.toml). Shape mirrors Favorite's
+// launch fields so it can be imported straight into the favorites store.
+export interface ScanCandidate {
+  script: string;
+  args: string[];
+  cwd: string;
+  name?: string;
+  desc?: string;
+}
+
+// Scan a folder for project commands. Returns the candidate list (possibly
+// empty). Throws with the server's `error` message on a bad path.
+export async function scanDirectory(
+  path: string,
+): Promise<ScanCandidate[]> {
+  const r = await api<{ candidates: ScanCandidate[] }>(
+    "POST",
+    "/api/favorites/scan",
+    { path },
+  );
+  return r.candidates;
+}
+
 export function stopProcess(id: string): Promise<void> {
   return api<void>(
     "POST",

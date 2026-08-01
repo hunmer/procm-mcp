@@ -23,6 +23,7 @@ import { toErrorMessage } from "./error.js";
 import { ProcessMetadata } from "./types.js";
 import { handleMcpRequest } from "./mcp-http.js";
 import { attachWebsocketServer } from "./websocket-server.js";
+import { scanProjectCommands } from "./project-scanner.js";
 
 const HOST = "127.0.0.1";
 
@@ -224,6 +225,27 @@ function createRequestHandler(token: string | undefined) {
           cwd: process.cwd(),
           startedAt: serverStartedAt,
         });
+        return;
+      }
+
+      // POST /api/favorites/scan -> scan a folder's top-level project manifests
+      // (package.json / pyproject.toml / Cargo.toml) and return candidate
+      // launch commands the dashboard can selectively import as favorites.
+      // Stateless: the dashboard persists the user's picks in localStorage; the
+      // backend never stores favorites.
+      if (method === "POST" && pathname === "/api/favorites/scan") {
+        const body = JSON.parse((await readBody(req)) || "{}");
+        const dir = String(body.path || "").trim();
+        if (!dir) {
+          json(res, 400, { error: "path is required" });
+          return;
+        }
+        try {
+          const candidates = await scanProjectCommands(dir);
+          json(res, 200, { candidates });
+        } catch (e) {
+          json(res, 400, { error: toErrorMessage(e) });
+        }
         return;
       }
 

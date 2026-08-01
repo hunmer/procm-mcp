@@ -7,12 +7,20 @@ import {
   TabsList,
   TabsTab,
 } from "@/registry/default/ui/tabs";
-import { ListIcon, MoonIcon, PanelLeftOpenIcon, StarIcon, SunIcon } from "lucide-react";
+import {
+  ListIcon,
+  MoonIcon,
+  PanelLeftOpenIcon,
+  StarIcon,
+  SunIcon,
+  TrashIcon,
+} from "lucide-react";
 import {
   FavoriteDialog,
   NewProcessDialog,
   ProcessDetailsDialog,
 } from "./NewProcessDialog";
+import { ImportFavoritesDialog } from "./ImportFavoritesDialog";
 import { ProcessList } from "./ProcessList";
 import { FavoritesView } from "./FavoritesView";
 import { LogPanel } from "./LogPanel";
@@ -20,7 +28,16 @@ import { Toast } from "./Toast";
 import { DevInspector } from "./DevInspector";
 import { useTheme } from "@/lib/useTheme";
 import { useDashboardSocket } from "@/lib/ws";
-import { startProcess } from "@/lib/api";
+import { deleteProcessCall, startProcess } from "@/lib/api";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "@/registry/default/ui/alert-dialog";
 import {
   favoriteSignature,
   favoriteToStartBody,
@@ -75,6 +92,10 @@ export function App() {
   const [favOpen, setFavOpen] = useState(false);
   const [favSeedProcess, setFavSeedProcess] = useState<ProcessView | null>(null);
   const [favSeedFavorite, setFavSeedFavorite] = useState<Favorite | null>(null);
+  // "Clear all" confirmation dialog — stop + delete every process at once.
+  const [clearAllOpen, setClearAllOpen] = useState(false);
+  // Folder import dialog: scan a project dir for commands to save as favorites.
+  const [importOpen, setImportOpen] = useState(false);
 
   const { status, reconnectInMs, onProcessesMessage, onLogMessage } =
     useDashboardSocket();
@@ -201,6 +222,24 @@ export function App() {
     showToast(`Removed “${f?.name ?? f?.script ?? "favorite"}”`);
   }
 
+  // Import a batch of scanned favorites (from the folder-import dialog). Each
+  // is added via addFavorite, which de-dupes by launch signature; we tally the
+  // skips so the toast reports how many were actually new vs. already saved.
+  function handleImportFavorites(favs: Favorite[]) {
+    let added = 0;
+    for (const fav of favs) {
+      if (addFavorite(fav)) added++;
+    }
+    const skipped = favs.length - added;
+    if (skipped === 0) {
+      showToast(`Imported ${added} favorite${added === 1 ? "" : "s"}`);
+    } else if (added === 0) {
+      showToast(`All ${skipped} already in favorites`, true);
+    } else {
+      showToast(`Imported ${added}, skipped ${skipped} already saved`);
+    }
+  }
+
   // Launch a favorite as a real process via the backend. On success, jump to
   // the Processes tab so the user sees it appear in the live list.
   async function handleLaunchFavorite(fav: Favorite) {
@@ -218,6 +257,32 @@ export function App() {
     setFavSeedProcess(null);
     setFavSeedFavorite(fav);
     setFavOpen(true);
+  }
+
+  // Stop + delete every process at once. deleteProcessCall already stops a
+  // running process before erasing its record, so one call per process clears
+  // the whole list. Runs them concurrently and reports an aggregate result;
+  // failures (e.g. a process vanishing mid-clear) are tolerated per-row.
+  async function handleClearAll() {
+    const snapshot = processes;
+    setClearAllOpen(false);
+    if (snapshot.length === 0) return;
+    // Drop the current selection immediately so the log panel doesn't linger
+    // on a process we're about to erase.
+    setSelected(null);
+    const results = await Promise.allSettled(
+      snapshot.map((p) => deleteProcessCall(p.id)),
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    const cleared = snapshot.length - failed;
+    if (failed === 0) {
+      showToast(`Cleared ${cleared} process${cleared === 1 ? "" : "es"}`);
+    } else {
+      showToast(
+        `Cleared ${cleared}, ${failed} failed`,
+        true,
+      );
+    }
   }
 
   const processes = data?.processes ?? [];
@@ -319,12 +384,25 @@ export function App() {
                   <TabsIndicator />
                 </TabsList>
               </Tabs>
-              {activeTab === "processes" && runningCount > 0 && (
-                <Badge variant="success" className="gap-1.5">
-                  <span className="inline-block size-1.5 rounded-full bg-current" />
-                  {runningCount} running
-                </Badge>
-              )}
+              <div className="ml-auto flex items-center gap-2">
+                {activeTab === "processes" && runningCount > 0 && (
+                  <Badge variant="success" className="gap-1.5">
+                    <span className="inline-block size-1.5 rounded-full bg-current" />
+                    {runningCount} running
+                  </Badge>
+                )}
+                {activeTab === "processes" && processes.length > 0 && (
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label="Clear all processes"
+                    title="Clear all processes"
+                    onClick={() => setClearAllOpen(true)}
+                  >
+                    <TrashIcon />
+                  </Button>
+                )}
+              </div>
             </div>
             {activeTab === "processes" ? (
               <ProcessList
@@ -346,6 +424,7 @@ export function App() {
                 onLaunch={handleLaunchFavorite}
                 onEdit={handleEditFavoriteCard}
                 onRemove={handleRemoveFavorite}
+                onImport={() => setImportOpen(true)}
               />
             )}
           </div>
@@ -402,6 +481,37 @@ export function App() {
         onCreate={handleCreateFavorite}
         onEdit={handleEditFavorite}
       />
+
+      <ImportFavoritesDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImport={handleImportFavorites}
+        onToast={showToast}
+      />
+
+      {/* Clear-all confirmation: stop + delete every process at once. The
+          count is read from the current list; deleting is irreversible. */}
+      <AlertDialog open={clearAllOpen} onOpenChange={setClearAllOpen}>
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear all processes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {`This will stop and delete all ${processes.length} process${processes.length === 1 ? "" : "es"}. This action cannot be undone.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="ghost" />}>
+              Cancel
+            </AlertDialogClose>
+            <AlertDialogClose
+              render={<Button variant="destructive" />}
+              onClick={handleClearAll}
+            >
+              Clear all
+            </AlertDialogClose>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
 
       {/* Dev-only: render nothing in production. Lets you click a component in
           the browser to open its source in your editor. */}
