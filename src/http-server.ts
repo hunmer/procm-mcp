@@ -1,5 +1,6 @@
 import http from "http";
-import { readFile } from "fs/promises";
+import { readFile, stat } from "fs/promises";
+import { spawn } from "child_process";
 import {
   dashboardNotBuiltHtml,
   getDashboardServeState,
@@ -26,6 +27,7 @@ import { ProcessMetadata } from "./types.js";
 import { handleMcpRequest } from "./mcp-http.js";
 import { attachWebsocketServer } from "./websocket-server.js";
 import { scanProjectCommands } from "./project-scanner.js";
+import { createLogsRepository } from "./logs-repository.js";
 
 const HOST = "127.0.0.1";
 
@@ -117,6 +119,42 @@ function readBody(req: http.IncomingMessage): Promise<string> {
     });
     req.on("end", () => resolve(data));
     req.on("error", reject);
+  });
+}
+
+// Reveal a folder in the OS file manager. Validates the path exists and is a
+// directory, then shells out to the platform's opener detached so the server
+// isn't tied to the spawned process's lifetime. Rejects with a clear message
+// on a missing/non-dir path or a launch failure.
+function openInFileManager(dir: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    stat(dir)
+      .then((info) => {
+        if (!info.isDirectory()) {
+          throw new Error(`Not a folder: ${dir}`);
+        }
+        const platform = process.platform;
+        // Windows: explorer; macOS: open; Linux/other: xdg-open.
+        const [cmd, args] =
+          platform === "win32"
+            ? ["explorer", [dir]]
+            : platform === "darwin"
+              ? ["open", [dir]]
+              : ["xdg-open", [dir]];
+        const child = spawn(cmd, args, {
+          detached: true,
+          stdio: "ignore",
+        });
+        child.on("error", (e) => {
+          reject(
+            new Error(`Could not open folder (${cmd}): ${toErrorMessage(e)}`),
+          );
+        });
+        child.unref();
+        // Resolve once launched; we don't wait for the file manager to exit.
+        resolve();
+      })
+      .catch((e) => reject(e));
   });
 }
 
@@ -306,6 +344,48 @@ function grepLogFile(
     .join("\n");
 }
 
+// Read a stopped/expired process's log stream as `[ISO] message` lines.
+// Prefers the sibling lowdb `.json` store (each record has its own timestamp,
+// so lines are correctly separated and sortable), recovering the store path by
+// swapping the persisted `.log` path's extension. Falls back to the raw `.log`
+// text file (now line-delimited) when the JSON store is missing or empty — for
+// records from a previous backend session whose tmp dir no longer exists.
+async function readRecordLogText(
+  logFilePath: string,
+  grepPattern: string | null,
+  ignoreCase: boolean,
+  count: number,
+): Promise<string> {
+  const jsonPath = logFilePath.replace(/\.log$/, ".json");
+  try {
+    const repo = await createLogsRepository(jsonPath);
+    await repo.initialize();
+    // top()/search() return newest-first; reverse for oldest-first so a tail
+    // shows the most recent `count` lines at the bottom (matching the live view).
+    const records =
+      grepPattern !== null
+        ? await repo.search(new RegExp(grepPattern, ignoreCase ? "i" : ""), count)
+        : await repo.top(count);
+    await repo.close();
+    if (records.length > 0) {
+      return records
+        .slice()
+        .sort((a, b) => a.timestamp - b.timestamp)
+        .map((r) => `[${new Date(r.timestamp).toISOString()}] ${r.message}`)
+        .join("\n");
+    }
+    // Empty JSON store: fall through to the .log file.
+  } catch {
+    // JSON store unreadable (ENOENT / corrupt): fall through to the .log file.
+  }
+
+  const fullText = await readLogFile(logFilePath);
+  if (grepPattern !== null) {
+    return grepLogFile(fullText, grepPattern, ignoreCase ? "1" : null, count);
+  }
+  return tailLogFile(fullText, count);
+}
+
 // Build the request handler. Shared by both modes (MCP+HTTP and HTTP-only).
 function createRequestHandler(token: string | undefined) {
   return async (req: http.IncomingMessage, res: http.ServerResponse) => {
@@ -390,6 +470,26 @@ function createRequestHandler(token: string | undefined) {
         try {
           const candidates = await scanProjectCommands(dir);
           json(res, 200, { candidates });
+        } catch (e) {
+          json(res, 400, { error: toErrorMessage(e) });
+        }
+        return;
+      }
+
+      // POST /api/open-folder -> reveal a folder in the OS file manager. Used by
+      // the favorites view's per-group "open folder" action. The browser can't
+      // do this directly, so the backend shells out (explorer/open/xdg-open).
+      // The path is validated to exist and be a directory first.
+      if (method === "POST" && pathname === "/api/open-folder") {
+        const body = JSON.parse((await readBody(req)) || "{}");
+        const dir = String(body.path || "").trim();
+        if (!dir) {
+          json(res, 400, { error: "path is required" });
+          return;
+        }
+        try {
+          await openInFileManager(dir);
+          json(res, 200, { ok: true });
         } catch (e) {
           json(res, 400, { error: toErrorMessage(e) });
         }
@@ -494,24 +594,32 @@ function createRequestHandler(token: string | undefined) {
             | "stderr";
           const count = Number(url.searchParams.get("count") || "200");
 
-          // Stopped/expired process: no in-memory client, so serve the on-disk
-          // .log file directly. Lines have no `[ISO]` timestamps, so grep is a
-          // plain substring/regex filter over the raw text. The frontend's
-          // parseLogText falls back to "now" for untimestamped lines.
+          // Stopped/expired process: no in-memory client, so serve logs from
+          // disk. Prefer the sibling lowdb `.json` store (one timestamped
+          // record per line, correct & separated) — recover it by swapping the
+          // persisted `.log` path's extension. Fall back to the raw `.log`
+          // text file when the JSON store is unreadable (e.g. a record from a
+          // previous backend session whose tmp dir is gone). The JSON path
+          // yields `[ISO] message` lines matching the live format; the `.log`
+          // fallback has no timestamps (frontend falls back to "now").
           if (rp.kind === "record") {
             const paths = logFilePathsOf(rp);
-            const filePath =
+            const textFilePath =
               stream === "stderr" ? paths.stderrPath : paths.stdoutPath;
-            if (!filePath) {
+            if (!textFilePath) {
               json(res, 200, { stream, text: "" });
               return;
             }
-            const fullText = await readLogFile(filePath);
             const grepPattern = url.searchParams.get("grep");
-            const text =
-              grepPattern !== null
-                ? grepLogFile(fullText, grepPattern, url.searchParams.get("ignoreCase"), count)
-                : tailLogFile(fullText, count);
+            const ignoreCase =
+              (url.searchParams.get("ignoreCase") || "").toLowerCase() === "1";
+
+            const text = await readRecordLogText(
+              textFilePath,
+              grepPattern,
+              ignoreCase,
+              count,
+            );
             json(res, 200, { stream, text });
             return;
           }
@@ -572,25 +680,28 @@ function createRequestHandler(token: string | undefined) {
         // GET /api/processes/:id/command -> a single-line, paste-and-run
         // terminal command that reproduces how the process was spawned (cd to
         // cwd + env-var prefixes + `script args`), formatted for the backend's
-        // own OS. envs live only in the in-memory ProcessMetadata (never
-        // serialized to records), so this resolves live processes only;
-        // stopped/exited rows 404 and the UI greys out the action there.
+        // own OS. Resolves live OR persisted record so any process that has
+        // ever run can copy its command. envs live only in memory (never
+        // serialized), so a historical record's command omits env-var prefixes.
         if (action === "command") {
           if (method !== "GET") {
             json(res, 405, { error: "Method not allowed" });
             return;
           }
-          const meta = getProcess(idParam);
-          if (!meta) {
+          const rp = await resolveProcess(idParam);
+          if (!rp) {
             json(res, 404, { error: "Process not found" });
             return;
           }
+          const { script, args, cwd } =
+            rp.kind === "live" ? rp.meta : rp.record;
+          const envs = rp.kind === "live" ? rp.meta.envs : {};
           json(res, 200, {
             command: buildCommand({
-              script: meta.script,
-              args: meta.args,
-              envs: meta.envs,
-              cwd: meta.cwd,
+              script,
+              args,
+              envs,
+              cwd,
               platform: process.platform,
             }),
           });

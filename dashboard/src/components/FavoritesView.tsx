@@ -18,6 +18,7 @@ import {
 import {
   DownloadIcon,
   FolderIcon,
+  FolderOpenIcon,
   PencilIcon,
   PlayIcon,
   SearchIcon,
@@ -30,6 +31,14 @@ import {
   type Favorite,
 } from "@/lib/favorites";
 
+// Whether a category label looks like an absolute folder path that the backend
+// could open in the OS file manager. Matches Windows drive paths (C:\, C:/),
+// UNC paths (\\server\share), and POSIX absolute paths (/...). Relative names
+// like "Dev servers" or "Uncategorized" return false so no button is shown.
+function looksLikePath(label: string): boolean {
+  return /^([a-zA-Z]:[\\/]|\\\\|\/)/.test(label.trim());
+}
+
 interface FavoritesViewProps {
   favorites: Favorite[];
   // Launch a favorite as a real process via the backend.
@@ -40,6 +49,11 @@ interface FavoritesViewProps {
   onRemove: (id: string) => void;
   // Open the folder-import dialog (scan a project dir for commands).
   onImport: () => void;
+  // Open a category's folder in the OS file manager (only offered when the
+  // category label is an absolute path, e.g. an imported project directory).
+  onOpenFolder: (path: string) => void;
+  // Delete every favorite in a category group, given the ids of its items.
+  onRemoveCategory: (ids: string[]) => void;
 }
 
 export function FavoritesView({
@@ -48,6 +62,8 @@ export function FavoritesView({
   onEdit,
   onRemove,
   onImport,
+  onOpenFolder,
+  onRemoveCategory,
 }: FavoritesViewProps) {
   const [query, setQuery] = useState("");
 
@@ -131,6 +147,32 @@ export function FavoritesView({
                   <Badge variant="secondary" className="tabular-nums">
                     {group.items.length}
                   </Badge>
+                  <div className="ml-auto flex items-center gap-0.5">
+                    {looksLikePath(group.label) && (
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label={`Open folder ${group.label}`}
+                        title="Open in file manager"
+                        onClick={() => onOpenFolder(group.label)}
+                        className="text-muted-foreground"
+                      >
+                        <FolderOpenIcon />
+                      </Button>
+                    )}
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label={`Delete group ${group.label}`}
+                      title="Delete group"
+                      onClick={() =>
+                        onRemoveCategory(group.items.map((f) => f.id))
+                      }
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <TrashIcon />
+                    </Button>
+                  </div>
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {group.items.map((f) => (

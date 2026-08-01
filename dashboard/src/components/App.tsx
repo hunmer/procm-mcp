@@ -28,7 +28,7 @@ import { Toast } from "./Toast";
 import { DevInspector } from "./DevInspector";
 import { useTheme } from "@/lib/useTheme";
 import { useDashboardSocket } from "@/lib/ws";
-import { clearAllProcesses, startProcess } from "@/lib/api";
+import { clearAllProcesses, openFolder, startProcess } from "@/lib/api";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -257,6 +257,25 @@ export function App() {
     }
   }
 
+  // Open a group's folder in the OS file manager via the backend (the browser
+  // can't do this directly). The group label is an absolute path here.
+  async function handleOpenFolder(path: string) {
+    try {
+      await openFolder(path);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : String(err), true);
+    }
+  }
+
+  // Delete an entire favorites group by removing each of its favorites. No
+  // confirmation: the cards' per-item remove doesn't confirm either, and the
+  //action is local/reversible by re-importing from the folder.
+  function handleRemoveCategory(ids: string[]) {
+    const n = ids.length;
+    for (const id of ids) removeFavorite(id);
+    if (n > 0) showToast(`Deleted ${n} favorite${n === 1 ? "" : "s"}`);
+  }
+
   // Launch a favorite as a real process via the backend. On success, jump to
   // the Processes tab and arm `pendingSelectRef` so the log panel auto-opens
   // on this process the moment the WS push delivers its row.
@@ -441,6 +460,8 @@ export function App() {
                 onEdit={handleEditFavoriteCard}
                 onRemove={handleRemoveFavorite}
                 onImport={() => setImportOpen(true)}
+                onOpenFolder={handleOpenFolder}
+                onRemoveCategory={handleRemoveCategory}
               />
             )}
           </div>

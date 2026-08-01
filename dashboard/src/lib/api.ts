@@ -203,6 +203,15 @@ export async function scanDirectory(
   return r.candidates;
 }
 
+// Open a folder in the OS file manager. The browser can't do this directly, so
+// the backend shells out (explorer/open/xdg-open). Throws with the server's
+// `error` message when the path is missing or not a directory.
+export function openFolder(path: string): Promise<void> {
+  return api<{ ok: boolean }>("POST", "/api/open-folder", { path }).then(
+    () => undefined,
+  );
+}
+
 export function stopProcess(id: string): Promise<void> {
   return api<void>(
     "POST",

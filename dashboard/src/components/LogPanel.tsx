@@ -235,10 +235,10 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
     };
   }, [process.id]);
 
-  // Load the launch command for the command strip. Built server-side (envs are
-  // in-memory only, never sent to the client). For closed processes the
-  // endpoint 404s, so fall back to a reconstruction from the public fields
-  // (script + args + cwd); envs are omitted there.
+  // Load the launch command for the command strip. Built server-side (cd to
+  // cwd + env-var prefixes + `script args`). Works for any process that has
+  // ever run: live includes envs; historical records omit them. On a true 404
+  // (unknown id) we fall back to a best-effort display from the public fields.
   useEffect(() => {
     let cancelled = false;
     async function loadCommand() {

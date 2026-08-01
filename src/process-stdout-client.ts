@@ -66,9 +66,13 @@ export async function createProcessStdoutClient({
             message,
           }),
           new Promise<void>((resolve, reject) => {
+            // Append with a trailing newline so the on-disk .log file is
+            // line-delimited. Without it, the file is one run-on blob and the
+            // closed-process log view (which reads this file directly) renders
+            // every message jammed together on a single line.
             fs.appendFile(
               textFilePath,
-              message,
+              message.endsWith("\n") ? message : `${message}\n`,
               { encoding: "utf8" },
               (err) => {
                 if (err) {

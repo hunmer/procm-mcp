@@ -197,8 +197,9 @@ export function ProcessList({
 
   // Copy a complete, paste-and-run terminal command for the process. Built on
   // the backend (cd to cwd + env-var prefixes + `script args`), formatted for
-  // the backend's own OS. Only live processes resolve — historical records
-  // don't carry envs and 404; the menu item is disabled for those.
+  // the backend's own OS. Works for any process that has ever run: live
+  // processes include env-var prefixes; historical records omit them (envs
+  // aren't persisted) but still copy script+args+cwd.
   async function handleCopyCommand(p: ProcessView) {
     try {
       const { command } = await getProcessCommand(p.id);
@@ -561,10 +562,7 @@ export function ProcessList({
                         <CopyIcon aria-hidden="true" />
                         Copy ID
                       </ContextMenuItem>
-                      <ContextMenuItem
-                        onClick={() => handleCopyCommand(p)}
-                        disabled={!canStop}
-                      >
+                      <ContextMenuItem onClick={() => handleCopyCommand(p)}>
                         <SquareTerminalIcon aria-hidden="true" />
                         复制命令
                       </ContextMenuItem>
