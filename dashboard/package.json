@@ -19,11 +19,14 @@
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
+    "@react-dev-inspector/babel-plugin": "^2.0.1",
+    "@react-dev-inspector/vite-plugin": "^2.0.1",
     "@tailwindcss/vite": "^4.0.0",
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.0",
+    "react-dev-inspector": "^2.0.1",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.8.0",
     "vite": "^6.0.0"

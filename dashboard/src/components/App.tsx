@@ -17,6 +17,7 @@ import { ProcessList } from "./ProcessList";
 import { FavoritesView } from "./FavoritesView";
 import { LogPanel } from "./LogPanel";
 import { Toast } from "./Toast";
+import { DevInspector } from "./DevInspector";
 import { useTheme } from "@/lib/useTheme";
 import { useDashboardSocket } from "@/lib/ws";
 import { startProcess } from "@/lib/api";
@@ -401,6 +402,10 @@ export function App() {
         onCreate={handleCreateFavorite}
         onEdit={handleEditFavorite}
       />
+
+      {/* Dev-only: render nothing in production. Lets you click a component in
+          the browser to open its source in your editor. */}
+      <DevInspector />
     </div>
   );
 }

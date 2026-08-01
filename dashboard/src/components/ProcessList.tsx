@@ -44,7 +44,7 @@ import {
   CopyIcon,
   EyeIcon,
   InboxIcon,
-  RotateCwIcon,
+  PlayIcon,
   SearchIcon,
   SquareIcon,
   StarIcon,
@@ -208,16 +208,7 @@ export function ProcessList({
         ),
         cell: ({ row }) => {
           const p = row.original;
-          return (
-            <span className="font-mono text-sm">
-              {p.name}
-              {p.stoppedAt != null && (
-                <span className="text-muted-foreground ml-1.5 text-[10px]">
-                  (stopped)
-                </span>
-              )}
-            </span>
-          );
+          return <span className="font-mono text-sm">{p.name}</span>;
         },
       },
       {
@@ -351,28 +342,30 @@ export function ProcessList({
                   }
                 />
               </Button>
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label={`Stop ${p.name}`}
-                title="Stop (keeps the record)"
-                onClick={() => requestStop(p)}
-                disabled={!canStop}
-                className="text-muted-foreground hover:text-warning"
-              >
-                <SquareIcon />
-              </Button>
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label={`Restart ${p.name}`}
-                title="Restart"
-                onClick={() => handleRestart(p.id)}
-                disabled={isExpired}
-                className="text-muted-foreground"
-              >
-                <RotateCwIcon />
-              </Button>
+              {canStop ? (
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={`Stop ${p.name}`}
+                  title="Stop (keeps the record)"
+                  onClick={() => requestStop(p)}
+                  className="text-muted-foreground hover:text-warning"
+                >
+                  <SquareIcon />
+                </Button>
+              ) : (
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={`Run ${p.name}`}
+                  title="Run"
+                  onClick={() => handleRestart(p.id)}
+                  disabled={isExpired}
+                  className="text-muted-foreground hover:text-success"
+                >
+                  <PlayIcon />
+                </Button>
+              )}
               <Button
                 size="icon-sm"
                 variant="ghost"
