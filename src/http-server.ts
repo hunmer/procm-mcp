@@ -1,4 +1,5 @@
 import http from "http";
+import { readFile } from "fs/promises";
 import {
   dashboardNotBuiltHtml,
   getDashboardServeState,
@@ -116,6 +117,47 @@ function readBody(req: http.IncomingMessage): Promise<string> {
   });
 }
 
+// Merge two plain-text log blobs (each line `[ISO] message`) into a single
+// chronologically ordered string. Lines without a parseable leading timestamp
+// keep their relative order (stable sort), mirroring the dashboard's
+// `mergeEntries`. Used by the /log-download route so the downloaded file
+// matches what the UI shows.
+function mergeLogText(
+  outText: string,
+  outStream: string,
+  errText: string,
+  errStream: string,
+): string {
+  type Row = { ts: number; seq: number; stream: string; line: string };
+  const rows: Row[] = [];
+  let seq = 0;
+  const parse = (text: string, stream: string) => {
+    for (const raw of text.split("\n")) {
+      if (!raw) continue;
+      const m = raw.match(/^\[(.+?)\]\s?(.*)$/);
+      const ts = m ? Date.parse(m[1]) : NaN;
+      rows.push({
+        ts: Number.isNaN(ts) ? Number.MAX_SAFE_INTEGER : ts,
+        seq: seq++,
+        stream,
+        line: m ? m[2] : raw,
+      });
+    }
+  };
+  parse(outText, outStream);
+  parse(errText, errStream);
+  // Stable sort preserves within-stream order for equal timestamps.
+  rows.sort((a, b) => a.ts - b.ts || a.seq - b.seq);
+  return rows
+    .map((r) => {
+      const iso = Number.isSafeInteger(r.ts) && r.ts !== Number.MAX_SAFE_INTEGER
+        ? new Date(r.ts).toISOString()
+        : new Date().toISOString();
+      return `[${iso}]${r.stream === "stderr" ? ` [${r.stream}]` : ""} ${r.line}`;
+    })
+    .join("\n");
+}
+
 // Build the request handler. Shared by both modes (MCP+HTTP and HTTP-only).
 function createRequestHandler(token: string | undefined) {
   return async (req: http.IncomingMessage, res: http.ServerResponse) => {
@@ -187,7 +229,7 @@ function createRequestHandler(token: string | undefined) {
 
       // /api/processes[/:id[/action]]
       const apiMatch = pathname.match(
-        /^\/api\/processes(?:\/([^/]+))?(?:\/(stop|restart|logs))?$/,
+        /^\/api\/processes(?:\/([^/]+))?(?:\/(stop|restart|logs|log-files|log-download))?$/,
       );
       if (apiMatch) {
         const [, idParam, action] = apiMatch;
@@ -291,6 +333,69 @@ function createRequestHandler(token: string | undefined) {
             .map((c) => `[${c.timestamp.toISOString()}] ${c.message}`)
             .join("\n");
           json(res, 200, { stream, text });
+          return;
+        }
+
+        // GET /api/processes/:id/log-files -> absolute paths of the two
+        // on-disk plain-text log files, so the dashboard can offer a
+        // "copy file location" action. The browser can't reconstruct these
+        // (they live under os.tmpdir()), so the backend must supply them.
+        if (action === "log-files") {
+          if (method !== "GET") {
+            json(res, 405, { error: "Method not allowed" });
+            return;
+          }
+          const meta = getProcess(idParam);
+          if (!meta) {
+            json(res, 404, { error: "Process not found" });
+            return;
+          }
+          json(res, 200, {
+            stdoutPath: meta.stdoutClient.textFilePath,
+            stderrPath: meta.stderrClient.textFilePath,
+          });
+          return;
+        }
+
+        // GET /api/processes/:id/log-download -> the merged, chronologically
+        // ordered log file as a downloadable attachment. Reads the two
+        // append-only .log files directly (the real on-disk data, not a
+        // count-capped reconstruction) and merges them the same way the
+        // dashboard does: stable sort by the leading `[ISO]` timestamp.
+        if (action === "log-download") {
+          if (method !== "GET") {
+            json(res, 405, { error: "Method not allowed" });
+            return;
+          }
+          const meta = getProcess(idParam);
+          if (!meta) {
+            json(res, 404, { error: "Process not found" });
+            return;
+          }
+
+          // Read each stream's file, tolerating a missing file (no output yet).
+          const readSafe = async (filePath: string) => {
+            try {
+              return await readFile(filePath, "utf8");
+            } catch (e) {
+              if ((e as NodeJS.ErrnoException).code === "ENOENT") return "";
+              throw e;
+            }
+          };
+          const [outText, errText] = await Promise.all([
+            readSafe(meta.stdoutClient.textFilePath),
+            readSafe(meta.stderrClient.textFilePath),
+          ]);
+          const merged = mergeLogText(outText, "stdout", errText, "stderr");
+          const payload = Buffer.from(merged, "utf8");
+          // Sanitize the filename: keep word chars, dashes, dots; drop the rest.
+          const safeName = (meta.name || idParam).replace(/[^\w.-]+/g, "_");
+          res.writeHead(200, {
+            "Content-Type": "text/plain; charset=utf-8",
+            "Content-Disposition": `attachment; filename="${safeName}-${idParam}.log"`,
+            "Content-Length": payload.length,
+          });
+          res.end(payload);
           return;
         }
 

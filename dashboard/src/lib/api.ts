@@ -111,6 +111,25 @@ export async function grepMergedLogs(
   ]);
 }
 
+// Absolute on-disk paths of the two plain-text log files. The browser can't
+// reconstruct these (they live under os.tmpdir()), so the backend supplies
+// them — used by the "copy log file location" action.
+export function getLogFiles(
+  id: string,
+): Promise<{ stdoutPath: string; stderrPath: string }> {
+  return api<{ stdoutPath: string; stderrPath: string }>(
+    "GET",
+    `/api/processes/${encodeURIComponent(id)}/log-files`,
+  );
+}
+
+// URL of the merged-log download endpoint (the browser streams the real
+// on-disk .log files, merged chronologically, as an attachment). Returned as
+// a plain string so the caller can set it as an <a download> href.
+export function downloadLogUrl(id: string): string {
+  return `/api/processes/${encodeURIComponent(id)}/log-download`;
+}
+
 // Parse the backend's `[ISO timestamp] message\n` text blob into structured
 // entries. Lines without a leading bracketed timestamp fall back to "now".
 export function parseLogText(text: string, stream: ProcessStream): LogEntry[] {

@@ -5,8 +5,11 @@ import { Badge } from "@/registry/default/ui/badge";
 import { ScrollArea } from "@/registry/default/ui/scroll-area";
 import {
   CopyIcon,
+  DownloadIcon,
+  EllipsisVerticalIcon,
   EraserIcon,
   FileTextIcon,
+  FolderTreeIcon,
   ListOrderedIcon,
   PanelRightCloseIcon,
   SearchIcon,
@@ -21,6 +24,14 @@ import {
   EmptyTitle,
 } from "@/registry/default/ui/empty";
 import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@/registry/default/ui/menu";
+import {
+  downloadLogUrl,
+  getLogFiles,
   getMergedLogs,
   grepMergedLogs,
   mergeEntries,
@@ -99,6 +110,54 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
   function handleClearLogs() {
     setEntries([]);
     stickToBottom.current = true;
+  }
+
+  // Copy the currently displayed log text to the clipboard. Mirrors the Line
+  // rendering (timestamp + optional stderr tag, line numbers excluded since
+  // they're select-none) so the copied text matches what's on screen.
+  async function handleCopyText() {
+    if (entries.length === 0) {
+      onToast("Nothing to copy");
+      return;
+    }
+    const text = entries
+      .map((e) => {
+        const time = `[${formatTime(e.timestamp)}]`;
+        const tag = e.stream === "stderr" ? ` [${e.stream}]` : "";
+        return `${time}${tag} ${e.message}`;
+      })
+      .join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      onToast(`Copied ${entries.length} line${entries.length === 1 ? "" : "s"}`);
+    } catch {
+      onToast("Copy failed", true);
+    }
+  }
+
+  // Copy the on-disk log file locations. The browser can't know these paths,
+  // so the backend supplies the absolute stdout/stderr file paths.
+  async function handleCopyLocation() {
+    try {
+      const { stdoutPath, stderrPath } = await getLogFiles(process.id);
+      await navigator.clipboard.writeText(`${stdoutPath}\n${stderrPath}`);
+      onToast("Copied log file location");
+    } catch (err) {
+      onToast(
+        err instanceof Error ? err.message : "Copy failed",
+        true,
+      );
+    }
+  }
+
+  // Download the merged on-disk log file (browser-native anchor download).
+  function handleDownloadLog() {
+    const a = document.createElement("a");
+    a.href = downloadLogUrl(process.id);
+    a.download = `${process.name}-${process.id}.log`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   }
 
   useEffect(() => {
@@ -387,7 +446,8 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
         </div>
       </ScrollArea>
 
-      {/* Footer toolbar: per-log view toggles (left) + line count (right). */}
+      {/* Footer toolbar: per-log view toggles + copy text (left), line count
+          + overflow actions dropdown (right). */}
       <div className="flex shrink-0 items-center justify-between gap-1 border-t px-2 py-1.5">
         <div className="flex items-center gap-1">
           <Button
@@ -412,16 +472,51 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
           >
             <ListOrderedIcon />
           </Button>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Copy logs"
+            title="Copy logs"
+            onClick={handleCopyText}
+          >
+            <CopyIcon />
+          </Button>
         </div>
-        <span className="text-muted-foreground px-1 text-[11px] tabular-nums">
-          {activeGrep
-            ? searching
-              ? "searching…"
-              : `${entries.length} match${entries.length === 1 ? "" : "es"}`
-            : loading
-              ? "loading…"
-              : `${entries.length} line${entries.length === 1 ? "" : "s"}`}
-        </span>
+        <div className="flex items-center gap-1">
+          <span className="text-muted-foreground px-1 text-[11px] tabular-nums">
+            {activeGrep
+              ? searching
+                ? "searching…"
+                : `${entries.length} match${entries.length === 1 ? "" : "es"}`
+              : loading
+                ? "loading…"
+                : `${entries.length} line${entries.length === 1 ? "" : "s"}`}
+          </span>
+          <Menu>
+            <MenuTrigger
+              render={
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="More actions"
+                  title="More actions"
+                />
+              }
+            >
+              <EllipsisVerticalIcon />
+            </MenuTrigger>
+            <MenuPopup>
+              <MenuItem onClick={handleCopyLocation}>
+                <FolderTreeIcon aria-hidden="true" />
+                复制日志文件位置
+              </MenuItem>
+              <MenuItem onClick={handleDownloadLog}>
+                <DownloadIcon aria-hidden="true" />
+                下载日志文件
+              </MenuItem>
+            </MenuPopup>
+          </Menu>
+        </div>
       </div>
     </aside>
   );

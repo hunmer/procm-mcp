@@ -20,6 +20,10 @@ export type ProcessStdoutClient = {
     count?: number,
   ) => Promise<ProcessStdoutChunk[]>;
   close: () => Promise<void>;
+  // Absolute path to the append-only plain-text log file
+  // (<serverDir>/processes/<id>-<type>.log). Exposed so the HTTP layer can
+  // report it (copy file location) and stream it (download log file).
+  textFilePath: string;
 };
 
 export async function createProcessStdoutClient({
@@ -107,6 +111,7 @@ export async function createProcessStdoutClient({
       readable.off("data", onData);
       await logsRepository.close();
     },
+    textFilePath,
   };
 }
 
