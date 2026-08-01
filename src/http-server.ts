@@ -10,9 +10,11 @@ import {
   listProcesses,
   listProcessRecords,
   getProcess,
+  getProcessRecord,
   startProcess,
   removeProcess,
   deleteProcess,
+  deleteProcesses,
   restartProcess,
   generateProcessId,
   validateScript,
@@ -216,6 +218,94 @@ function buildCommand(opts: {
   return parts.join(" && ");
 }
 
+// Resolve a process for log-serving purposes: live in-memory metadata first
+// (carries the stdout/stderr clients + envs), else fall back to the persisted
+// record (carries the on-disk log paths). Returns null only when neither
+// exists — a true 404. Used by the logs/log-files/log-download routes so a
+// stopped/expired process's logs stay accessible after its clients are gone.
+type ResolvedProcess =
+  | { kind: "live"; meta: ProcessMetadata }
+  | { kind: "record"; record: ProcessRecord };
+
+async function resolveProcess(
+  id: string,
+): Promise<ResolvedProcess | null> {
+  const meta = getProcess(id);
+  if (meta) return { kind: "live", meta };
+  const record = await getProcessRecord(id);
+  if (record) return { kind: "record", record };
+  return null;
+}
+
+// The on-disk stdout/stderr .log paths for a resolved process. `null` when
+// unknown (a live process always has paths; a legacy record written before
+// paths were persisted may not).
+function logFilePathsOf(rp: ResolvedProcess): {
+  stdoutPath: string | null;
+  stderrPath: string | null;
+} {
+  if (rp.kind === "live") {
+    return {
+      stdoutPath: rp.meta.stdoutClient.textFilePath,
+      stderrPath: rp.meta.stderrClient.textFilePath,
+    };
+  }
+  return {
+    stdoutPath: rp.record.stdoutLogPath ?? null,
+    stderrPath: rp.record.stderrLogPath ?? null,
+  };
+}
+
+// Read a log file, returning "" when it doesn't exist yet (no output / process
+// never wrote). Used for both tail and download of record-sourced logs.
+async function readLogFile(filePath: string): Promise<string> {
+  try {
+    return await readFile(filePath, "utf8");
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") return "";
+    throw e;
+  }
+}
+
+// Return the last `count` lines of a raw log blob (record-sourced logs have no
+// timestamps, so we tail by line). Empty input → empty string.
+function tailLogFile(fullText: string, count: number): string {
+  const lines = fullText.split("\n");
+  // Drop a single trailing empty line from the final \n, if present.
+  if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+  const start = Math.max(0, lines.length - count);
+  return lines.slice(start).join("\n");
+}
+
+// Grep a raw log blob (record-sourced): keep lines matching the regex, capped
+// at `count` matches. Invalid regex falls back to a literal substring match.
+function grepLogFile(
+  fullText: string,
+  pattern: string,
+  ignoreCaseParam: string | null,
+  count: number,
+): string {
+  const ignoreCase = (ignoreCaseParam || "").toLowerCase() === "1";
+  let regex: RegExp;
+  try {
+    regex = new RegExp(pattern, ignoreCase ? "i" : "");
+  } catch {
+    // Fall back to literal substring matching on regex parse failure.
+    const needle = ignoreCase ? pattern.toLowerCase() : pattern;
+    const matched = fullText
+      .split("\n")
+      .filter((l) =>
+        ignoreCase ? l.toLowerCase().includes(needle) : l.includes(needle),
+      );
+    return matched.slice(0, count).join("\n");
+  }
+  return fullText
+    .split("\n")
+    .filter((l) => regex.test(l))
+    .slice(0, count)
+    .join("\n");
+}
+
 // Build the request handler. Shared by both modes (MCP+HTTP and HTTP-only).
 function createRequestHandler(token: string | undefined) {
   return async (req: http.IncomingMessage, res: http.ServerResponse) => {
@@ -365,6 +455,25 @@ function createRequestHandler(token: string | undefined) {
           return;
         }
 
+        // DELETE /api/processes  -> bulk delete (the dashboard "clear all").
+        // Body: { ids?: string[] }. When ids is omitted/empty, every current
+        // record (live + historical) is targeted. Done server-side so the
+        // in-memory list and the durable store are mutated in one pass each —
+        // fanning out per-id DELETEs races in lowdb and resurrects rows.
+        if (method === "DELETE" && !idParam) {
+          const body = JSON.parse((await readBody(req)) || "{}");
+          let ids: string[] =
+            Array.isArray(body.ids) ? body.ids.map(String) : [];
+          if (ids.length === 0) {
+            // No explicit list: clear everything currently known.
+            const records = await listProcessRecords();
+            ids = records.map((r) => r.id);
+          }
+          const result = await deleteProcesses(ids);
+          json(res, 200, result);
+          return;
+        }
+
         if (!idParam) {
           json(res, 404, { error: "Not found" });
           return;
@@ -375,8 +484,8 @@ function createRequestHandler(token: string | undefined) {
             json(res, 405, { error: "Method not allowed" });
             return;
           }
-          const meta = getProcess(idParam);
-          if (!meta) {
+          const rp = await resolveProcess(idParam);
+          if (!rp) {
             json(res, 404, { error: "Process not found" });
             return;
           }
@@ -384,6 +493,30 @@ function createRequestHandler(token: string | undefined) {
             | "stdout"
             | "stderr";
           const count = Number(url.searchParams.get("count") || "200");
+
+          // Stopped/expired process: no in-memory client, so serve the on-disk
+          // .log file directly. Lines have no `[ISO]` timestamps, so grep is a
+          // plain substring/regex filter over the raw text. The frontend's
+          // parseLogText falls back to "now" for untimestamped lines.
+          if (rp.kind === "record") {
+            const paths = logFilePathsOf(rp);
+            const filePath =
+              stream === "stderr" ? paths.stderrPath : paths.stdoutPath;
+            if (!filePath) {
+              json(res, 200, { stream, text: "" });
+              return;
+            }
+            const fullText = await readLogFile(filePath);
+            const grepPattern = url.searchParams.get("grep");
+            const text =
+              grepPattern !== null
+                ? grepLogFile(fullText, grepPattern, url.searchParams.get("ignoreCase"), count)
+                : tailLogFile(fullText, count);
+            json(res, 200, { stream, text });
+            return;
+          }
+
+          const meta = rp.meta;
           const client =
             stream === "stderr" ? meta.stderrClient : meta.stdoutClient;
 
@@ -419,20 +552,20 @@ function createRequestHandler(token: string | undefined) {
         // on-disk plain-text log files, so the dashboard can offer a
         // "copy file location" action. The browser can't reconstruct these
         // (they live under os.tmpdir()), so the backend must supply them.
+        // Resolves live OR persisted record so stopped/expired processes still
+        // expose their file locations.
         if (action === "log-files") {
           if (method !== "GET") {
             json(res, 405, { error: "Method not allowed" });
             return;
           }
-          const meta = getProcess(idParam);
-          if (!meta) {
+          const rp = await resolveProcess(idParam);
+          if (!rp) {
             json(res, 404, { error: "Process not found" });
             return;
           }
-          json(res, 200, {
-            stdoutPath: meta.stdoutClient.textFilePath,
-            stderrPath: meta.stderrClient.textFilePath,
-          });
+          const paths = logFilePathsOf(rp);
+          json(res, 200, paths);
           return;
         }
 
@@ -469,34 +602,28 @@ function createRequestHandler(token: string | undefined) {
         // append-only .log files directly (the real on-disk data, not a
         // count-capped reconstruction) and merges them the same way the
         // dashboard does: stable sort by the leading `[ISO]` timestamp.
+        // Resolves live OR persisted record so stopped/expired processes stay
+        // downloadable.
         if (action === "log-download") {
           if (method !== "GET") {
             json(res, 405, { error: "Method not allowed" });
             return;
           }
-          const meta = getProcess(idParam);
-          if (!meta) {
+          const rp = await resolveProcess(idParam);
+          if (!rp) {
             json(res, 404, { error: "Process not found" });
             return;
           }
-
-          // Read each stream's file, tolerating a missing file (no output yet).
-          const readSafe = async (filePath: string) => {
-            try {
-              return await readFile(filePath, "utf8");
-            } catch (e) {
-              if ((e as NodeJS.ErrnoException).code === "ENOENT") return "";
-              throw e;
-            }
-          };
+          const { stdoutPath, stderrPath } = logFilePathsOf(rp);
           const [outText, errText] = await Promise.all([
-            readSafe(meta.stdoutClient.textFilePath),
-            readSafe(meta.stderrClient.textFilePath),
+            stdoutPath ? readLogFile(stdoutPath) : "",
+            stderrPath ? readLogFile(stderrPath) : "",
           ]);
           const merged = mergeLogText(outText, "stdout", errText, "stderr");
           const payload = Buffer.from(merged, "utf8");
+          const name = rp.kind === "live" ? rp.meta.name : rp.record.name;
           // Sanitize the filename: keep word chars, dashes, dots; drop the rest.
-          const safeName = (meta.name || idParam).replace(/[^\w.-]+/g, "_");
+          const safeName = (name || idParam).replace(/[^\w.-]+/g, "_");
           res.writeHead(200, {
             "Content-Type": "text/plain; charset=utf-8",
             "Content-Disposition": `attachment; filename="${safeName}-${idParam}.log"`,

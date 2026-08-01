@@ -4,6 +4,7 @@ import { Input } from "@/registry/default/ui/input";
 import { Badge } from "@/registry/default/ui/badge";
 import { ScrollArea } from "@/registry/default/ui/scroll-area";
 import {
+  CircleOffIcon,
   CopyIcon,
   DownloadIcon,
   EllipsisVerticalIcon,
@@ -13,9 +14,15 @@ import {
   ListOrderedIcon,
   PanelRightCloseIcon,
   SearchIcon,
+  SquareTerminalIcon,
   XIcon,
   ClockIcon,
 } from "lucide-react";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/registry/default/ui/alert";
 import {
   Empty,
   EmptyDescription,
@@ -33,6 +40,7 @@ import {
   downloadLogUrl,
   getLogFiles,
   getMergedLogs,
+  getProcessCommand,
   grepMergedLogs,
   mergeEntries,
 } from "@/lib/api";
@@ -84,6 +92,12 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
   const [showTime, setShowTime] = useState(true);
   // Whether a line-number badge is shown at the start of each row.
   const [showLineNumbers, setShowLineNumbers] = useState(false);
+  // The launch command shown in a top strip (built server-side incl. envs for
+  // live processes; falls back to a public-field reconstruction when closed).
+  const [command, setCommand] = useState<string | null>(null);
+  // Set when the process is no longer live: shown as a 「进程已经关闭」 notice
+  // instead of surfacing the raw "Process not found" error.
+  const [closedNotice, setClosedNotice] = useState(false);
 
   const reqId = useRef(0);
   const asideRef = useRef<HTMLElement | null>(null);
@@ -136,11 +150,19 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
   }
 
   // Copy the on-disk log file locations. The browser can't know these paths,
-  // so the backend supplies the absolute stdout/stderr file paths.
+  // so the backend supplies the absolute stdout/stderr file paths. For a
+  // historical record written before paths were persisted, they may be null.
   async function handleCopyLocation() {
     try {
       const { stdoutPath, stderrPath } = await getLogFiles(process.id);
-      await navigator.clipboard.writeText(`${stdoutPath}\n${stderrPath}`);
+      const paths = [stdoutPath, stderrPath].filter(
+        (p): p is string => !!p,
+      );
+      if (paths.length === 0) {
+        onToast("No log file available", true);
+        return;
+      }
+      await navigator.clipboard.writeText(paths.join("\n"));
       onToast("Copied log file location");
     } catch (err) {
       onToast(
@@ -180,6 +202,7 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
     async function load() {
       setLoading(true);
       setError(null);
+      setClosedNotice(false);
       try {
         const rows = await getMergedLogs(process.id, HISTORY_COUNT);
         if (cancelled || reqId.current !== id) return;
@@ -187,7 +210,17 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
         stickToBottom.current = true;
       } catch (err) {
         if (cancelled || reqId.current !== id) return;
-        setError(err instanceof Error ? err.message : String(err));
+        const msg = err instanceof Error ? err.message : String(err);
+        // A closed process's in-memory clients are gone; the backend may 404 or
+        // (now) serve its on-disk logs. Either way, show a friendly notice
+        // instead of the raw "Process not found" error. Genuine failures (e.g.
+        // network) still surface via `error`.
+        if (/Process not found/i.test(msg)) {
+          setClosedNotice(true);
+          setEntries([]);
+        } else {
+          setError(msg);
+        }
       } finally {
         if (!cancelled && reqId.current === id) setLoading(false);
       }
@@ -201,6 +234,33 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
       cancelled = true;
     };
   }, [process.id]);
+
+  // Load the launch command for the command strip. Built server-side (envs are
+  // in-memory only, never sent to the client). For closed processes the
+  // endpoint 404s, so fall back to a reconstruction from the public fields
+  // (script + args + cwd); envs are omitted there.
+  useEffect(() => {
+    let cancelled = false;
+    async function loadCommand() {
+      try {
+        const { command: cmd } = await getProcessCommand(process.id);
+        if (!cancelled) setCommand(cmd);
+      } catch {
+        if (cancelled) return;
+        // Backend can't build the full command (process gone / no envs). Build
+        // a best-effort display from the always-present public fields.
+        const parts = [process.script, ...process.args];
+        const invocation = parts.join(" ");
+        setCommand(
+          process.cwd ? `${invocation}  (in ${process.cwd})` : invocation,
+        );
+      }
+    }
+    void loadCommand();
+    return () => {
+      cancelled = true;
+    };
+  }, [process.id, process.script, process.args, process.cwd]);
 
   // Receive live log lines (both streams) and append them, but only when not
   // showing search results. onLiveLog is a ref-registering API so calling it
@@ -403,12 +463,42 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
         </div>
       </header>
 
+      {/* Launch command strip: a compact, read-only display of how the process
+          was started. Shown once the command resolves (live: full command with
+          envs; closed: best-effort reconstruction from public fields). */}
+      {command && (
+        <Alert
+          variant="info"
+          className="shrink-0 gap-2 rounded-none border-x-0 border-t-0 px-4 py-2"
+        >
+          <SquareTerminalIcon className="mt-0.5 size-4 shrink-0" />
+          <div className="min-w-0">
+            <AlertTitle className="text-xs">Command</AlertTitle>
+            <AlertDescription className="text-foreground break-all font-mono text-xs">
+              {command}
+            </AlertDescription>
+          </div>
+        </Alert>
+      )}
+
       {/* Log body: a themed "code block" surface that fills the remaining
           height. Uses bg-muted so it adapts to light/dark themes instead of a
           hardcoded black. The log-selectable class re-enables text selection
           (disabled app-wide) so users can copy log lines. */}
       <ScrollArea className="log-selectable bg-muted text-foreground min-h-0 flex-1">
         <div className="min-h-full p-4">
+          {closedNotice && (
+            <Alert variant="warning" className="mb-3">
+              <CircleOffIcon className="mt-0.5 size-4 shrink-0" />
+              <div className="min-w-0">
+                <AlertTitle>进程已经关闭</AlertTitle>
+                <AlertDescription>
+                  This process is no longer running. Showing its last saved
+                  logs.
+                </AlertDescription>
+              </div>
+            </Alert>
+          )}
           {error ? (
             <pre className="m-0 whitespace-pre-wrap break-words text-xs leading-relaxed">
               <span className="text-destructive">error: {error}</span>

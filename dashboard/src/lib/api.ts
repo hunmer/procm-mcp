@@ -113,11 +113,12 @@ export async function grepMergedLogs(
 
 // Absolute on-disk paths of the two plain-text log files. The browser can't
 // reconstruct these (they live under os.tmpdir()), so the backend supplies
-// them — used by the "copy log file location" action.
+// them — used by the "copy log file location" action. Paths may be null for a
+// historical record written before log paths were persisted.
 export function getLogFiles(
   id: string,
-): Promise<{ stdoutPath: string; stderrPath: string }> {
-  return api<{ stdoutPath: string; stderrPath: string }>(
+): Promise<{ stdoutPath: string | null; stderrPath: string | null }> {
+  return api<{ stdoutPath: string | null; stderrPath: string | null }>(
     "GET",
     `/api/processes/${encodeURIComponent(id)}/log-files`,
   );
@@ -215,6 +216,20 @@ export function deleteProcessCall(id: string): Promise<void> {
   return api<void>(
     "DELETE",
     `/api/processes/${encodeURIComponent(id)}`,
+  );
+}
+
+// Bulk delete via the collection endpoint. Done server-side in a single
+// read-modify-write pass so concurrent deletes can't race in the store and
+// resurrect rows. With no ids the backend deletes every current record
+// (live + historical), which is what the dashboard "clear all" wants.
+export function clearAllProcesses(
+  ids?: string[],
+): Promise<{ deleted: string[]; notFound: string[] }> {
+  return api<{ deleted: string[]; notFound: string[] }>(
+    "DELETE",
+    "/api/processes",
+    ids ? { ids } : {},
   );
 }
 

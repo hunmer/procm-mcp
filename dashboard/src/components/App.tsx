@@ -28,7 +28,7 @@ import { Toast } from "./Toast";
 import { DevInspector } from "./DevInspector";
 import { useTheme } from "@/lib/useTheme";
 import { useDashboardSocket } from "@/lib/ws";
-import { deleteProcessCall, startProcess } from "@/lib/api";
+import { clearAllProcesses, startProcess } from "@/lib/api";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -278,29 +278,26 @@ export function App() {
     setFavOpen(true);
   }
 
-  // Stop + delete every process at once. deleteProcessCall already stops a
-  // running process before erasing its record, so one call per process clears
-  // the whole list. Runs them concurrently and reports an aggregate result;
-  // failures (e.g. a process vanishing mid-clear) are tolerated per-row.
+  // Stop + delete every process at once. Goes through the bulk endpoint so the
+  // backend kills + erases them in a single pass each — fanning out per-id
+  // DELETEs races in the store and resurrects rows. The selection is dropped
+  // immediately so the log panel doesn't linger on a process we're erasing.
   async function handleClearAll() {
     const snapshot = processes;
     setClearAllOpen(false);
     if (snapshot.length === 0) return;
-    // Drop the current selection immediately so the log panel doesn't linger
-    // on a process we're about to erase.
     setSelected(null);
-    const results = await Promise.allSettled(
-      snapshot.map((p) => deleteProcessCall(p.id)),
-    );
-    const failed = results.filter((r) => r.status === "rejected").length;
-    const cleared = snapshot.length - failed;
-    if (failed === 0) {
-      showToast(`Cleared ${cleared} process${cleared === 1 ? "" : "es"}`);
-    } else {
-      showToast(
-        `Cleared ${cleared}, ${failed} failed`,
-        true,
+    try {
+      const { deleted, notFound } = await clearAllProcesses(
+        snapshot.map((p) => p.id),
       );
+      if (notFound.length === 0) {
+        showToast(`Cleared ${deleted.length} process${deleted.length === 1 ? "" : "es"}`);
+      } else {
+        showToast(`Cleared ${deleted.length}, ${notFound.length} not found`, true);
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : String(err), true);
     }
   }
 

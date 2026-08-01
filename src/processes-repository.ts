@@ -22,6 +22,12 @@ export type ProcessRecord = {
   // Epoch ms when the process was removed from the live list (stopped by the
   // user or cleaned up). null while it is still tracked in memory.
   stoppedAt: number | null;
+  // Absolute paths to the on-disk plain-text log files, captured at start time
+  // so logs stay viewable/downloadable after the process is stopped/expired
+  // (its in-memory clients are gone). Undefined on records written before this
+  // field existed; null when explicitly absent.
+  stdoutLogPath?: string | null;
+  stderrLogPath?: string | null;
 };
 
 type ProcessesDb = {
@@ -34,6 +40,7 @@ export type ProcessesRepository = {
   getAll: () => Promise<ProcessRecord[]>;
   getById: (id: string) => Promise<ProcessRecord | undefined>;
   remove: (id: string) => Promise<boolean>;
+  removeMany: (ids: string[]) => Promise<number>;
   close: () => Promise<void>;
 };
 
@@ -50,6 +57,7 @@ export async function createProcessesRepository(
     getAll: () => getAll(db),
     getById: (id) => getById(db, id),
     remove: (id) => remove(db, id),
+    removeMany: (ids) => removeMany(db, ids),
     close: () => close(db),
   };
 }
@@ -103,6 +111,26 @@ async function remove(db: Low<ProcessesDb>, id: string): Promise<boolean> {
   db.data.processes.splice(idx, 1);
   await db.write();
   return true;
+}
+
+// Remove many records in a single read-modify-write cycle. This is the
+// concurrency-safe way to delete more than one record at once: lowdb does
+// not serialize the per-id `remove()` cycle, so fanning out N concurrent
+// deletes lets each one read the same snapshot, drop only its own row, and
+// have the last `write()` win — resurrecting the others. Returns the count
+// of records actually removed.
+async function removeMany(
+  db: Low<ProcessesDb>,
+  ids: string[],
+): Promise<number> {
+  if (ids.length === 0) return 0;
+  await db.read();
+  const doomed = new Set(ids);
+  const before = db.data.processes.length;
+  db.data.processes = db.data.processes.filter((p) => !doomed.has(p.id));
+  const removed = before - db.data.processes.length;
+  if (removed > 0) await db.write();
+  return removed;
 }
 
 async function close(db: Low<ProcessesDb>): Promise<void> {

@@ -124,6 +124,11 @@ function toRecord(meta: ProcessMetadata, stoppedAt: number | null = null): Proce
     desc: meta.desc,
     startedAt: startedAtByMeta.get(meta.id) ?? Date.now(),
     stoppedAt,
+    // Persist the on-disk log paths so a stopped/expired process's logs stay
+    // viewable/downloadable after its in-memory clients are gone (and across
+    // backend restarts, since the paths are absolute under tmpdir).
+    stdoutLogPath: meta.stdoutClient.textFilePath,
+    stderrLogPath: meta.stderrClient.textFilePath,
   };
 }
 
@@ -167,6 +172,15 @@ export async function listProcessRecords(): Promise<ProcessRecord[]> {
 
 export function getProcess(id: string): ProcessMetadata | undefined {
   return processes.find((p) => p.id === id);
+}
+
+// Fetch a persisted process record by id (used by the HTTP layer to serve
+// logs/paths for stopped/expired processes whose in-memory metadata is gone).
+export async function getProcessRecord(
+  id: string,
+): Promise<ProcessRecord | undefined> {
+  const repo = await ensureRepository();
+  return repo.getById(id);
 }
 
 export function findProcessIndex(id: string): number {
@@ -426,6 +440,64 @@ export async function deleteProcess(id: string): Promise<boolean> {
     return true;
   }
   return false;
+}
+
+// Bulk-delete many processes in one pass — the concurrency-safe alternative to
+// fanning out `deleteProcess` per id. The per-id path races in the durable
+// store (lowdb doesn't serialize its read-modify-write), and concurrent kills
+// also interleave in the in-memory array. Here the kill phase runs first
+// (independent — kills target PIDs, not indices), then the in-memory array and
+// the JSON store are each mutated once, atomically, with a single change
+// broadcast at the end. Returns the ids actually removed vs. not found.
+export async function deleteProcesses(
+  ids: string[],
+): Promise<{ deleted: string[]; notFound: string[] }> {
+  if (ids.length === 0) return { deleted: [], notFound: [] };
+
+  // Phase 1 — stop every live process in the set. These are independent and
+  // safe to run concurrently: each kill acts on its own ChildProcess, not on
+  // the shared `processes` array.
+  const liveMetas = ids
+    .map((id) => processes.find((p) => p.id === id))
+    .filter((m): m is ProcessMetadata => m != null);
+  await Promise.allSettled(liveMetas.map((m) => killProcess(m)));
+
+  // Phase 2 — drop every live entry from the in-memory list in a single
+  // synchronous pass (no `await` between the index lookups, so nothing can
+  // interleave and shift indices mid-loop).
+  const liveIds = new Set(liveMetas.map((m) => m.id));
+  if (liveIds.size > 0) {
+    for (let i = processes.length - 1; i >= 0; i--) {
+      if (liveIds.has(processes[i].id)) {
+        startedAtByMeta.delete(processes[i].id);
+        processes.splice(i, 1);
+      }
+    }
+  }
+
+  // Phase 3 — erase all of the records from the durable store in one
+  // read-modify-write cycle so concurrent writes can't resurrect survivors.
+  let removedStoredIds: string[] = [];
+  try {
+    const repo = await ensureRepository();
+    const removedCount = await repo.removeMany(ids);
+    // removeMany returns a count, not the ids, so re-derive which stored ids
+    // were actually erased by diffing — only when something was removed.
+    if (removedCount > 0) {
+      const remaining = new Set((await repo.getAll()).map((r) => r.id));
+      removedStoredIds = ids.filter((id) => !remaining.has(id));
+    }
+  } catch (err) {
+    serverLog(`Error bulk-deleting process records: ${toErrorMessage(err)}`);
+  }
+
+  // An id is "deleted" if it left either the live list or the store.
+  const deletedSet = new Set<string>([...liveIds, ...removedStoredIds]);
+  const deleted = ids.filter((id) => deletedSet.has(id));
+  const notFound = ids.filter((id) => !deletedSet.has(id));
+
+  if (deleted.length > 0) dashboardEvents.emitProcessChange();
+  return { deleted, notFound };
 }
 
 // Restart an existing process, preserving its id and position in the list.
