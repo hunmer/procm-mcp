@@ -11,9 +11,7 @@ import {
   generateProcessId,
   startProcess,
   pushProcess,
-  isAllowAll,
 } from "../process-manager.js";
-import { checkProcessCreationAllowed } from "../allowed-process-creations.js";
 
 export const COMMANDS_FILE = "procm-commands.json";
 
@@ -66,13 +64,13 @@ async function readCommandsFile(
 }
 
 // Unified procm-command tool: list the commands defined in procm-commands.json
-// or start one by name. Still subject to allow-x.
+// or start one by name.
 export function registerProcmCommandsTools(server: McpServer) {
   server.tool(
     "procm-command",
     `Manage processes defined in procm-commands.json (in the project directory, defaults to the current working directory).
 - action "list": read the file and return its contents plus the available command names.
-- action "start": start a command by name (requires name). Still subject to allow-x: the script/args/cwd must be allowed first via the allowed-process tool.`,
+- action "start": start a command by name (requires name).`,
     {
       action: z.enum(["list", "start"]),
       name: z.string().optional(),
@@ -132,21 +130,6 @@ export function registerProcmCommandsTools(server: McpServer) {
         // Resolve cwd relative to the project directory, fall back to it.
         const resolvedCwd = command.cwd ? path.resolve(cwd, command.cwd) : cwd;
         const envs = command.envs || {};
-
-        const isAllowed =
-          isAllowAll() ||
-          (await checkProcessCreationAllowed({
-            script: command.script,
-            args,
-            cwd: resolvedCwd,
-          }));
-        if (!isAllowed) {
-          return textResult(
-            `Process creation is not allowed for command "${name}" (script: ${command.script}, args: ${args.join(
-              " ",
-            )}, cwd: ${resolvedCwd}). Please allow it first using the allowed-process tool.`,
-          );
-        }
 
         const processId = generateProcessId();
         const cmd = createCommand(command.script, args);

@@ -75,6 +75,7 @@
     "ctxCopyCommand": "Copy command",
     "ctxView": "View",
     "ctxStop": "Stop",
+    "ctxRestart": "Restart",
     "addFavoriteAria": "Add {{name}} to favorites",
     "removeFavoriteAria": "Remove {{name}} from favorites",
     "addFavoriteTitle": "Add to favorites",
@@ -83,6 +84,8 @@
     "stopTitle": "Stop (keeps the record)",
     "runAria": "Run {{name}}",
     "runTitle": "Run",
+    "restartAria": "Restart {{name}}",
+    "restartTitle": "Restart",
     "deleteAria": "Delete {{name}}",
     "deleteTitle": "Delete (stops the process if running)",
     "deleteQuestion": "Delete process?",
@@ -121,6 +124,8 @@
     "showTimestamps": "Show timestamps",
     "hideLineNumbers": "Hide line numbers",
     "showLineNumbers": "Show line numbers",
+    "pauseAutoScroll": "Pause auto-scroll",
+    "resumeAutoScroll": "Resume auto-scroll",
     "copyLogsAria": "Copy logs",
     "copyLogsTitle": "Copy logs",
     "countSearching": "searching…",
@@ -143,7 +148,7 @@
   "dialogs": {
     "newProcess": {
       "title": "Start a process",
-      "description": "The dashboard is a human-driven localhost UI. Starting a process here bypasses the allow-x gate, equivalent to running the command yourself in a terminal.",
+      "description": "The dashboard is a human-driven localhost UI. Starting a process here is equivalent to running the command yourself in a terminal.",
       "validationError": "script and working directory are required",
       "submit": "Start process"
     },

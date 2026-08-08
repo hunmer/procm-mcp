@@ -3,15 +3,14 @@
 //   { "type": "http", "url": "http://127.0.0.1:<port>/mcp" }
 //
 // Runs in STATELESS mode (sessionIdGenerator: undefined): each request gets a
-// fresh transport + McpServer. The durable state (process list, allow list,
-// server id) lives in the shared modules, so it is consistent across requests
-// and with the REST API / dashboard.
+// fresh transport + McpServer. The durable state (process list, server id)
+// lives in the shared modules, so it is consistent across requests and with
+// the REST API / dashboard.
 import http from "http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { serverLog } from "./server-log.js";
 import { toErrorMessage } from "./error.js";
-import { registerAllowedProcessTools } from "./tools/allowed-process.js";
 import { registerProcessTools } from "./tools/process.js";
 import { registerProcessLogTools } from "./tools/process-logs.js";
 import { registerProcmCommandsTools } from "./tools/procm-commands.js";
@@ -19,7 +18,6 @@ import { registerProcmCommandsTools } from "./tools/procm-commands.js";
 // Register every tool onto a fresh McpServer. Called once per request in
 // stateless mode.
 function registerAllTools(server: McpServer) {
-  registerAllowedProcessTools(server);
   registerProcessTools(server);
   registerProcessLogTools(server);
   registerProcmCommandsTools(server);

@@ -540,7 +540,6 @@ function createRequestHandler(token: string | undefined) {
               : {};
           const desc = body.desc ? String(body.desc) : undefined;
           const processId = generateProcessId();
-          // NOTE: human-driven dashboard start intentionally bypasses allow-x.
           const started = await startProcess(
             processId,
             script,
@@ -681,8 +680,9 @@ function createRequestHandler(token: string | undefined) {
         // terminal command that reproduces how the process was spawned (cd to
         // cwd + env-var prefixes + `script args`), formatted for the backend's
         // own OS. Resolves live OR persisted record so any process that has
-        // ever run can copy its command. envs live only in memory (never
-        // serialized), so a historical record's command omits env-var prefixes.
+        // ever run can copy its command. envs are persisted on records now, so
+        // even a historical record's command includes env-var prefixes; older
+        // records written before envs were persisted fall back to none.
         if (action === "command") {
           if (method !== "GET") {
             json(res, 405, { error: "Method not allowed" });
@@ -695,7 +695,8 @@ function createRequestHandler(token: string | undefined) {
           }
           const { script, args, cwd } =
             rp.kind === "live" ? rp.meta : rp.record;
-          const envs = rp.kind === "live" ? rp.meta.envs : {};
+          const envs =
+            rp.kind === "live" ? rp.meta.envs : rp.record.envs ?? {};
           json(res, 200, {
             command: buildCommand({
               script,

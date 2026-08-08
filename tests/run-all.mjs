@@ -11,7 +11,6 @@ const scripts = [
   "logs-grep.mjs",
   "http-api.mjs",
   "mcp-http.mjs",
-  "allow-x.mjs",
   "cli-roundtrip.mjs",
 ];
 

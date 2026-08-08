@@ -13,9 +13,7 @@ import {
   getProcess,
   listProcesses,
   pushProcess,
-  isAllowAll,
 } from "../process-manager.js";
-import { checkProcessCreationAllowed } from "../allowed-process-creations.js";
 
 export function registerProcessTools(server: McpServer) {
   server.tool(
@@ -43,21 +41,6 @@ Warning: Do not invoke background processes that will not exit automatically, an
         const validateScriptError = validateScript(script);
         if (validateScriptError) {
           return textResult(validateScriptError);
-        }
-
-        const isAllowed =
-          isAllowAll() ||
-          (await checkProcessCreationAllowed({
-            script,
-            args: args,
-            cwd: cwd,
-          }));
-        if (!isAllowed) {
-          return textResult(
-            `Process creation is not allowed for script: ${script} with args: ${args.join(
-              " ",
-            )} in cwd: ${cwd}. Please allow it first using the allowed-process tool.`,
-          );
         }
 
         const processId = generateProcessId();

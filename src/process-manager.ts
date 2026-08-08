@@ -129,6 +129,8 @@ function toRecord(meta: ProcessMetadata, stoppedAt: number | null = null): Proce
     // backend restarts, since the paths are absolute under tmpdir).
     stdoutLogPath: meta.stdoutClient.textFilePath,
     stderrLogPath: meta.stderrClient.textFilePath,
+    // Persist envs so a stopped process can be fully restored on restart.
+    envs: meta.envs,
   };
 }
 
@@ -136,19 +138,6 @@ function toRecord(meta: ProcessMetadata, stoppedAt: number | null = null): Proce
 // across status updates (the record's own startedAt is authoritative once
 // persisted, but we need a value before the first write lands).
 const startedAtByMeta = new Map<string, number>();
-
-// When true, the allow-x (allow-start-process) gate is skipped for the
-// start-process / start-procm-command tools. DANGEROUS: set only in trusted
-// environments. Configured at startup from --allow-all / PROCM_ALLOW_ALL.
-let allowAll = false;
-
-export function setAllowAll(value: boolean) {
-  allowAll = value;
-}
-
-export function isAllowAll(): boolean {
-  return allowAll;
-}
 
 export function listProcesses(): ProcessMetadata[] {
   return processes;
@@ -500,28 +489,53 @@ export async function deleteProcesses(
   return { deleted, notFound };
 }
 
-// Restart an existing process, preserving its id and position in the list.
+// Restart an existing process, preserving its id. A live in-memory process is
+// killed then re-spawned in place; a stopped/expired process (no longer in
+// memory) is rebuilt from its persisted record — including the originally
+// supplied envs, so the launch environment is fully reproduced. Returns null
+// only when no live process AND no stored record exists for the id.
 export async function restartProcess(id: string): Promise<ProcessMetadata | null> {
   const processIndex = findProcessIndex(id);
-  if (processIndex === -1) {
+  if (processIndex !== -1) {
+    // Live process: kill then re-spawn in place, keeping list position.
+    const processMetadata = processes[processIndex];
+    await killProcess(processMetadata);
+
+    const newProcess = await startProcess(
+      id,
+      processMetadata.script,
+      processMetadata.name,
+      processMetadata.args,
+      processMetadata.cwd,
+      processMetadata.envs,
+      processMetadata.desc,
+    );
+    processes[processIndex] = newProcess;
+    dashboardEvents.emitProcessChange();
+    return newProcess;
+  }
+
+  // Not in memory: fall back to the persisted record so a stopped process can
+  // be revived. Restores script/args/cwd/envs/desc from history; envs default
+  // to {} for records written before envs were persisted.
+  const record = await getProcessRecord(id);
+  if (!record) {
     return null;
   }
-  const processMetadata = processes[processIndex];
-
-  await killProcess(processMetadata);
-
-  const newProcess = await startProcess(
+  const restored = await startProcess(
     id,
-    processMetadata.script,
-    processMetadata.name,
-    processMetadata.args,
-    processMetadata.cwd,
-    processMetadata.envs,
-    processMetadata.desc,
+    record.script,
+    record.name,
+    record.args,
+    record.cwd,
+    record.envs ?? {},
+    record.desc,
   );
-  processes[processIndex] = newProcess;
-  dashboardEvents.emitProcessChange();
-  return newProcess;
+  // Preserve the original start time so the revived process keeps its place
+  // in the history-sorted list instead of jumping to the top.
+  if (record.startedAt) startedAtByMeta.set(id, record.startedAt);
+  pushProcess(restored);
+  return restored;
 }
 
 // Cleanup all processes. Safe to call multiple times — subsequent calls are no-ops.

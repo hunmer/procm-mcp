@@ -28,6 +28,10 @@ export type ProcessRecord = {
   // field existed; null when explicitly absent.
   stdoutLogPath?: string | null;
   stderrLogPath?: string | null;
+  // Operator-supplied environment variables, persisted so a stopped process can
+  // be fully restored on restart. NEVER sent to clients — toPublicView /
+  // toPublicRecord deliberately omit it; it lives only on disk for recovery.
+  envs?: Record<string, string> | null;
 };
 
 type ProcessesDb = {

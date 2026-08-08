@@ -75,6 +75,7 @@
     "ctxCopyCommand": "复制命令",
     "ctxView": "查看",
     "ctxStop": "停止",
+    "ctxRestart": "重启",
     "addFavoriteAria": "将 {{name}} 加入收藏",
     "removeFavoriteAria": "将 {{name}} 移出收藏",
     "addFavoriteTitle": "加入收藏",
@@ -83,6 +84,8 @@
     "stopTitle": "停止（保留记录）",
     "runAria": "运行 {{name}}",
     "runTitle": "运行",
+    "restartAria": "重启 {{name}}",
+    "restartTitle": "重启",
     "deleteAria": "删除 {{name}}",
     "deleteTitle": "删除（如仍在运行会先停止）",
     "deleteQuestion": "要删除该进程吗？",
@@ -121,6 +124,8 @@
     "showTimestamps": "显示时间戳",
     "hideLineNumbers": "隐藏行号",
     "showLineNumbers": "显示行号",
+    "pauseAutoScroll": "暂停自动滚动",
+    "resumeAutoScroll": "恢复自动滚动",
     "copyLogsAria": "复制日志",
     "copyLogsTitle": "复制日志",
     "countSearching": "搜索中…",
@@ -143,7 +148,7 @@
   "dialogs": {
     "newProcess": {
       "title": "启动一个进程",
-      "description": "本控制台是面向本机的人工操作界面。在此启动进程会绕过 allow-x 校验，等同于你在终端中亲自运行该命令。",
+      "description": "本控制台是面向本机的人工操作界面。在此启动进程，等同于你在终端中亲自运行该命令。",
       "validationError": "必须填写脚本和工作目录",
       "submit": "启动进程"
     },

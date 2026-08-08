@@ -4,12 +4,11 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { toErrorMessage } from "./error.js";
 import { serverLog, serverId } from "./server-log.js";
-import { cleanup, reconcileStaleProcesses, setAllowAll } from "./process-manager.js";
+import { cleanup, reconcileStaleProcesses } from "./process-manager.js";
 import {
   startHttpServer,
   startHttpServerIfConfigured,
 } from "./http-server.js";
-import { registerAllowedProcessTools } from "./tools/allowed-process.js";
 import { registerProcessTools } from "./tools/process.js";
 import { registerProcessLogTools } from "./tools/process-logs.js";
 import { registerProcmCommandsTools } from "./tools/procm-commands.js";
@@ -20,11 +19,10 @@ const DEFAULT_SERVER_PORT = 7331;
 // Minimal CLI flag parsing. Supports:
 //   --server            Run as an HTTP-only backend (no MCP stdio transport)
 //   --port <number>     Dashboard port (with --server, client --port, or override PROCM_HTTP_PORT)
-//   --allow-all         Skip the allow-start-process gate (DANGEROUS — see README)
 // Client subcommands (ps/info/logs/grep/start/restart/stop/ping) are detected
 // separately and connect to a running backend instead of starting one.
 function parseArgs(argv: string[]) {
-  const flags = { server: false, port: NaN as number, allowAll: false };
+  const flags = { server: false, port: NaN as number };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--server") {
@@ -34,12 +32,10 @@ function parseArgs(argv: string[]) {
       i++;
     } else if (a.startsWith("--port=")) {
       flags.port = Number(a.slice("--port=".length));
-    } else if (a === "--allow-all") {
-      flags.allowAll = true;
     } else if (a === "--help" || a === "-h") {
       process.stdout.write(
         [
-          "Usage: procm-mcp [--server] [--port <number>] [--allow-all]",
+          "Usage: procm-mcp [--server] [--port <number>]",
           "",
           "Modes:",
           "  (default)         MCP server over stdio. Optional HTTP dashboard if PROCM_HTTP_PORT is set.",
@@ -47,9 +43,6 @@ function parseArgs(argv: string[]) {
           "",
           "Options:",
           "  --port <number>   Dashboard port (default: 7331, or PROCM_HTTP_PORT).",
-          "  --allow-all       Skip the allow-start-process (allow-x) gate for start-process /",
-          "                    start-procm-command. DANGEROUS: only use in trusted environments.",
-          "                    Equivalent env var: PROCM_ALLOW_ALL=1.",
           "  -h, --help        Show this help.",
         ].join("\n") + "\n",
       );
@@ -59,25 +52,8 @@ function parseArgs(argv: string[]) {
   return flags;
 }
 
-// Truthy PROCM_ALLOW_ALL (1/true/yes/on) also enables allow-all.
-function envFlag(name: string): boolean {
-  const v = (process.env[name] || "").trim().toLowerCase();
-  return v === "1" || v === "true" || v === "yes" || v === "on";
-}
-
 try {
   const cli = parseArgs(process.argv.slice(2));
-
-  // allow-all: skip the allow-x gate. CLI flag takes precedence; PROCM_ALLOW_ALL also enables it.
-  const allowAll = cli.allowAll || envFlag("PROCM_ALLOW_ALL");
-  if (allowAll) {
-    setAllowAll(true);
-    serverLog("WARNING: allow-x gate is DISABLED (--allow-all / PROCM_ALLOW_ALL).");
-    console.error(
-      "\n  procm-mcp: WARNING — allow-start-process gate is DISABLED.\n" +
-        "  Any process may be started without confirmation. Only run this in trusted environments.\n",
-    );
-  }
 
   // Client mode: if the first positional arg is a client command (ps/info/...),
   // connect to a running backend over HTTP and run it, then exit. This does NOT
@@ -123,7 +99,6 @@ try {
       version: "1.0.0",
     });
 
-    registerAllowedProcessTools(server);
     registerProcessTools(server);
     registerProcessLogTools(server);
     registerProcmCommandsTools(server);

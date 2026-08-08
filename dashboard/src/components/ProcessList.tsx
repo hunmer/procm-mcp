@@ -46,6 +46,7 @@ import {
   EyeIcon,
   InboxIcon,
   PlayIcon,
+  RotateCwIcon,
   SearchIcon,
   SquareIcon,
   SquareTerminalIcon,
@@ -200,8 +201,8 @@ export function ProcessList({
   // Copy a complete, paste-and-run terminal command for the process. Built on
   // the backend (cd to cwd + env-var prefixes + `script args`), formatted for
   // the backend's own OS. Works for any process that has ever run: live
-  // processes include env-var prefixes; historical records omit them (envs
-  // aren't persisted) but still copy script+args+cwd.
+  // processes and persisted records both include env-var prefixes; records
+  // written before envs were persisted fall back to script+args+cwd only.
   async function handleCopyCommand(p: ProcessView) {
     try {
       const { command } = await getProcessCommand(p.id);
@@ -331,11 +332,10 @@ export function ProcessList({
         header: () => <div className="text-right">{t("processes.colActions")}</div>,
         cell: ({ row }) => {
           const p = row.original;
-          // Expired (stopped) processes can't be restarted, but their logs are
-          // still browsable (click the row) and the record can be deleted.
-          const isExpired = p.stoppedAt != null;
           // Whether the process can currently be stopped — mirrors the
-          // context-menu Stop item (running/spawning only).
+          // context-menu Stop item (running/spawning only). Anything that
+          // can't be stopped (stopped/exited/error) shows a Play button so it
+          // can be restarted, restored from its persisted record if gone.
           const canStop =
             p.stoppedAt == null &&
             p.status !== "exited" &&
@@ -371,16 +371,28 @@ export function ProcessList({
                 />
               </Button>
               {canStop ? (
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label={t("processes.stopAria", { name: p.name })}
-                  title={t("processes.stopTitle")}
-                  onClick={() => requestStop(p)}
-                  className="text-muted-foreground hover:text-warning"
-                >
-                  <SquareIcon />
-                </Button>
+                <>
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label={t("processes.restartAria", { name: p.name })}
+                    title={t("processes.restartTitle")}
+                    onClick={() => handleRestart(p.id)}
+                    className="text-muted-foreground hover:text-success"
+                  >
+                    <RotateCwIcon />
+                  </Button>
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label={t("processes.stopAria", { name: p.name })}
+                    title={t("processes.stopTitle")}
+                    onClick={() => requestStop(p)}
+                    className="text-muted-foreground hover:text-warning"
+                  >
+                    <SquareIcon />
+                  </Button>
+                </>
               ) : (
                 <Button
                   size="icon-sm"
@@ -388,7 +400,6 @@ export function ProcessList({
                   aria-label={t("processes.runAria", { name: p.name })}
                   title={t("processes.runTitle")}
                   onClick={() => handleRestart(p.id)}
-                  disabled={isExpired}
                   className="text-muted-foreground hover:text-success"
                 >
                   <PlayIcon />
@@ -574,14 +585,20 @@ export function ProcessList({
                         {t("processes.ctxView")}
                       </ContextMenuItem>
                       <ContextMenuSeparator />
-                      <ContextMenuItem
-                        variant="destructive"
-                        onClick={() => requestStop(p)}
-                        disabled={!canStop}
-                      >
-                        <SquareIcon aria-hidden="true" />
-                        {t("processes.ctxStop")}
-                      </ContextMenuItem>
+                      {canStop ? (
+                        <ContextMenuItem
+                          variant="destructive"
+                          onClick={() => requestStop(p)}
+                        >
+                          <SquareIcon aria-hidden="true" />
+                          {t("processes.ctxStop")}
+                        </ContextMenuItem>
+                      ) : (
+                        <ContextMenuItem onClick={() => handleRestart(p.id)}>
+                          <PlayIcon aria-hidden="true" />
+                          {t("processes.ctxRestart")}
+                        </ContextMenuItem>
+                      )}
                     </ContextMenuPopup>
                   </ContextMenu>
                 );

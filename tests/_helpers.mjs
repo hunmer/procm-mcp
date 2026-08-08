@@ -31,13 +31,11 @@ export function assertEqual(actual, expected, msg) {
 }
 
 // ---- backend lifecycle ----
-export async function startBackend({ port, allowAll = false } = {}) {
+export async function startBackend({ port } = {}) {
   const args = [buildIndex, "--server", "--port", String(port)];
-  if (allowAll) args.push("--allow-all");
   const child = spawn("node", args, {
     cwd: projectRoot,
     stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, PROCM_ALLOW_ALL: allowAll ? "1" : "" },
   });
   // Wait until /api/processes responds.
   const deadline = Date.now() + 8000;
@@ -87,12 +85,10 @@ export async function http(port, method, path, body, token) {
 // ---- MCP-over-stdio helper ----
 // Sends requests SERIALLY: one at a time, waiting for each response before the
 // next. This matters because the MCP SDK may dispatch concurrently-received
-// requests in parallel, which races dependent calls (e.g. allow-start-process
-// then start-process). Never close stdin (that triggers cleanup+exit); we kill
-// the server when done.
-export async function mcpCalls(requests, { allowAll = false } = {}) {
+// requests in parallel, which races dependent calls. Never close stdin (that
+// triggers cleanup+exit); we kill the server when done.
+export async function mcpCalls(requests) {
   const args = [buildIndex];
-  if (allowAll) args.push("--allow-all");
   const child = spawn("node", args, {
     cwd: projectRoot,
     stdio: ["pipe", "pipe", "ignore"],
@@ -153,7 +149,7 @@ export async function mcpCalls(requests, { allowAll = false } = {}) {
   // Run each request in order, awaiting its response.
   for (const r of requests) {
     await send(r);
-    // Allow any downstream disk flush (e.g. allow list write) to land.
+    // Allow any downstream disk flush to land.
     await sleep(150);
   }
 

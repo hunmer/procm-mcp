@@ -5,6 +5,7 @@ import { Input } from "@/registry/default/ui/input";
 import { Badge } from "@/registry/default/ui/badge";
 import { ScrollArea } from "@/registry/default/ui/scroll-area";
 import {
+  ArrowDownToLineIcon,
   CircleOffIcon,
   CopyIcon,
   DownloadIcon,
@@ -94,6 +95,10 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
   const [showTime, setShowTime] = useState(true);
   // Whether a line-number badge is shown at the start of each row.
   const [showLineNumbers, setShowLineNumbers] = useState(false);
+  // Whether the view auto-scrolls to keep the latest line in sight. Pausing
+  // lets the user scroll up to read older output while new logs stream in;
+  // re-enabling snaps back to the bottom immediately.
+  const [autoScroll, setAutoScroll] = useState(true);
   // The launch command shown in a top strip (built server-side incl. envs for
   // live processes; falls back to a public-field reconstruction when closed).
   const [command, setCommand] = useState<string | null>(null);
@@ -194,6 +199,18 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);
   }, []);
+
+  // Re-enabling auto-scroll snaps the view back to the bottom right away and
+  // restores the stick-to-bottom tracking that had been released on pause.
+  useEffect(() => {
+    if (!autoScroll) {
+      stickToBottom.current = false;
+      return;
+    }
+    stickToBottom.current = true;
+    const el = viewport();
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [autoScroll]);
 
   // Load merged history (both streams) whenever the process changes. Search is
   // reset because a grep is process-specific.
@@ -349,10 +366,10 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
 
   // Keep pinned to the latest line when new content arrives.
   useEffect(() => {
-    if (!stickToBottom.current) return;
+    if (!autoScroll || !stickToBottom.current) return;
     const el = viewport();
     if (el) el.scrollTop = el.scrollHeight;
-  }, [entries]);
+  }, [entries, autoScroll]);
 
   // Decide whether to show the hour part. If any visible line is in a
   // different hour than the first one, show HH:mm:ss everywhere for a
@@ -564,6 +581,20 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
             onClick={() => setShowLineNumbers((v) => !v)}
           >
             <ListOrderedIcon />
+          </Button>
+          <Button
+            size="icon-sm"
+            variant={autoScroll ? "default" : "ghost"}
+            aria-pressed={autoScroll}
+            aria-label={
+              autoScroll ? t("logs.pauseAutoScroll") : t("logs.resumeAutoScroll")
+            }
+            title={
+              autoScroll ? t("logs.pauseAutoScroll") : t("logs.resumeAutoScroll")
+            }
+            onClick={() => setAutoScroll((v) => !v)}
+          >
+            <ArrowDownToLineIcon />
           </Button>
           <Button
             size="icon-sm"

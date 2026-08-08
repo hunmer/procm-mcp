@@ -10,7 +10,7 @@ const PORT = 17331 + Math.floor(Math.random() * 1000);
 
 const backend = spawn(
   process.execPath,
-  ["./build/index.js", "--server", "--port", String(PORT), "--allow-all"],
+  ["./build/index.js", "--server", "--port", String(PORT)],
   { cwd: process.cwd(), stdio: ["ignore", "pipe", "pipe"] },
 );
 backend.stdout.on("data", () => {});
