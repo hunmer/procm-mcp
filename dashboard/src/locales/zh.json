@@ -58,6 +58,7 @@
     "colCommand": "命令",
     "colDescription": "描述",
     "colCreated": "创建时间",
+    "colUptime": "运行时长",
     "colStatus": "状态",
     "colPid": "PID",
     "colExit": "退出码",

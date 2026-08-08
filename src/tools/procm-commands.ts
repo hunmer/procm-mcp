@@ -11,6 +11,7 @@ import {
   generateProcessId,
   startProcess,
   pushProcess,
+  listProcesses,
 } from "../process-manager.js";
 
 export const COMMANDS_FILE = "procm-commands.json";
@@ -89,15 +90,44 @@ export function registerProcmCommandsTools(server: McpServer) {
             );
           }
           const names = Object.keys(commandsFile.commands);
+
+          // Cross-reference each command name against the live process list so
+          // the agent can tell at a glance which commands are already running.
+          // procm-command "start" uses the command's key as the process name,
+          // so a match on `name` links the two. Multiple live instances of the
+          // same command are all surfaced (e.g. restarts / duplicate starts).
+          const liveByName = new Map<string, typeof liveProcesses>();
+          const liveProcesses = listProcesses();
+          for (const p of liveProcesses) {
+            const arr = liveByName.get(p.name);
+            if (arr) {
+              arr.push(p);
+            } else {
+              liveByName.set(p.name, [p]);
+            }
+          }
+
+          const statusLines = names.map((n) => {
+            const running = liveByName.get(n);
+            if (running && running.length > 0) {
+              const detail = running
+                .map((p) => `running (id=${p.id}, pid=${p.pid ?? "n/a"}, status=${p.status})`)
+                .join(", ");
+              return `  - ${n}: ${detail}`;
+            }
+            return `  - ${n}: not running`;
+          });
+
           logToolEnd("procm-command", { action: "list", cwd, count: names.length });
           return textResult(
             `${COMMANDS_FILE} in ${cwd}:\n\n${JSON.stringify(
               commandsFile,
               null,
               2,
-            )}\n\nAvailable command names: ${
-              names.length ? names.join(", ") : "(none)"
-            }`,
+            )}\n\nCommand status:\n${statusLines.join("\n")}\n\n` +
+              `Available command names: ${
+                names.length ? names.join(", ") : "(none)"
+              }`,
           );
         }
 

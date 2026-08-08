@@ -89,6 +89,9 @@ import {
 interface ProcessListProps {
   processes: ProcessView[];
   selectedId: string | null;
+  // Wall-clock "now" (epoch ms) that ticks every second from the parent, so the
+  // uptime column stays live without this component owning its own timer.
+  now: number;
   // Per-process unread log counts, keyed by process id.
   unread: Record<string, number>;
   // Set of favorited launch signatures, so rows show the filled star.
@@ -126,6 +129,7 @@ const PAGE_SIZE = 8;
 export function ProcessList({
   processes,
   selectedId,
+  now,
   unread,
   favoritedSignatures,
   onToggleFavorite,
@@ -282,6 +286,43 @@ export function ProcessList({
         },
       },
       {
+        // "Time since last restart". Only shown for live processes
+        // (running/spawning); stopped/exited/error rows render a dash. Uses
+        // lastStartedAt (reset on every restart), falling back to startedAt
+        // for records that predate the field. The parent's `now` ticks every
+        // second so the value stays current.
+        id: "uptime",
+        // Sort by elapsed uptime (now - since). Stopped/exited rows have no
+        // meaningful uptime, so they sort as Infinity — last on ascending (the
+        // shortest-lived first), matching their "—" display. Depends on `now`,
+        // so the sort key tracks the live display.
+        accessorFn: (p) => {
+          const live = p.status === "running" || p.status === "spawning";
+          const since = p.lastStartedAt ?? p.startedAt;
+          return live && since != null ? Math.max(0, now - since) : Infinity;
+        },
+        header: ({ column }) => (
+          <SortableHeader column={column}>{t("processes.colUptime")}</SortableHeader>
+        ),
+        cell: ({ row }) => {
+          const p = row.original;
+          const live = p.status === "running" || p.status === "spawning";
+          const since = p.lastStartedAt ?? p.startedAt;
+          if (!live || since == null) {
+            return <span className="text-muted-foreground text-xs">—</span>;
+          }
+          const uptime = formatUptime(Math.max(0, now - since));
+          return (
+            <span
+              className="text-muted-foreground font-mono text-xs tabular-nums"
+              title={new Date(since).toLocaleString()}
+            >
+              {uptime}
+            </span>
+          );
+        },
+      },
+      {
         accessorKey: "status",
         header: ({ column }) => (
           <SortableHeader column={column}>{t("processes.colStatus")}</SortableHeader>
@@ -420,7 +461,7 @@ export function ProcessList({
         },
       },
     ],
-    [selectedId, unread, favoritedSignatures, onToggleFavorite, onSelectLogs, onToast],
+    [now, selectedId, unread, favoritedSignatures, onToggleFavorite, onSelectLogs, onToast],
   );
 
   // Client-side filtering by status and name. "expired" is a UI-only filter
@@ -769,4 +810,17 @@ function SortableHeader({
       </span>
     </button>
   );
+}
+
+// Format a duration (ms) as a compact uptime string. Shows hours only when
+// present, always zero-padded minutes/seconds: "1h 02m 03s" / "02m 03s" / "03s".
+// Mirrors the server-uptime formatting in App.tsx so both displays agree.
+function formatUptime(ms: number): string {
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const mm = String(m).padStart(2, "0");
+  const ss = String(s).padStart(2, "0");
+  return h > 0 ? `${h}h ${mm}m ${ss}s` : `${mm}m ${ss}s`;
 }

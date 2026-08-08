@@ -123,6 +123,9 @@ function toRecord(meta: ProcessMetadata, stoppedAt: number | null = null): Proce
     error: meta.error,
     desc: meta.desc,
     startedAt: startedAtByMeta.get(meta.id) ?? Date.now(),
+    // lastStartedAt falls back to startedAt so a record that predates this
+    // field (or a process that never restarted) still has a sensible value.
+    lastStartedAt: lastStartedAtByMeta.get(meta.id) ?? startedAtByMeta.get(meta.id) ?? Date.now(),
     stoppedAt,
     // Persist the on-disk log paths so a stopped/expired process's logs stay
     // viewable/downloadable after its in-memory clients are gone (and across
@@ -138,6 +141,11 @@ function toRecord(meta: ProcessMetadata, stoppedAt: number | null = null): Proce
 // across status updates (the record's own startedAt is authoritative once
 // persisted, but we need a value before the first write lands).
 const startedAtByMeta = new Map<string, number>();
+
+// Track each process's MOST RECENT start time in memory so the dashboard can
+// show "time since last restart". Unlike startedAt, this is reset on every
+// restart (see restartProcess) and NOT preserved by upsert().
+const lastStartedAtByMeta = new Map<string, number>();
 
 export function listProcesses(): ProcessMetadata[] {
   return processes;
@@ -511,6 +519,11 @@ export async function restartProcess(id: string): Promise<ProcessMetadata | null
       processMetadata.desc,
     );
     processes[processIndex] = newProcess;
+    // This branch reassigns in place and bypasses pushProcess, so reset the
+    // most-recent-start time explicitly — this is the restart that "time since
+    // last restart" must reflect. (Persist happens later via the spawn handlers
+    // in startProcess, same as the rest of the record.)
+    lastStartedAtByMeta.set(id, Date.now());
     dashboardEvents.emitProcessChange();
     return newProcess;
   }
@@ -595,6 +608,10 @@ async function killProcessTree(
 export function pushProcess(metadata: ProcessMetadata) {
   processes.push(metadata);
   startedAtByMeta.set(metadata.id, Date.now());
+  // A fresh registration is also a (re)start, so reset the most-recent-start
+  // time here. Every entry path that registers a process goes through this,
+  // except the live-restart branch in restartProcess (which reassigns in place).
+  lastStartedAtByMeta.set(metadata.id, Date.now());
   dashboardEvents.emitProcessChange();
   // Persist the initial record so a crash between spawn and the next state
   // change still leaves a trace.

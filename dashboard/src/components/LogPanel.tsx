@@ -213,7 +213,11 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
   }, [autoScroll]);
 
   // Load merged history (both streams) whenever the process changes. Search is
-  // reset because a grep is process-specific.
+  // reset because a grep is process-specific. Also re-runs on restart: the id
+  // stays the same but the pid changes (new child process), which is the signal
+  // to clear the previous run's logs and reload the new run's. The new run has
+  // fresh in-memory clients, so getMergedLogs returns its own (initially empty)
+  // history instead of the stopped run's on-disk logs.
   useEffect(() => {
     let cancelled = false;
     const id = ++reqId.current;
@@ -252,7 +256,7 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
     return () => {
       cancelled = true;
     };
-  }, [process.id]);
+  }, [process.id, process.pid]);
 
   // Load the launch command for the command strip. Built server-side (cd to
   // cwd + env-var prefixes + `script args`). Works for any process that has

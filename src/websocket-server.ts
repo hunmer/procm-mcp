@@ -26,6 +26,7 @@ function toPublicView(p: ProcessRecord) {
     error: p.error,
     desc: p.desc,
     startedAt: p.startedAt,
+    lastStartedAt: p.lastStartedAt ?? null,
     stoppedAt: p.stoppedAt,
   };
 }

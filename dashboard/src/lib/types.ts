@@ -17,6 +17,9 @@ export interface ProcessView {
   // Lifecycle timestamps (epoch ms). addedAt stays undefined for live-only
   // records the server didn't persist, so the UI tolerates their absence.
   startedAt?: number;
+  // Epoch ms of the most recent start; reset on every restart. Used to show
+  // "time since last restart". Falls back to startedAt when absent.
+  lastStartedAt?: number | null;
   stoppedAt?: number | null;
 }
 

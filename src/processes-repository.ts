@@ -19,6 +19,11 @@ export type ProcessRecord = {
   desc: string | null;
   // Epoch ms when the process was first started.
   startedAt: number;
+  // Epoch ms of the most recent start; reset on every restart (distinct from
+  // startedAt, which is the original launch time and is preserved). The
+  // dashboard shows "time since last restart" from this. Undefined on records
+  // written before this field existed; null when explicitly absent.
+  lastStartedAt?: number | null;
   // Epoch ms when the process was removed from the live list (stopped by the
   // user or cleaned up). null while it is still tracked in memory.
   stoppedAt: number | null;
@@ -73,8 +78,9 @@ async function initialize(db: Low<ProcessesDb>): Promise<void> {
 
 // Insert or replace a record by id. We always overwrite the whole record so
 // the persisted state matches the latest in-memory metadata (status, pid,
-// exitCode, error, stoppedAt). startedAt is preserved when updating so the
-// original launch time isn't lost across state changes.
+// exitCode, error, stoppedAt, lastStartedAt). startedAt is preserved when
+// updating so the original launch time isn't lost across state changes;
+// lastStartedAt is NOT preserved so every restart resets it.
 async function upsert(db: Low<ProcessesDb>, record: ProcessRecord): Promise<void> {
   await db.read();
   const idx = db.data.processes.findIndex((p) => p.id === record.id);

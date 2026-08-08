@@ -468,6 +468,7 @@ export function App() {
               <ProcessList
                 processes={processes}
                 selectedId={selected?.id ?? null}
+                now={now}
                 unread={unread}
                 favoritedSignatures={favoritedSignatures}
                 onToggleFavorite={handleToggleFavorite}

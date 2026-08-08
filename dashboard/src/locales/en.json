@@ -58,6 +58,7 @@
     "colCommand": "Command",
     "colDescription": "Description",
     "colCreated": "Created",
+    "colUptime": "Uptime",
     "colStatus": "Status",
     "colPid": "PID",
     "colExit": "Exit",
