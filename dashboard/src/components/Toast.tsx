@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 interface ToastProps {
   message: string;
@@ -9,10 +9,18 @@ interface ToastProps {
 // Minimal transient toast. Not the coss toast primitive — kept inline to avoid
 // pulling the heavier toastManager/provider wiring for a single message.
 export function Toast({ message, isError, onDismiss }: ToastProps) {
+  // The auto-close timer must fire once on mount and survive parent re-renders.
+  // App re-renders every second (for its uptime clock), which would otherwise
+  // pass a fresh inline onDismiss each time, flip this effect's deps, and keep
+  // resetting the 2800ms timer so it never fires — the toast would stick.
+  // Holding the latest callback in a ref decouples the timer from that churn.
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
+
   useEffect(() => {
-    const t = setTimeout(onDismiss, 2800);
+    const t = setTimeout(() => onDismissRef.current(), 2800);
     return () => clearTimeout(t);
-  }, [message, onDismiss]);
+  }, []);
 
   return (
     <div

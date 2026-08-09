@@ -2,8 +2,9 @@ import { readFile, stat } from "fs/promises";
 import path from "path";
 
 // Stateless project-config scanner. Given a folder path, reads its top-level
-// project manifest files (package.json / pyproject.toml / Cargo.toml) and
-// derives a list of launchable commands the dashboard can import as favorites.
+// project manifest files (package.json / pyproject.toml / Cargo.toml /
+// procm-commands.json) and derives a list of launchable commands the dashboard
+// can import as favorites.
 //
 // This is purely advisory metadata: it never writes anything and never recurses
 // into subdirectories (the caller passes the exact folder to scan). Failures
@@ -37,15 +38,17 @@ export async function scanProjectCommands(
 
   const candidates: ScanCandidate[] = [];
   // Read each manifest independently; an unreadable one doesn't abort the rest.
-  const [pkg, py, cargo] = await Promise.all([
+  const [pkg, py, cargo, procm] = await Promise.all([
     readJsonIfExists(path.join(resolved, "package.json")),
     readTextIfExists(path.join(resolved, "pyproject.toml")),
     readTextIfExists(path.join(resolved, "Cargo.toml")),
+    readJsonIfExists(path.join(resolved, "procm-commands.json")),
   ]);
 
   if (pkg) candidates.push(...fromPackageJson(pkg, resolved));
   if (py) candidates.push(...fromPyproject(py, resolved));
   if (cargo) candidates.push(...fromCargo(resolved));
+  if (procm) candidates.push(...fromProcmCommands(procm, resolved));
 
   // De-dup by (script+args+cwd) so a command that appears in two manifests is
   // only offered once.
@@ -154,6 +157,41 @@ function fromCargo(cwd: string): ScanCandidate[] {
     { script: "cargo", args: ["test"], cwd, name: "test", desc: "cargo test" },
     { script: "cargo", args: ["check"], cwd, name: "check", desc: "cargo check" },
   ];
+}
+
+// ---- procm-commands.json ------------------------------------------------
+// procm-mcp's own project manifest: a { commands: { name: { script, args?, cwd?,
+// envs?, desc? } } } map. The cwd, when relative, is resolved against the
+// project folder (same convention the procm-command tool uses at start time)
+// so an imported favorite launches from the same directory as it would there.
+
+function fromProcmCommands(
+  file: Record<string, unknown>,
+  projectDir: string,
+): ScanCandidate[] {
+  const commands = file.commands;
+  if (!commands || typeof commands !== "object") return [];
+  const out: ScanCandidate[] = [];
+  for (const [name, raw] of Object.entries(
+    commands as Record<string, unknown>,
+  )) {
+    if (!raw || typeof raw !== "object") continue;
+    const cmd = raw as Record<string, unknown>;
+    const script = typeof cmd.script === "string" ? cmd.script.trim() : "";
+    if (!script) continue;
+    const args = Array.isArray(cmd.args)
+      ? cmd.args.filter((a): a is string => typeof a === "string")
+      : [];
+    // Resolve a relative cwd against the project dir; default to the dir itself.
+    const cwdRaw = typeof cmd.cwd === "string" ? cmd.cwd.trim() : "";
+    const cwd = cwdRaw ? path.resolve(projectDir, cwdRaw) : projectDir;
+    const desc =
+      typeof cmd.desc === "string" && cmd.desc ? cmd.desc : undefined;
+    out.push({ script, args, cwd, name, desc });
+  }
+  // Stable alphabetical order, mirroring fromPackageJson.
+  out.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+  return out;
 }
 
 // ---- helpers ------------------------------------------------------------

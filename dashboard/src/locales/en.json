@@ -210,7 +210,7 @@
   },
   "importDialog": {
     "title": "Import from folder",
-    "description": "Scan a folder for project commands (package.json, pyproject.toml, Cargo.toml) and import the ones you want as favorites. The folder path becomes the favorites category.",
+    "description": "Scan a folder for project commands (package.json, pyproject.toml, Cargo.toml, procm-commands.json) and import the ones you want as favorites. The folder path becomes the favorites category.",
     "folderLabel": "Folder path",
     "folderPlaceholder": "/path/to/project",
     "scan": "Scan",
