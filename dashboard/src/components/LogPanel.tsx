@@ -4,6 +4,7 @@ import { Button } from "@/registry/default/ui/button";
 import { Input } from "@/registry/default/ui/input";
 import { Badge } from "@/registry/default/ui/badge";
 import { ScrollArea } from "@/registry/default/ui/scroll-area";
+import { Separator } from "@/registry/default/ui/separator";
 import {
   ArrowDownToLineIcon,
   CircleOffIcon,
@@ -15,7 +16,10 @@ import {
   FolderTreeIcon,
   ListOrderedIcon,
   PanelRightCloseIcon,
+  PlayIcon,
+  RotateCwIcon,
   SearchIcon,
+  SquareIcon,
   SquareTerminalIcon,
   XIcon,
   ClockIcon,
@@ -25,6 +29,15 @@ import {
   AlertDescription,
   AlertTitle,
 } from "@/registry/default/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "@/registry/default/ui/alert-dialog";
 import {
   Empty,
   EmptyDescription,
@@ -45,6 +58,8 @@ import {
   getProcessCommand,
   grepMergedLogs,
   mergeEntries,
+  restartProcess,
+  stopProcess,
 } from "@/lib/api";
 import type {
   LogEntry,
@@ -105,6 +120,18 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
   // Set when the process is no longer live: shown as a 「进程已经关闭」 notice
   // instead of surfacing the raw "Process not found" error.
   const [closedNotice, setClosedNotice] = useState(false);
+  // Whether the stop confirmation dialog is open. Restart/run fire directly,
+  // but stop (which keeps the record) is gated behind a confirm — mirroring
+  // the ProcessList behavior.
+  const [pendingStop, setPendingStop] = useState(false);
+
+  // Whether the process can currently be stopped — mirrors the same check in
+  // ProcessList (running/spawning only). When it can't be stopped, the footer
+  // shows a Play button to restart instead.
+  const canStop =
+    process.stoppedAt == null &&
+    process.status !== "exited" &&
+    process.status !== "error";
 
   const reqId = useRef(0);
   const asideRef = useRef<HTMLElement | null>(null);
@@ -131,6 +158,36 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
   function handleClearLogs() {
     setEntries([]);
     stickToBottom.current = true;
+  }
+
+  // Restart the process. The WebSocket push refreshes the process view (and
+  // thus `canStop`/status), and the load effect re-runs on pid change to swap
+  // in the new run's logs.
+  async function handleRestart() {
+    try {
+      await restartProcess(process.id);
+      onToast(t("logs.toastRestarted", { id: process.id }));
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : String(err), true);
+    }
+  }
+
+  // Open the stop confirmation dialog. Defensive guard against the same
+  // canStop check so a stale click on a row that just stopped is a no-op.
+  function requestStop() {
+    if (!canStop) return;
+    setPendingStop(true);
+  }
+
+  // Actually stop the process (keeps its record as history).
+  async function confirmStop() {
+    setPendingStop(false);
+    try {
+      await stopProcess(process.id);
+      onToast(t("logs.toastStopped", { name: process.name }));
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : String(err), true);
+    }
   }
 
   // Copy the currently displayed log text to the clipboard. Mirrors the Line
@@ -419,15 +476,21 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              aria-label={t("logs.clearLogsAria")}
-              title={t("logs.clearLogsTitle")}
-              onClick={handleClearLogs}
-            >
-              <EraserIcon />
-            </Button>
+            {/* Run (restart) button: only shown when the process can't be
+                stopped (stopped/exited/error), so a closed process can be
+                relaunched straight from its panel header. */}
+            {!canStop && (
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-label={t("logs.runAria", { name: process.name })}
+                title={t("logs.runTitle")}
+                onClick={handleRestart}
+                className="text-muted-foreground hover:text-success"
+              >
+                <PlayIcon />
+              </Button>
+            )}
             <Button
               size="icon-sm"
               variant="ghost"
@@ -609,6 +672,42 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
           >
             <CopyIcon />
           </Button>
+          {/* Process controls: restart always, stop (when running) or run
+              (when stopped/exited), then the clear-view button. Mirrors the
+              ProcessList row actions so the open process can be controlled
+              directly from its log panel. */}
+          <Separator orientation="vertical" />
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label={t("logs.restartAria", { name: process.name })}
+            title={t("logs.restartTitle")}
+            onClick={handleRestart}
+            className="text-muted-foreground hover:text-success"
+          >
+            <RotateCwIcon />
+          </Button>
+          {canStop && (
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label={t("logs.stopAria", { name: process.name })}
+              title={t("logs.stopTitle")}
+              onClick={requestStop}
+              className="text-muted-foreground hover:text-warning"
+            >
+              <SquareIcon />
+            </Button>
+          )}
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label={t("logs.clearLogsAria")}
+            title={t("logs.clearLogsTitle")}
+            onClick={handleClearLogs}
+          >
+            <EraserIcon />
+          </Button>
         </div>
         <div className="flex items-center gap-1">
           <span className="text-muted-foreground px-1 text-[11px] tabular-nums">
@@ -646,6 +745,35 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
           </Menu>
         </div>
       </div>
+
+      {/* Stop confirmation: triggered from the footer Stop button. Stopping
+          keeps the record (and its on-disk logs) as history. */}
+      <AlertDialog
+        open={pendingStop}
+        onOpenChange={(open) => {
+          if (!open) setPendingStop(false);
+        }}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("logs.stopQuestion")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("logs.stopDescription", { name: process.name, id: process.id })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="ghost" />}>
+              {t("common.cancel")}
+            </AlertDialogClose>
+            <AlertDialogClose
+              render={<Button variant="destructive" />}
+              onClick={confirmStop}
+            >
+              {t("common.stop")}
+            </AlertDialogClose>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
     </aside>
   );
 }
