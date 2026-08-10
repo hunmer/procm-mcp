@@ -1,213 +1,227 @@
 ---
 name: procm-mcp
-description: How to use the procm-mcp MCP server to launch, control, inspect, and interact with local processes from an agent. Use whenever the user wants to start/stop/restart a local command as a managed background process, read its live stdout/stderr logs, grep them, send stdin input or a signal (e.g. Ctrl+C / SIGINT), or run named commands from a project's procm-commands.json. Covers the five tools (start-process, process, process-logs, process-input, procm-command), their argument shapes, and common workflows.
+description: HTTP API fallback for procm-mcp when the MCP server/tools are unavailable (not connected, tools missing, or transport error). Use whenever the agent needs to start/stop/restart a local background process, read or grep its stdout/stderr logs, send stdin input or a signal (Ctrl+C = SIGINT), or run commands from a project's procm-commands.json — AND the procm-mcp MCP tools are NOT working, so the same operations must be done over plain HTTP (or the `procm-mcp` CLI). Covers endpoint paths, request/response shapes, port & token discovery, and error codes.
 ---
 
-# procm-mcp
+# procm-mcp (HTTP fallback)
 
-procm-mcp is a local process manager exposed as an MCP server. It lets an agent
-spawn long-running commands (dev servers, build watchers, REPLs, scripts),
-keep them alive in the background across the conversation, read their logs in
-real time, send them input or signals, and start predefined commands by name.
+procm-mcp normally exposes its process manager as MCP tools (`start-process`,
+`process`, `process-logs`, `process-input`, `procm-command`). **This skill is
+the fallback for when those tools are not available** — the MCP server won't
+connect, the `mcp__procm-mcp__*` tools don't appear, a tool call times out, or
+the editor's MCP integration is broken. Every operation the tools do is also
+exposed as a plain localhost HTTP API, and the same backend ships a `procm-mcp`
+CLI that wraps it. Use either to keep working while MCP is down.
 
-A single backend tracks every process it started. Each process gets a stable
-**id** (8-char nanoid); that id is the handle for all subsequent operations.
+## When to use this skill
 
-## What this skill is for
+Reach for this skill when you would normally call a procm-mcp MCP tool but
+cannot. Concretely:
 
-Use this skill to:
+- the `mcp__procm-mcp__*` tools are missing from the tool list, **or**
+- a tool call fails with a connection / transport / timeout error, **or**
+- the user says "MCP isn't working" / "use HTTP instead" / "the server won't connect".
 
-- Start a command as a managed background process and get an id back
-- List running processes, inspect one, or restart / delete it
-- Tail or grep a process's stdout/stderr
-- Write to a process's stdin (answer a prompt, feed a CLI) or send a signal
-  (Ctrl+C = `SIGINT`, graceful stop, hard kill)
-- Run commands predefined in a project's `procm-commands.json` by name
+If the MCP tools work, prefer them — they're the primary path. This skill is
+the backup.
 
-## Tool set (5 tools)
+## Prerequisites: find a live backend
 
-All five tools live under `src/tools/` and are registered in `src/index.ts`.
-Argument schemas are validated with zod; unknown/extra args are rejected.
+The HTTP API is served by a `procm-mcp` backend process. It must already be
+running — this skill does not start it.
 
-### 1. `start-process` — spawn a new process
+- **Host/port:** bound to `http://127.0.0.1:<port>`. Port comes from
+  `--port <n>`, else `PROCM_HTTP_PORT`, else **7331**. There is no port-file
+  discovery — if the port is unknown, try 7331, then ask the user.
+- **Auth (optional):** if the backend was started with `PROCM_HTTP_TOKEN` set,
+  every request must carry `Authorization: Bearer <token>`. Token is unknown to
+  the agent; the user must supply it.
+- **Liveness check** — one request tells you if it's up and which port works:
 
-Starts a single command as a managed child process and returns its id.
+```bash
+curl -s http://127.0.0.1:7331/api/processes        # add -H "Authorization: Bearer $T" if token-protected
+```
 
-| arg | type | required | notes |
+Non-2xx / connection refused → backend not on that port. A 200 JSON body with
+`serverId`/`pid` → you're in. The `procm-mcp ping` CLI does the same check.
+
+> **Note:** a stdio-MCP backend only serves HTTP if `PROCM_HTTP_PORT` was set
+> (dashboard is optional in that mode). A `procm-mcp --server` backend always
+> serves HTTP. If you cannot find any live port, the fallback is unavailable —
+> tell the user to start one: `procm-mcp --server` (or set `PROCM_HTTP_PORT`
+> for the MCP backend).
+
+## Endpoint reference
+
+All paths are under `/api`. `:id` is a process id (8-char nanoid, stable across
+restarts). Bodies are JSON; `Content-Type: application/json` on writes.
+
+### Process lifecycle
+
+| Operation | Method + path | Body / query | Success |
 |---|---|---|---|
-| `script` | string | **yes** | Executable to run. **No spaces / no `=`** — split a compound command into `script` + `args`, and put env vars in `envs`. A violation returns a helpful message instead of spawning. |
-| `cwd` | string | **yes** | Working directory (absolute or relative to the backend). |
-| `name` | string | no | Human label shown in lists/dashboard. Defaults to `script + args`. |
-| `args` | string[] | no | Argv after `script`. |
-| `envs` | object | no | Extra env vars (`{ "KEY": "value" }`), merged on top of the backend's own env. Persisted so a stopped process can be fully reproduced on restart. |
-| `desc` | string | no | Free-text description, persisted with the record. |
+| **List** (live + history) | `GET /api/processes` | — | `{ serverId, pid, processes: [...] }` |
+| **Start** | `POST /api/processes` | `{ script, cwd, args?, name?, envs?, desc? }` | `201 { id, name }` |
+| **Get one** (live only) | `GET /api/processes/:id` | — | `200` process view |
+| **Stop, keep record** | `POST /api/processes/:id/stop` | `{}` | `200 { id, stopped: true }` |
+| **Restart** | `POST /api/processes/:id/restart` | `{}` | `200 { id, restarted: true }` |
+| **Delete** (stop + erase) | `DELETE /api/processes/:id` | — | `200 { id, deleted: true }` |
+| **Bulk delete** | `DELETE /api/processes` | `{ ids?: string[] }` (omit = all) | `200 { deleted, notFound }` |
 
-Returns `Process started: <name> (ID: <id>)`.
+Process view fields: `id, name, script, args, cwd, status, pid, exitCode,
+error, desc, startedAt, lastStartedAt, stoppedAt`. Status is one of
+`spawning | running | exited | error`.
 
-The id is the handle for everything else — capture it from the response.
+**Start validation (returns 400 otherwise):**
 
-### 2. `process` — manage / list (unified)
+- `script` and `cwd` are both required and must be non-empty.
+- `script` cannot contain spaces — split into `script` + `args`.
+- `script` cannot contain `=` — put env vars in `envs: { KEY: "value" }`,
+  not as `KEY=value` prefixes.
 
-One tool, four actions selected by `action`:
+### Logs
 
-| action | needs `id`? | what it does |
+| Operation | Method + path | Query |
 |---|---|---|
-| `"list"` | no | List every currently-running process as `id: name (script args...)`. Empty → "No processes are currently running." |
-| `"get"` | **yes** | Full detail of one process: pid, name, script, args, cwd, status, exit code, error. |
-| `"restart"` | **yes** | Kill and re-spawn in place (keeps the id). Works on stopped/expired processes too — rebuilt from its persisted record (envs included). |
-| `"delete"` | **yes** | Stop (if running) and remove from the live list. The historical record is kept so it still shows as expired. |
+| **Tail** recent | `GET /api/processes/:id/logs` | `stream=stdout\|stderr` (default stdout), `count` (default 200) |
+| **Grep** | `GET /api/processes/:id/logs` | `grep=<regex>`, `stream` (optional; omit = both), `count` (default 50), `ignoreCase=1` |
 
-Status values: `spawning` → `running` → `exited` (or `error`).
+Returns `{ stream, text }` where each line is `[ISO] message`. Invalid grep
+regex → `400 { error }`. Logs resolve live **or** persisted record, so a
+stopped/expired process's logs are still readable.
 
-### 3. `process-logs` — tail or grep logs
+Related (less common): `GET /api/processes/:id/log-files` (on-disk paths),
+`GET /api/processes/:id/log-download` (merged file as attachment),
+`GET /api/processes/:id/command` (paste-and-run reproduction of the launch).
 
-Read a process's captured output. Two modes, picked by whether `pattern` is set:
+### Input (stdin / signal) — `process-input` equivalent
 
-- **Tail** (no `pattern`): most recent chunks of one stream.
-  - `stream` defaults to `"stdout"`; `count` defaults to `10`.
-- **Grep** (`pattern` set): regex search over the logs.
-  - `stream` optional (omit → search both stdout **and** stderr).
-  - `count` defaults to `50`, results returned **newest-first**.
-  - `ignoreCase` (`boolean`, default false) for `/pattern/i`.
-  - Invalid regex → returns an error message (does not throw).
+`POST /api/processes/:id/input` — body is **one of**:
 
-| arg | type | notes |
+```jsonc
+// write text to the process's stdin
+{ "text": "y", "newline": true }     // newline defaults to true; set false for raw bytes
+
+// deliver an OS signal
+{ "signal": "SIGINT" }               // Ctrl+C
+```
+
+- `text` and `signal` are **mutually exclusive** — both → `400`.
+- Allowed signals: `SIGINT SIGTERM SIGKILL SIGHUP SIGUSR1 SIGUSR2 SIGTSTP
+  SIGCONT SIGQUIT`. Anything else → `400`.
+- **Ctrl+C is `SIGINT`, not a `\x03` byte** — piped stdio has no TTY, so a raw
+  control byte is usually ignored. Use the signal.
+- Responses: `200 { ok: true, kind: "text", bytes }` /
+  `200 { ok: true, kind: "signal", signal }`. Failures: `404` (unknown id) or
+  `400` (no writable stdin / bad args / signal error) with `{ error }`.
+
+### Misc endpoints
+
+| Path | Purpose |
+|---|---|
+| `GET /api/meta` | `{ serverId, pid, cwd, startedAt }` — backend metadata |
+| `POST /api/favorites/scan` `{ path }` | Scan a folder for project launch commands |
+| `POST /api/open-folder` `{ path }` | Reveal a folder in the OS file manager |
+
+> The `procm-command` MCP tool (start commands from `procm-commands.json` by
+> name) has **no dedicated HTTP endpoint**. Its equivalent over HTTP is to read
+> `procm-commands.json` yourself and `POST /api/processes` with the matched
+> entry's `script/args/cwd/envs`. Set `name` to the command's key so it lines
+> up with how `procm-command` would have named it.
+
+## Copy-paste request patterns
+
+The agent can issue these directly with `curl`/`fetch`. Replace `$PORT`,
+`$ID`, `$T` (token, only if needed).
+
+```bash
+# 0. reachability + token check
+curl -s http://127.0.0.1:$PORT/api/processes ${T:+-H "Authorization: Bearer $T"}
+
+# 1. start a process (capture the returned id)
+curl -s -X POST http://127.0.0.1:$PORT/api/processes ${T:+-H "Authorization: Bearer $T"} \
+  -H "Content-Type: application/json" \
+  -d '{"script":"npm","args":["run","dev"],"cwd":"G:/myapp","name":"dev"}'
+
+# 2. tail logs
+curl -s "http://127.0.0.1:$PORT/api/processes/$ID/logs?stream=stdout&count=200" ${T:+-H "Authorization: Bearer $T}"
+
+# 3. grep both streams, case-insensitive
+curl -s "http://127.0.0.1:$PORT/api/processes/$ID/logs?grep=error&ignoreCase=1&count=50" ${T:+-H "Authorization: Bearer $T"}
+
+# 4. answer an interactive prompt (stdin)
+curl -s -X POST "http://127.0.0.1:$PORT/api/processes/$ID/input" ${T:+-H "Authorization: Bearer $T"} \
+  -H "Content-Type: application/json" -d '{"text":"y"}'
+
+# 5. Ctrl+C (SIGINT)
+curl -s -X POST "http://127.0.0.1:$PORT/api/processes/$ID/input" ${T:+-H "Authorization: Bearer $T"} \
+  -H "Content-Type: application/json" -d '{"signal":"SIGINT"}'
+
+# 6. stop but keep the history record
+curl -s -X POST "http://127.0.0.1:$PORT/api/processes/$ID/stop" ${T:+-H "Authorization: Bearer $T"} -d '{}'
+
+# 7. restart (keeps the id)
+curl -s -X POST "http://127.0.0.1:$PORT/api/processes/$ID/restart" ${T:+-H "Authorization: Bearer $T"} -d '{}'
+
+# 8. delete (stop + erase record)
+curl -s -X DELETE "http://127.0.0.1:$PORT/api/processes/$ID" ${T:+-H "Authorization: Bearer $T"}
+```
+
+## CLI alternative
+
+If `procm-mcp` is on PATH, the CLI is a thinner way to hit the same API. It's
+often faster for one-off checks than building a `fetch`. Default port 7331;
+override with `--port` or `PROCM_HTTP_PORT`; token via `--token` or
+`PROCM_HTTP_TOKEN`.
+
+```
+procm-mcp ping                                    reachability check
+procm-mcp ps                                      list processes
+procm-mcp info <id>                               details
+procm-mcp logs <id> [--stream stdout|stderr] [-n 200]
+procm-mcp grep <id> <pattern> [--stream s] [-n 50] [-i]
+procm-mcp start <script> [args...] [--cwd <dir>] [--name <n>] [--env KEY=VAL ...]
+procm-mcp restart <id>
+procm-mcp stop <id>                               stop + delete
+```
+
+> The CLI has **no** `input` subcommand — for stdin/signal, use the HTTP
+> `POST /api/processes/:id/input` endpoint directly (step 4/5 above).
+
+## Error codes
+
+| Status | Meaning | Typical cause |
 |---|---|---|
-| `id` | string | required |
-| `stream` | `"stdout"` \| `"stderr"` | optional |
-| `pattern` | string (regex) | optional — presence selects grep mode |
-| `count` | number | optional (tail: 10, grep: 50) |
-| `ignoreCase` | boolean | optional, grep only |
+| `200` | success | — |
+| `201` | created | `POST /api/processes` start |
+| `400` | bad request | script validation failed; `input` got both/neither text+signal; bad signal name; no writable stdin |
+| `401` | unauthorized | token required but missing/wrong (`Authorization: Bearer`) |
+| `404` | not found | unknown id; or live-only op (`GET /:id`, `stop`) on a stopped process |
+| `405` | method not allowed | wrong verb on a known path (e.g. GET on `/stop`) |
+| `500` | server error | unexpected — check backend logs |
 
-Lines are returned as `[ISO timestamp] (stream) message`. Requires a live
-process — logs of stopped/expited processes are read via the HTTP API / dashboard,
-not this tool (the in-memory client is gone).
+Connection refused / `ECONNREFUSED` / fetch-failed → no backend on that port.
 
-### 4. `process-input` — write stdin or send a signal
+## Fallback decision tree
 
-Send input to a running process. **Exactly one of `text` / `signal`** must be
-provided; both or neither returns an error.
-
-- **`text`** — write a string to the process's stdin.
-  - `newline` (boolean, default **true**) appends `\n` so a single write reads
-    as one complete line by the child.
-  - Set `newline: false` to send raw bytes (e.g. ANSI/control sequences).
-- **`signal`** — deliver an OS signal to the child's pid (cross-platform;
-  Windows maps these to the platform equivalent).
-  - Whitelist: `SIGINT`, `SIGTERM`, `SIGKILL`, `SIGHUP`, `SIGUSR1`, `SIGUSR2`,
-    `SIGTSTP`, `SIGCONT`, `SIGQUIT`. Anything else is rejected.
-  - **Ctrl+C = `SIGINT`** — this is the reliable way to interrupt a process,
-    *not* writing `\x03` (the piped stdio has no TTY, so a raw Ctrl byte is
-    usually ignored).
-
-| arg | type | notes |
-|---|---|---|
-| `id` | string | required |
-| `text` | string | text mode |
-| `newline` | boolean | text mode only, default true |
-| `signal` | enum (see list) | signal mode |
-
-Returns `Wrote <n> byte(s) to stdin of process <id>.` or
-`Sent signal <SIG> to process <id>.`.
-
-Failure reasons surfaced as text: process not found, no writable stdin
-(child closed it), or write/kill error.
-
-### 5. `procm-command` — run predefined commands by name
-
-Reads `procm-commands.json` from a project directory and lets the agent start
-or list its entries by name. Good for "start the dev server" style tasks where
-the launch recipe should live with the project, not in the agent's memory.
-
-| arg | type | notes |
-|---|---|---|
-| `action` | `"list"` \| `"start"` | required |
-| `name` | string | required for `start`; the command's key in the JSON |
-| `cwd` | string | project dir containing `procm-commands.json`, defaults to backend cwd |
-
-- `list` returns the full file plus per-command live status (`running` with
-  id/pid, or `not running`) and the available names.
-- `start` resolves the command's `cwd` relative to the project dir, applies its
-  `envs`, and spawns it. The command's **key becomes the process name**, which
-  is how `list` cross-references it against live processes.
-
-`procm-commands.json` shape:
-
-```json
-{
-  "commands": {
-    "dev": {
-      "script": "npm",
-      "args": ["run", "dev"],
-      "cwd": ".",
-      "envs": { "NODE_ENV": "development" },
-      "desc": "Vite dev server on :5173"
-    },
-    "worker": { "script": "node", "args": ["worker.js"] }
-  }
-}
-```
-
-## Common workflows
-
-### Start a dev server and watch its logs
-
-1. `start-process` with `script`/`args`/`cwd` → note the `ID`.
-2. `process-logs { id, stream: "stdout", count: 50 }` to see startup output.
-3. If it didn't come up, `process-logs { id, pattern: "error|EADDRINUSE" }`.
-
-### Stop a hung process cleanly
-
-1. `process { action: "list" }` to find the id.
-2. Try a graceful interrupt first:
-   `process-input { id, signal: "SIGINT" }` (= Ctrl+C).
-3. If it doesn't exit, `process-input { id, signal: "SIGTERM" }`.
-4. Last resort: `process-input { id, signal: "SIGKILL" }`, or
-   `process { action: "delete", id }` to stop + remove the record.
-
-### Answer an interactive prompt
-
-A CLI asking `Continue? (y/n)` — answer without restarting it:
-
-```
-process-input { id, text: "y" }     # newline appended automatically
-```
-
-### Run a project-defined command
-
-```
-procm-command { action: "list", cwd: "/path/to/project" }
-procm-command { action: "start", name: "dev", cwd: "/path/to/project" }
-```
-
-## Rules of thumb
-
-- **Split compound commands.** `start-process.script` cannot contain spaces or
-  `=`. `npm run dev` → `script: "npm", args: ["run", "dev"]`; `FOO=bar cmd`
-  → `envs: { "FOO": "bar" }`.
-- **Capture the id.** Every later call keys off it. The id is stable across
-  restarts (`restart` keeps the id).
-- **Ctrl+C is `SIGINT`, not a byte.** Piped stdio has no TTY, so writing `\x03`
-  usually does nothing. Use `signal: "SIGINT"`.
-- **`text` and `signal` are mutually exclusive** — passing both is a 400/error.
-- **Stopped processes keep their history** — `delete` leaves an expired record;
-  logs are still served via the HTTP API / dashboard.
-- **Background ≠ fire-and-forget.** A started process keeps running and writing
-  logs until explicitly stopped or the backend exits. `cleanup()` on backend
-  shutdown kills them all.
+1. A procm-mcp operation is needed.
+2. Are the `mcp__procm-mcp__*` tools present **and** do they respond? → use them; skip this skill.
+3. Otherwise, is a backend reachable? `curl http://127.0.0.1:7331/api/processes`
+   - no → ask the user to run `procm-mcp --server` (or report the port); stop.
+   - yes → use the HTTP endpoints above (or the CLI for non-input ops).
+4. Once MCP is restored, switch back to the tools — they're the primary path.
 
 ## Source of truth
 
-- Tool definitions (authoritative): `src/tools/process.ts`,
-  `src/tools/process-logs.ts`, `src/tools/process-input.ts`,
-  `src/tools/procm-commands.ts`.
-- Process lifecycle / stdin / signals: `src/process-manager.ts`
-  (`sendProcessInput`, `startProcess`, `restartProcess`, signal whitelist
-  `ALLOWED_INPUT_SIGNALS`).
-- Backend modes & registration: `src/index.ts`.
-- HTTP API (mirrors the tools for the dashboard / REST clients):
-  `src/http-server.ts` — `POST /api/processes/:id/input`, `/stop`, `/restart`,
-  `GET /api/processes/:id/logs`, etc.
+- HTTP routes + request/response shapes: `src/http-server.ts` (the request
+  handler; the `apiMatch` regex lists every `:id/:action`).
+- Backend modes, port & token resolution, signal handlers: `src/index.ts`.
+- Process lifecycle / stdin / signals / signal whitelist:
+  `src/process-manager.ts` (`sendProcessInput`, `startProcess`,
+  `restartProcess`, `ALLOWED_INPUT_SIGNALS`).
+- CLI wrapper over the same API: `src/cli-client.ts`.
+- Data dir (per-server logs + global `processes.json`): `os.tmpdir()/procm-mcp/`
+  — see `src/procm-mcp-dir.ts`.
 
-When a tool's behavior and this doc disagree, **the source is right** —
-read the file above before trusting the prose here.
+When this doc and the source disagree, **the source is right** — read the
+relevant file before trusting the prose here.

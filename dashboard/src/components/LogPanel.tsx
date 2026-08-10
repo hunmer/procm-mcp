@@ -2,28 +2,28 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/registry/default/ui/button";
 import { Input } from "@/registry/default/ui/input";
+import { Textarea } from "@/registry/default/ui/textarea";
 import { Badge } from "@/registry/default/ui/badge";
 import { ScrollArea } from "@/registry/default/ui/scroll-area";
 import { Separator } from "@/registry/default/ui/separator";
 import {
-  ArrowDownToLineIcon,
   CircleOffIcon,
   CopyIcon,
   DownloadIcon,
+  EllipsisIcon,
   EllipsisVerticalIcon,
   EraserIcon,
   FileTextIcon,
   FolderTreeIcon,
-  ListOrderedIcon,
   PanelRightCloseIcon,
   PlayIcon,
   RotateCwIcon,
   SearchIcon,
   SendIcon,
+  SettingsIcon,
   SquareIcon,
   SquareTerminalIcon,
   XIcon,
-  ClockIcon,
 } from "lucide-react";
 import {
   Alert,
@@ -50,8 +50,15 @@ import {
   Menu,
   MenuItem,
   MenuPopup,
+  MenuSeparator,
   MenuTrigger,
 } from "@/registry/default/ui/menu";
+import {
+  Popover,
+  PopoverPopup,
+  PopoverTrigger,
+} from "@/registry/default/ui/popover";
+import { Checkbox } from "@/registry/default/ui/checkbox";
 import {
   downloadLogUrl,
   getLogFiles,
@@ -116,6 +123,12 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
   // lets the user scroll up to read older output while new logs stream in;
   // re-enabling snaps back to the bottom immediately.
   const [autoScroll, setAutoScroll] = useState(true);
+  // Log body font size, driven from the view-settings popover. The default
+  // ("xs") matches the previous hardcoded text-xs scale.
+  const [fontSize, setFontSize] = useState<"xs" | "sm" | "md">("xs");
+  const fontTextClass =
+    fontSize === "xs" ? "text-xs" : fontSize === "sm" ? "text-sm" : "text-base";
+  const fontLineClass = fontSize === "xs" ? "leading-relaxed" : "leading-normal";
   // The launch command shown in a top strip (built server-side incl. envs for
   // live processes; falls back to a public-field reconstruction when closed).
   const [command, setCommand] = useState<string | null>(null);
@@ -133,9 +146,6 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
   // Sending-in-flight guard so the input can't be double-submitted while a
   // write is pending (prevents duplicate lines from a fast double-Enter).
   const [sendingInput, setSendingInput] = useState(false);
-  // Whether the Ctrl+C confirmation dialog is open. Ctrl+C can terminate the
-  // process, so it's gated behind a confirm — mirroring the Stop button.
-  const [pendingCtrlC, setPendingCtrlC] = useState(false);
 
   // Whether the process can currently be stopped — mirrors the same check in
   // ProcessList (running/spawning only). When it can't be stopped, the footer
@@ -227,14 +237,16 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
     }
   }
 
-  // Actually send SIGINT (Ctrl+C). The dialog is opened from the footer button
-  // via requestCtrlC; this fires on confirm. Most programs treat SIGINT as a
-  // graceful interrupt, but it can terminate the process — hence the confirm.
-  async function confirmCtrlC() {
-    setPendingCtrlC(false);
+  // Append a snippet to the stdin box (used by the snippets dropdown next to
+  // the input). Plain text is appended in place; signals are sent immediately
+  // since they don't belong on stdin.
+  function appendSnippet(text: string) {
+    setStdinValue((v) => (v ? `${v}${text}` : text));
+  }
+  async function sendSignal(signal: string, label: string) {
     try {
-      await sendProcessInput(process.id, { signal: "SIGINT" });
-      onToast(t("logs.toastCtrlCSent"));
+      await sendProcessInput(process.id, { signal });
+      onToast(t("logs.toastSignalSent", { signal: label }));
     } catch (err) {
       onToast(
         t("logs.toastInputFailed", {
@@ -555,6 +567,31 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
             >
               <PanelRightCloseIcon />
             </Button>
+            {/* Process controls pulled into the header so the open process
+                can be restarted / stopped without scrolling to the toolbar.
+                Mirrors the ProcessList row actions. */}
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label={t("logs.restartAria", { name: process.name })}
+              title={t("logs.restartTitle")}
+              onClick={handleRestart}
+              className="text-muted-foreground hover:text-success"
+            >
+              <RotateCwIcon />
+            </Button>
+            {canStop && (
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-label={t("logs.stopAria", { name: process.name })}
+                title={t("logs.stopTitle")}
+                onClick={requestStop}
+                className="text-muted-foreground hover:text-warning"
+              >
+                <SquareIcon />
+              </Button>
+            )}
           </div>
         </div>
 
@@ -603,6 +640,73 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
               </button>
             );
           })}
+          {/* View settings: a popover (stays open while toggling) holding the
+              per-log view toggles + font-size picker, collapsed behind a gear
+              so the quick-filter row stays compact. ms-auto pins it to the far
+              right of the quick-filter row even when the chips wrap. */}
+          <Popover>
+            <PopoverTrigger
+              render={
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  className="ms-auto"
+                  aria-label={t("logs.viewSettingsAria")}
+                  title={t("logs.viewSettingsTitle")}
+                />
+              }
+            >
+              <SettingsIcon />
+            </PopoverTrigger>
+            <PopoverPopup className="w-60">
+              {/* Toggles: timestamps, line numbers, auto-scroll. */}
+              <label className="hover:bg-accent flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm">
+                <Checkbox
+                  checked={showTime}
+                  onCheckedChange={(v) => setShowTime(v)}
+                />
+                {t("logs.timestampsOption")}
+              </label>
+              <label className="hover:bg-accent flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm">
+                <Checkbox
+                  checked={showLineNumbers}
+                  onCheckedChange={(v) => setShowLineNumbers(v)}
+                />
+                {t("logs.lineNumbersOption")}
+              </label>
+              <label className="hover:bg-accent flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm">
+                <Checkbox
+                  checked={autoScroll}
+                  onCheckedChange={(v) => setAutoScroll(v)}
+                />
+                {t("logs.autoScrollOption")}
+              </label>
+              <Separator className="my-1" />
+              {/* Font size: segmented pick of small / medium / large. */}
+              <div className="px-1 pb-1">
+                <span className="text-muted-foreground px-1 text-xs">
+                  {t("logs.fontSizeOption")}
+                </span>
+                <div className="mt-1.5 grid grid-cols-3 gap-1">
+                  {(["xs", "sm", "md"] as const).map((size, i) => (
+                    <Button
+                      key={size}
+                      size="xs"
+                      variant={fontSize === size ? "default" : "outline"}
+                      aria-pressed={fontSize === size}
+                      onClick={() => setFontSize(size)}
+                    >
+                      {[
+                        t("logs.fontSizeSmall"),
+                        t("logs.fontSizeMedium"),
+                        t("logs.fontSizeLarge"),
+                      ][i]}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </PopoverPopup>
+          </Popover>
         </div>
       </header>
 
@@ -642,7 +746,7 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
             </Alert>
           )}
           {error ? (
-            <pre className="m-0 whitespace-pre-wrap break-words text-xs leading-relaxed">
+            <pre className={`m-0 whitespace-pre-wrap break-words ${fontTextClass} ${fontLineClass}`}>
               <span className="text-destructive">{t("logs.errorPrefix", { message: error })}</span>
             </pre>
           ) : entries.length === 0 ? (
@@ -662,7 +766,7 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
               </EmptyHeader>
             </Empty>
           ) : (
-            <pre className="m-0 whitespace-pre-wrap break-words text-xs leading-relaxed">
+            <pre className={`m-0 whitespace-pre-wrap break-words ${fontTextClass} ${fontLineClass}`}>
               {entries.map((e, i) => (
                 <Line
                   key={i}
@@ -680,11 +784,13 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
 
       {/* Stdin input bar: write text directly to the process's standard input.
           Only shown while the process is live (canStop) — a stopped/exited
-          process has no stdin to write to. Enter submits; Shift+Enter is
-          passed through as a newline (the value itself contains the \n). */}
+          process has no stdin to write to. Uses an auto-sizing textarea
+          (field-sizing-content grows with input). Enter submits; Shift+Enter
+          inserts a newline. The dots menu inserts common snippets / signals. */}
       {canStop && (
-        <div className="flex shrink-0 items-center gap-1.5 border-t px-2 py-1.5">
-          <Input
+        <div className="flex shrink-0 items-end gap-1.5 border-t px-2 py-1.5">
+          <Textarea
+            size="sm"
             value={stdinValue}
             onChange={(e) => setStdinValue(e.target.value)}
             onKeyDown={(e) => {
@@ -695,8 +801,66 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
             }}
             placeholder={t("logs.inputPlaceholder")}
             disabled={sendingInput}
-            className="h-8 text-xs"
+            rows={1}
+            className="max-h-40 text-xs"
           />
+          {/* Snippets dropdown: insert common stdin snippets or deliver an OS
+              signal (Ctrl+C / Ctrl+D / SIGTERM / SIGHUP). Plain text is
+              appended to the box; signals are sent immediately. */}
+          <Menu>
+            <MenuTrigger
+              render={
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={t("logs.snippetsAria")}
+                  title={t("logs.snippetsTitle")}
+                  className="shrink-0"
+                />
+              }
+            >
+              <EllipsisIcon />
+            </MenuTrigger>
+            <MenuPopup>
+              <MenuItem
+                onClick={() => sendSignal("SIGINT", t("logs.snippetCtrlC"))}
+              >
+                <SquareTerminalIcon aria-hidden="true" />
+                {t("logs.snippetCtrlC")}
+              </MenuItem>
+              <MenuItem
+                onClick={() => sendSignal("SIGTERM", t("logs.snippetSigterm"))}
+              >
+                <SquareTerminalIcon aria-hidden="true" />
+                {t("logs.snippetSigterm")}
+              </MenuItem>
+              <MenuItem
+                onClick={() => sendSignal("SIGHUP", t("logs.snippetSighup"))}
+              >
+                <SquareTerminalIcon aria-hidden="true" />
+                {t("logs.snippetSighup")}
+              </MenuItem>
+              <MenuItem onClick={() => appendSnippet("\u0004")}>
+                {t("logs.snippetCtrlD")}
+              </MenuItem>
+              <MenuSeparator />
+              <MenuItem onClick={() => appendSnippet("\n")}>
+                {t("logs.snippetNewline")}
+              </MenuItem>
+              <MenuItem onClick={() => appendSnippet("yes")}>
+                {t("logs.snippetYes")}
+              </MenuItem>
+              <MenuItem onClick={() => appendSnippet("no")}>
+                {t("logs.snippetNo")}
+              </MenuItem>
+              <MenuItem onClick={() => appendSnippet("exit")}>
+                {t("logs.snippetExit")}
+              </MenuItem>
+              <MenuItem onClick={() => appendSnippet("clear")}>
+                {t("logs.snippetClear")}
+              </MenuItem>
+            </MenuPopup>
+          </Menu>
           <Button
             size="icon-sm"
             variant="ghost"
@@ -704,6 +868,7 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
             title={t("logs.sendTitle")}
             onClick={handleSendInput}
             disabled={sendingInput || !stdinValue}
+            className="shrink-0"
           >
             <SendIcon />
           </Button>
@@ -716,42 +881,6 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
         <div className="flex items-center gap-1">
           <Button
             size="icon-sm"
-            variant={showTime ? "default" : "ghost"}
-            aria-label={showTime ? t("logs.hideTimestamps") : t("logs.showTimestamps")}
-            title={showTime ? t("logs.hideTimestamps") : t("logs.showTimestamps")}
-            onClick={() => setShowTime((v) => !v)}
-          >
-            <ClockIcon />
-          </Button>
-          <Button
-            size="icon-sm"
-            variant={showLineNumbers ? "default" : "ghost"}
-            aria-label={
-              showLineNumbers ? t("logs.hideLineNumbers") : t("logs.showLineNumbers")
-            }
-            title={
-              showLineNumbers ? t("logs.hideLineNumbers") : t("logs.showLineNumbers")
-            }
-            onClick={() => setShowLineNumbers((v) => !v)}
-          >
-            <ListOrderedIcon />
-          </Button>
-          <Button
-            size="icon-sm"
-            variant={autoScroll ? "default" : "ghost"}
-            aria-pressed={autoScroll}
-            aria-label={
-              autoScroll ? t("logs.pauseAutoScroll") : t("logs.resumeAutoScroll")
-            }
-            title={
-              autoScroll ? t("logs.pauseAutoScroll") : t("logs.resumeAutoScroll")
-            }
-            onClick={() => setAutoScroll((v) => !v)}
-          >
-            <ArrowDownToLineIcon />
-          </Button>
-          <Button
-            size="icon-sm"
             variant="ghost"
             aria-label={t("logs.copyLogsAria")}
             title={t("logs.copyLogsTitle")}
@@ -759,45 +888,8 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
           >
             <CopyIcon />
           </Button>
-          {/* Process controls: restart always, stop (when running) or run
-              (when stopped/exited), then the clear-view button. Mirrors the
-              ProcessList row actions so the open process can be controlled
-              directly from its log panel. */}
-          <Separator orientation="vertical" />
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label={t("logs.restartAria", { name: process.name })}
-            title={t("logs.restartTitle")}
-            onClick={handleRestart}
-            className="text-muted-foreground hover:text-success"
-          >
-            <RotateCwIcon />
-          </Button>
-          {canStop && (
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              aria-label={t("logs.stopAria", { name: process.name })}
-              title={t("logs.stopTitle")}
-              onClick={requestStop}
-              className="text-muted-foreground hover:text-warning"
-            >
-              <SquareIcon />
-            </Button>
-          )}
-          {canStop && (
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              aria-label={t("logs.sendCtrlCAria", { name: process.name })}
-              title={t("logs.sendCtrlCTitle")}
-              onClick={() => setPendingCtrlC(true)}
-              className="text-muted-foreground hover:text-destructive"
-            >
-              <SquareTerminalIcon />
-            </Button>
-          )}
+          {/* Clear-view button. Ctrl+C and other signals moved to the stdin
+              bar's snippets menu. */}
           <Button
             size="icon-sm"
             variant="ghost"
@@ -869,36 +961,6 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
               onClick={confirmStop}
             >
               {t("common.stop")}
-            </AlertDialogClose>
-          </AlertDialogFooter>
-        </AlertDialogPopup>
-      </AlertDialog>
-
-      {/* Ctrl+C (SIGINT) confirmation: triggered from the footer terminal
-          button. SIGINT usually interrupts the process; some programs catch
-          and ignore it, so we confirm rather than fire it blindly. */}
-      <AlertDialog
-        open={pendingCtrlC}
-        onOpenChange={(open) => {
-          if (!open) setPendingCtrlC(false);
-        }}
-      >
-        <AlertDialogPopup>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("logs.ctrlCQuestion")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("logs.ctrlCDescription", { name: process.name, id: process.id })}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogClose render={<Button variant="ghost" />}>
-              {t("common.cancel")}
-            </AlertDialogClose>
-            <AlertDialogClose
-              render={<Button variant="destructive" />}
-              onClick={confirmCtrlC}
-            >
-              {t("logs.ctrlCConfirm")}
             </AlertDialogClose>
           </AlertDialogFooter>
         </AlertDialogPopup>
