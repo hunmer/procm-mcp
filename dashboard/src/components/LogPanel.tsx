@@ -558,15 +558,7 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
                 <PlayIcon />
               </Button>
             )}
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              aria-label={t("logs.collapseAria")}
-              title={t("logs.collapseTitle")}
-              onClick={onClose}
-            >
-              <PanelRightCloseIcon />
-            </Button>
+           
             {/* Process controls pulled into the header so the open process
                 can be restarted / stopped without scrolling to the toolbar.
                 Mirrors the ProcessList row actions. */}
@@ -592,6 +584,15 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
                 <SquareIcon />
               </Button>
             )}
+             <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label={t("logs.collapseAria")}
+              title={t("logs.collapseTitle")}
+              onClick={onClose}
+            >
+              <PanelRightCloseIcon />
+            </Button>
           </div>
         </div>
 
