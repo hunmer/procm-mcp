@@ -22,6 +22,7 @@ import {
   SendIcon,
   SettingsIcon,
   SquareIcon,
+  TerminalIcon,
   SquareTerminalIcon,
   XIcon,
 } from "lucide-react";
@@ -143,6 +144,9 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
   // submit (Enter or Send button). Only meaningful for a running process with
   // a live stdin, so the bar is hidden when !canStop.
   const [stdinValue, setStdinValue] = useState("");
+  // Whether the stdin input bar is shown. Hidden by default and toggled from
+  // the footer so the log view stays uncluttered unless the user wants to write.
+  const [showStdin, setShowStdin] = useState(false);
   // Sending-in-flight guard so the input can't be double-submitted while a
   // write is pending (prevents duplicate lines from a fast double-Enter).
   const [sendingInput, setSendingInput] = useState(false);
@@ -784,11 +788,12 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
       </ScrollArea>
 
       {/* Stdin input bar: write text directly to the process's standard input.
-          Only shown while the process is live (canStop) — a stopped/exited
-          process has no stdin to write to. Uses an auto-sizing textarea
-          (field-sizing-content grows with input). Enter submits; Shift+Enter
-          inserts a newline. The dots menu inserts common snippets / signals. */}
-      {canStop && (
+          Shown only while the process is live (canStop) AND the user has
+          toggled the bar on from the footer (hidden by default so the log view
+          stays uncluttered). Uses an auto-sizing textarea (field-sizing-content
+          grows with input). Enter submits; Shift+Enter inserts a newline. The
+          dots menu inserts common snippets / signals. */}
+      {canStop && showStdin && (
         <div className="flex shrink-0 items-end gap-1.5 border-t px-2 py-1.5">
           <Textarea
             size="sm"
@@ -900,6 +905,23 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
           >
             <EraserIcon />
           </Button>
+          {/* Toggle the stdin input bar (only meaningful for a live process).
+              Hidden by default so the log view stays uncluttered; the active
+              variant shows when input is on. */}
+          {canStop && (
+            <Button
+              size="icon-sm"
+              variant={showStdin ? "default" : "ghost"}
+              aria-pressed={showStdin}
+              aria-label={t("logs.toggleStdinAria")}
+              title={
+                showStdin ? t("logs.hideStdin") : t("logs.showStdin")
+              }
+              onClick={() => setShowStdin((v) => !v)}
+            >
+              <TerminalIcon />
+            </Button>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <span className="text-muted-foreground px-1 text-[11px] tabular-nums">
