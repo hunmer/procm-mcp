@@ -19,6 +19,7 @@ import {
   PlayIcon,
   RotateCwIcon,
   SearchIcon,
+  SendIcon,
   SquareIcon,
   SquareTerminalIcon,
   XIcon,
@@ -59,6 +60,7 @@ import {
   grepMergedLogs,
   mergeEntries,
   restartProcess,
+  sendProcessInput,
   stopProcess,
 } from "@/lib/api";
 import type {
@@ -124,6 +126,16 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
   // but stop (which keeps the record) is gated behind a confirm — mirroring
   // the ProcessList behavior.
   const [pendingStop, setPendingStop] = useState(false);
+  // Stdin input bar: text typed here is written to the process's stdin on
+  // submit (Enter or Send button). Only meaningful for a running process with
+  // a live stdin, so the bar is hidden when !canStop.
+  const [stdinValue, setStdinValue] = useState("");
+  // Sending-in-flight guard so the input can't be double-submitted while a
+  // write is pending (prevents duplicate lines from a fast double-Enter).
+  const [sendingInput, setSendingInput] = useState(false);
+  // Whether the Ctrl+C confirmation dialog is open. Ctrl+C can terminate the
+  // process, so it's gated behind a confirm — mirroring the Stop button.
+  const [pendingCtrlC, setPendingCtrlC] = useState(false);
 
   // Whether the process can currently be stopped — mirrors the same check in
   // ProcessList (running/spawning only). When it can't be stopped, the footer
@@ -187,6 +199,49 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
       onToast(t("logs.toastStopped", { name: process.name }));
     } catch (err) {
       onToast(err instanceof Error ? err.message : String(err), true);
+    }
+  }
+
+  // Submit the stdin input bar: write the current value to the process's
+  // stdin (newline appended so the child reads it as a complete line). Clears
+  // the box on success. Errors surface via toast — the backend returns a
+  // descriptive message (e.g. "no writable stdin") which the api() wrapper
+  // turns into a thrown Error.
+  async function handleSendInput() {
+    const value = stdinValue;
+    if (!value || sendingInput) return;
+    setSendingInput(true);
+    try {
+      const res = await sendProcessInput(process.id, { text: value, newline: true });
+      onToast(t("logs.toastInputSent", { bytes: res.bytes ?? 0 }));
+      setStdinValue("");
+    } catch (err) {
+      onToast(
+        t("logs.toastInputFailed", {
+          message: err instanceof Error ? err.message : String(err),
+        }),
+        true,
+      );
+    } finally {
+      setSendingInput(false);
+    }
+  }
+
+  // Actually send SIGINT (Ctrl+C). The dialog is opened from the footer button
+  // via requestCtrlC; this fires on confirm. Most programs treat SIGINT as a
+  // graceful interrupt, but it can terminate the process — hence the confirm.
+  async function confirmCtrlC() {
+    setPendingCtrlC(false);
+    try {
+      await sendProcessInput(process.id, { signal: "SIGINT" });
+      onToast(t("logs.toastCtrlCSent"));
+    } catch (err) {
+      onToast(
+        t("logs.toastInputFailed", {
+          message: err instanceof Error ? err.message : String(err),
+        }),
+        true,
+      );
     }
   }
 
@@ -623,6 +678,38 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
         </div>
       </ScrollArea>
 
+      {/* Stdin input bar: write text directly to the process's standard input.
+          Only shown while the process is live (canStop) — a stopped/exited
+          process has no stdin to write to. Enter submits; Shift+Enter is
+          passed through as a newline (the value itself contains the \n). */}
+      {canStop && (
+        <div className="flex shrink-0 items-center gap-1.5 border-t px-2 py-1.5">
+          <Input
+            value={stdinValue}
+            onChange={(e) => setStdinValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void handleSendInput();
+              }
+            }}
+            placeholder={t("logs.inputPlaceholder")}
+            disabled={sendingInput}
+            className="h-8 text-xs"
+          />
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label={t("logs.sendAria", { name: process.name })}
+            title={t("logs.sendTitle")}
+            onClick={handleSendInput}
+            disabled={sendingInput || !stdinValue}
+          >
+            <SendIcon />
+          </Button>
+        </div>
+      )}
+
       {/* Footer toolbar: per-log view toggles + copy text (left), line count
           + overflow actions dropdown (right). */}
       <div className="flex shrink-0 items-center justify-between gap-1 border-t px-2 py-1.5">
@@ -699,6 +786,18 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
               <SquareIcon />
             </Button>
           )}
+          {canStop && (
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label={t("logs.sendCtrlCAria", { name: process.name })}
+              title={t("logs.sendCtrlCTitle")}
+              onClick={() => setPendingCtrlC(true)}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              <SquareTerminalIcon />
+            </Button>
+          )}
           <Button
             size="icon-sm"
             variant="ghost"
@@ -770,6 +869,36 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
               onClick={confirmStop}
             >
               {t("common.stop")}
+            </AlertDialogClose>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+
+      {/* Ctrl+C (SIGINT) confirmation: triggered from the footer terminal
+          button. SIGINT usually interrupts the process; some programs catch
+          and ignore it, so we confirm rather than fire it blindly. */}
+      <AlertDialog
+        open={pendingCtrlC}
+        onOpenChange={(open) => {
+          if (!open) setPendingCtrlC(false);
+        }}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("logs.ctrlCQuestion")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("logs.ctrlCDescription", { name: process.name, id: process.id })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="ghost" />}>
+              {t("common.cancel")}
+            </AlertDialogClose>
+            <AlertDialogClose
+              render={<Button variant="destructive" />}
+              onClick={confirmCtrlC}
+            >
+              {t("logs.ctrlCConfirm")}
             </AlertDialogClose>
           </AlertDialogFooter>
         </AlertDialogPopup>

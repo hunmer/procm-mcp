@@ -497,6 +497,138 @@ export async function deleteProcesses(
   return { deleted, notFound };
 }
 
+// Whitelisted POSIX/Windows signals we allow sending to a managed child. These
+// cover the common operator intents (Ctrl+C = SIGINT, suspend/resume, custom
+// hooks, hard kill). Names are platform-portable constants on Node; on Windows
+// tree-kill semantics differ but process.kill with these names still resolves.
+export const ALLOWED_INPUT_SIGNALS = [
+  "SIGINT", // Ctrl+C
+  "SIGTERM", // default "terminate" (graceful shutdown)
+  "SIGKILL", // force kill (cannot be caught)
+  "SIGHUP", // hangup (often reload)
+  "SIGUSR1",
+  "SIGUSR2",
+  "SIGTSTP", // Ctrl+Z (terminal stop)
+  "SIGCONT", // resume after SIGTSTP
+  "SIGQUIT", // quit with core dump (Ctrl+\)
+] as const;
+export type InputSignal = (typeof ALLOWED_INPUT_SIGNALS)[number];
+
+export function isInputSignal(v: unknown): v is InputSignal {
+  return typeof v === "string" && (ALLOWED_INPUT_SIGNALS as readonly string[]).includes(v);
+}
+
+// Result of writing to a process's stdin or sending it a signal. `ok:false`
+// carries a discriminated `reason` so callers (MCP tool / HTTP route) can map
+// to the right response without parsing strings.
+export type SendInputResult =
+  | { ok: true; kind: "text"; bytes: number }
+  | { ok: true; kind: "signal"; signal: InputSignal }
+  | { ok: false; reason: "not_found"; error?: string }
+  | { ok: false; reason: "no_stdin"; error?: string }
+  | { ok: false; reason: "bad_request"; error?: string }
+  | { ok: false; reason: "write_error"; error?: string };
+
+// Write to a running process's stdin (text mode) or deliver an OS signal to it
+// (signal mode). One of `text` or `signal` must be provided; both is rejected.
+// The child is spawned with the default piped stdio, so `stdin` is a writable
+// stream we can write to directly. Signals go through `process.kill(pid, sig)`,
+// which is cross-platform (Windows maps these to TerminateProcess-style calls).
+//
+// This does NOT persist state or broadcast a process-list change: sending input
+// doesn't alter the process record. The exit/error handlers on the child still
+// fire normally if the input (e.g. SIGINT) causes it to terminate.
+export function sendProcessInput(
+  id: string,
+  opts: { text?: string; newline?: boolean; signal?: string },
+): SendInputResult {
+  const meta = getProcess(id);
+  if (!meta) {
+    return { ok: false, reason: "not_found" };
+  }
+
+  const { text, newline = true, signal } = opts;
+
+  // Exactly one of text / signal must be set.
+  const hasText = text !== undefined && text !== null;
+  const hasSignal = signal !== undefined && signal !== null;
+  if (!hasText && !hasSignal) {
+    return {
+      ok: false,
+      reason: "bad_request",
+      error: `Provide either "text" (to write to the process's stdin) or "signal" (to send an OS signal like SIGINT).`,
+    };
+  }
+  if (hasText && hasSignal) {
+    return {
+      ok: false,
+      reason: "bad_request",
+      error: `Provide only one of "text" or "signal", not both.`,
+    };
+  }
+
+  // --- signal mode --------------------------------------------------------
+  if (hasSignal) {
+    if (!isInputSignal(signal)) {
+      return {
+        ok: false,
+        reason: "bad_request",
+        error: `Unsupported signal "${signal}". Allowed: ${ALLOWED_INPUT_SIGNALS.join(", ")}.`,
+      };
+    }
+    const pid = meta.pid;
+    if (!pid) {
+      return {
+        ok: false,
+        reason: "write_error",
+        error: `Process ${meta.name} (ID: ${id}) has no PID yet; cannot signal.`,
+      };
+    }
+    try {
+      process.kill(pid, signal);
+      serverLog(`Sent signal ${signal} to process ${meta.name} (ID: ${id}, PID: ${pid}).`);
+      return { ok: true, kind: "signal", signal };
+    } catch (err) {
+      const e = err as NodeJS.ErrnoException;
+      const msg = e.code === "ESRCH"
+        ? `Process ${meta.name} (ID: ${id}) is no longer running.`
+        : toErrorMessage(err);
+      serverLog(`Failed to send signal ${signal} to process ${meta.name} (ID: ${id}): ${msg}`);
+      return { ok: false, reason: "write_error", error: msg };
+    }
+  }
+
+  // --- text mode ----------------------------------------------------------
+  // Reaching here means hasText is true (the exclusivity checks above reject
+  // the neither/both cases); narrow explicitly so TS sees `text` as a string.
+  if (text === undefined || text === null) {
+    return { ok: false, reason: "bad_request", error: `Missing "text".` };
+  }
+  const stdin = meta.process.stdin;
+  if (!stdin || stdin.destroyed || !stdin.writable) {
+    return {
+      ok: false,
+      reason: "no_stdin",
+      error: `Process ${meta.name} (ID: ${id}) has no writable stdin. The child may have closed it or was spawned with stdio disabled.`,
+    };
+  }
+
+  const payload = newline ? text + "\n" : text;
+  try {
+    // write() without a callback is safe; it returns a backpressure boolean,
+    // not an error. Errors surface via the stream's 'error' event, which the
+    // child's stdout/stderr plumbing already routes to the exit/error path.
+    stdin.write(payload);
+    const bytes = Buffer.byteLength(payload, "utf8");
+    serverLog(`Wrote ${bytes} byte(s) to stdin of process ${meta.name} (ID: ${id}).`);
+    return { ok: true, kind: "text", bytes };
+  } catch (err) {
+    const msg = toErrorMessage(err);
+    serverLog(`Error writing to stdin of process ${meta.name} (ID: ${id}): ${msg}`);
+    return { ok: false, reason: "write_error", error: msg };
+  }
+}
+
 // Restart an existing process, preserving its id. A live in-memory process is
 // killed then re-spawned in place; a stopped/expired process (no longer in
 // memory) is rebuilt from its persisted record — including the originally

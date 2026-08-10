@@ -20,6 +20,7 @@ import {
   generateProcessId,
   validateScript,
   pushProcess,
+  sendProcessInput,
 } from "./process-manager.js";
 import type { ProcessRecord } from "./processes-repository.js";
 import { toErrorMessage } from "./error.js";
@@ -499,7 +500,7 @@ function createRequestHandler(token: string | undefined) {
 
       // /api/processes[/:id[/action]]
       const apiMatch = pathname.match(
-        /^\/api\/processes(?:\/([^/]+))?(?:\/(stop|restart|logs|log-files|log-download|command))?$/,
+        /^\/api\/processes(?:\/([^/]+))?(?:\/(stop|restart|logs|log-files|log-download|command|input))?$/,
       );
       if (apiMatch) {
         const [, idParam, action] = apiMatch;
@@ -771,6 +772,31 @@ function createRequestHandler(token: string | undefined) {
             return;
           }
           json(res, 200, { id: idParam, restarted: true });
+          return;
+        }
+
+        // POST /api/processes/:id/input -> write to the process's stdin or
+        // send it an OS signal. Body: { text?, newline?, signal? }. Exactly
+        // one of text/signal must be present. Used by the dashboard's log
+        // panel input bar and Ctrl+C button. Mirrors the MCP process-input
+        // tool; both go through sendProcessInput for the validation/typing.
+        if (action === "input") {
+          if (method !== "POST") {
+            json(res, 405, { error: "Method not allowed" });
+            return;
+          }
+          const body = JSON.parse((await readBody(req)) || "{}");
+          const result = sendProcessInput(idParam, {
+            text: typeof body.text === "string" ? body.text : undefined,
+            newline: typeof body.newline === "boolean" ? body.newline : undefined,
+            signal: typeof body.signal === "string" ? body.signal : undefined,
+          });
+          if (result.ok) {
+            json(res, 200, { id: idParam, ...result });
+            return;
+          }
+          const status = result.reason === "not_found" ? 404 : 400;
+          json(res, status, { id: idParam, error: result.error || result.reason });
           return;
         }
 

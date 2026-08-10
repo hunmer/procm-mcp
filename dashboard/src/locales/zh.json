@@ -154,7 +154,18 @@
     "toastCopiedLines_one": "已复制 {{count}} 行",
     "toastCopiedLines_other": "已复制 {{count}} 行",
     "toastNoLogFile": "没有可用的日志文件",
-    "toastCopiedLocation": "已复制日志文件位置"
+    "toastCopiedLocation": "已复制日志文件位置",
+    "inputPlaceholder": "写入到标准输入…",
+    "sendAria": "向 {{name}} 发送输入",
+    "sendTitle": "发送输入",
+    "sendCtrlCTitle": "发送 Ctrl+C (SIGINT)",
+    "sendCtrlCAria": "向 {{name}} 发送 Ctrl+C",
+    "ctrlCQuestion": "发送 Ctrl+C？",
+    "ctrlCDescription": "将向“{{name}}”({{id}})发送 SIGINT 信号。这通常会停止进程，但忽略 SIGINT 的程序仍会继续运行。",
+    "ctrlCConfirm": "发送 Ctrl+C",
+    "toastInputSent": "已发送输入（{{bytes}} 字节）",
+    "toastCtrlCSent": "已发送 Ctrl+C",
+    "toastInputFailed": "发送输入失败：{{message}}"
   },
   "dialogs": {
     "newProcess": {

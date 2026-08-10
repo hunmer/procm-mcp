@@ -154,7 +154,18 @@
     "toastCopiedLines_one": "Copied {{count}} line",
     "toastCopiedLines_other": "Copied {{count}} lines",
     "toastNoLogFile": "No log file available",
-    "toastCopiedLocation": "Copied log file location"
+    "toastCopiedLocation": "Copied log file location",
+    "inputPlaceholder": "Write to stdin…",
+    "sendAria": "Send input to {{name}}",
+    "sendTitle": "Send input",
+    "sendCtrlCTitle": "Send Ctrl+C (SIGINT)",
+    "sendCtrlCAria": "Send Ctrl+C to {{name}}",
+    "ctrlCQuestion": "Send Ctrl+C?",
+    "ctrlCDescription": "This will send a SIGINT signal to “{{name}}” ({{id}}). It usually stops the process, but a program that ignores SIGINT will keep running.",
+    "ctrlCConfirm": "Send Ctrl+C",
+    "toastInputSent": "Input sent ({{bytes}} bytes)",
+    "toastCtrlCSent": "Ctrl+C sent",
+    "toastInputFailed": "Failed to send input: {{message}}"
   },
   "dialogs": {
     "newProcess": {

@@ -249,6 +249,28 @@ export function restartProcess(id: string): Promise<void> {
   );
 }
 
+// Write to a running process's stdin or deliver an OS signal to it. Used by the
+// log panel's input bar (text) and Ctrl+C button (SIGINT). Exactly one of
+// text/signal must be set. The backend maps not_found -> 404 and other failures
+// -> 400 with an explanatory `error`; the api() wrapper turns those into throws.
+export type SendInputResponse = {
+  id: string;
+  ok: true;
+  kind: "text" | "signal";
+  bytes?: number;
+  signal?: string;
+};
+export function sendProcessInput(
+  id: string,
+  opts: { text?: string; newline?: boolean; signal?: string },
+): Promise<SendInputResponse> {
+  return api<SendInputResponse>(
+    "POST",
+    `/api/processes/${encodeURIComponent(id)}/input`,
+    opts,
+  );
+}
+
 // Parse a `KEY=VALUE`-per-line textarea into an env object.
 export function parseEnvs(text: string): Record<string, string> {
   const envs: Record<string, string> = {};
