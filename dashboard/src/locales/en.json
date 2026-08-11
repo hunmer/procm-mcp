@@ -99,7 +99,17 @@
     "toastCopiedId": "Copied ID: {{id}}",
     "toastCopyFailed": "Copy failed",
     "toastCopiedCommand": "Copied command",
-    "toastRestarted": "Restarted {{id}}"
+    "toastRestarted": "Restarted {{id}}",
+    "viewTableAria": "Show as table",
+    "viewTableTitle": "Table view",
+    "viewCardsAria": "Show as cards",
+    "viewCardsTitle": "Card view",
+    "cardCommand": "Command",
+    "cardCwd": "Working directory",
+    "cardCreated": "Created",
+    "cardUptime": "Uptime",
+    "cardPid": "PID",
+    "cardExit": "Exit code"
   },
   "logs": {
     "panelTitle": "Logs: {{name}}",

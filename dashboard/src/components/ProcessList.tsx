@@ -45,6 +45,8 @@ import {
   CopyIcon,
   EyeIcon,
   InboxIcon,
+  LayoutGridIcon,
+  LayoutListIcon,
   PlayIcon,
   RotateCwIcon,
   SearchIcon,
@@ -69,6 +71,12 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/registry/default/ui/context-menu";
+import {
+  Card,
+  CardAction,
+  CardHeader,
+  CardPanel,
+} from "@/registry/default/ui/card";
 import {
   Empty,
   EmptyDescription,
@@ -126,10 +134,27 @@ const STATUS_OPTIONS: { value: StatusFilter; labelKey: string }[] = [
 
 const PAGE_SIZE = 8;
 
-// Sticky styling for the pinned rightmost actions column. Keeps the action
-// buttons always visible (outside the horizontal scroll) and syncs the cell
-// background with the row's hover/selected state so the highlight carries
-// across the pinned cell. Applied to the actions <th>/<td> in the render loop.
+// Layout toggle for the process list: "table" (rows) or "cards" (grid).
+type ViewMode = "table" | "cards";
+const VIEW_KEY = "procm.processView";
+function loadViewMode(): ViewMode {
+  if (typeof localStorage === "undefined") return "table";
+  return localStorage.getItem(VIEW_KEY) === "cards" ? "cards" : "table";
+}
+
+// Sticky styling for the pinned columns. The name column pins left and the
+// actions column pins right so both stay visible outside the horizontal scroll.
+// Cell variants sync their background with the row's hover/selected state so
+// the highlight carries across the pinned cell. Applied to the matching <th>/
+// <td> in the render loop.
+const STICKY_NAME_HEAD =
+  "sticky left-0 z-20 bg-background border-r border-border";
+const STICKY_NAME_CELL =
+  "sticky left-0 z-10 bg-background border-r border-border " +
+  "group-hover:bg-[color-mix(in_srgb,var(--background),var(--color-black)_2%)] " +
+  "group-data-[state=selected]:bg-[color-mix(in_srgb,var(--background),var(--color-black)_4%)] " +
+  "dark:group-hover:bg-[color-mix(in_srgb,var(--background),var(--color-white)_2%)] " +
+  "dark:group-data-[state=selected]:bg-[color-mix(in_srgb,var(--background),var(--color-white)_4%)]";
 const STICKY_ACTIONS_HEAD =
   "sticky right-0 z-20 bg-background border-l border-border";
 const STICKY_ACTIONS_CELL =
@@ -138,6 +163,19 @@ const STICKY_ACTIONS_CELL =
   "group-data-[state=selected]:bg-[color-mix(in_srgb,var(--background),var(--color-black)_4%)] " +
   "dark:group-hover:bg-[color-mix(in_srgb,var(--background),var(--color-white)_2%)] " +
   "dark:group-data-[state=selected]:bg-[color-mix(in_srgb,var(--background),var(--color-white)_4%)]";
+
+// Class for a pinned column, or undefined if the column isn't pinned. `head`
+// selects the header variant (higher z so it stays above body cells).
+function stickyColClass(colId: string, head: boolean): string | undefined {
+  switch (colId) {
+    case "name":
+      return head ? STICKY_NAME_HEAD : STICKY_NAME_CELL;
+    case "actions":
+      return head ? STICKY_ACTIONS_HEAD : STICKY_ACTIONS_CELL;
+    default:
+      return undefined;
+  }
+}
 
 export function ProcessList({
   processes,
@@ -153,6 +191,9 @@ export function ProcessList({
   const { t } = useTranslation();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [nameFilter, setNameFilter] = useState("");
+  // Layout (table vs cards). Persisted to localStorage, matching the
+  // useTheme.ts / i18n.ts pattern (best-effort; may be unavailable).
+  const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode);
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: PAGE_SIZE,
@@ -254,6 +295,16 @@ export function ProcessList({
     }
   }
 
+  // Switch the list layout and persist the choice (best-effort).
+  function changeViewMode(mode: ViewMode) {
+    setViewMode(mode);
+    try {
+      localStorage.setItem(VIEW_KEY, mode);
+    } catch {
+      // localStorage may be unavailable (private mode); ignore.
+    }
+  }
+
   const columns = useMemo<ColumnDef<ProcessView>[]>(
     () => [
       {
@@ -263,7 +314,12 @@ export function ProcessList({
         ),
         cell: ({ row }) => {
           const p = row.original;
-          return <span className="font-mono text-sm">{p.name}</span>;
+          return (
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-sm">{p.name}</span>
+              <StatusBadge status={p.status} error={p.error} />
+            </div>
+          );
         },
       },
       {
@@ -350,18 +406,6 @@ export function ProcessList({
         },
       },
       {
-        accessorKey: "status",
-        header: ({ column }) => (
-          <SortableHeader column={column}>{t("processes.colStatus")}</SortableHeader>
-        ),
-        cell: ({ row }) => (
-          <StatusBadge
-            status={row.original.status}
-            error={row.original.error}
-          />
-        ),
-      },
-      {
         accessorKey: "pid",
         header: t("processes.colPid"),
         cell: ({ row }) => (
@@ -398,94 +442,17 @@ export function ProcessList({
       {
         id: "actions",
         header: () => <div className="text-right">{t("processes.colActions")}</div>,
-        cell: ({ row }) => {
-          const p = row.original;
-          // Whether the process can currently be stopped — mirrors the
-          // context-menu Stop item (running/spawning only). Anything that
-          // can't be stopped (stopped/exited/error) shows a Play button so it
-          // can be restarted, restored from its persisted record if gone.
-          const canStop =
-            p.stoppedAt == null &&
-            p.status !== "exited" &&
-            p.status !== "error";
-          return (
-            <div
-              className="flex justify-end gap-1.5"
-              // Prevent row-click (open logs) when interacting with an action.
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label={
-                  favoritedSignatures.has(favoriteSignature(p))
-                    ? t("processes.removeFavoriteAria", { name: p.name })
-                    : t("processes.addFavoriteAria", { name: p.name })
-                }
-                title={
-                  favoritedSignatures.has(favoriteSignature(p))
-                    ? t("processes.removeFavoriteTitle")
-                    : t("processes.addFavoriteTitle")
-                }
-                onClick={() => onToggleFavorite(p)}
-                className={favoritedSignatures.has(favoriteSignature(p)) ? "text-warning" : "text-muted-foreground"}
-              >
-                <StarIcon
-                  className={
-                    favoritedSignatures.has(favoriteSignature(p))
-                      ? "fill-current"
-                      : undefined
-                  }
-                />
-              </Button>
-              {canStop ? (
-                <>
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label={t("processes.restartAria", { name: p.name })}
-                    title={t("processes.restartTitle")}
-                    onClick={() => handleRestart(p.id)}
-                    className="text-muted-foreground hover:text-success"
-                  >
-                    <RotateCwIcon />
-                  </Button>
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label={t("processes.stopAria", { name: p.name })}
-                    title={t("processes.stopTitle")}
-                    onClick={() => requestStop(p)}
-                    className="text-muted-foreground hover:text-warning"
-                  >
-                    <SquareIcon />
-                  </Button>
-                </>
-              ) : (
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label={t("processes.runAria", { name: p.name })}
-                  title={t("processes.runTitle")}
-                  onClick={() => handleRestart(p.id)}
-                  className="text-muted-foreground hover:text-success"
-                >
-                  <PlayIcon />
-                </Button>
-              )}
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label={t("processes.deleteAria", { name: p.name })}
-                title={t("processes.deleteTitle")}
-                onClick={() => requestDelete(p)}
-                className="text-muted-foreground hover:text-destructive"
-              >
-                <TrashIcon />
-              </Button>
-            </div>
-          );
-        },
+        cell: ({ row }) => (
+          <ProcessActions
+            process={row.original}
+            favorited={favoritedSignatures.has(favoriteSignature(row.original))}
+            onToggleFavorite={onToggleFavorite}
+            onRestart={handleRestart}
+            onStop={requestStop}
+            onDelete={requestDelete}
+            align="end"
+          />
+        ),
       },
     ],
     [now, selectedId, unread, favoritedSignatures, onToggleFavorite, onSelectLogs, onToast],
@@ -587,9 +554,137 @@ export function ProcessList({
         <span className="text-muted-foreground text-xs">
           {t("processes.countOfTotal", { shown: rowCount, total: processes.length })}
         </span>
+        {/* Layout toggle: table rows vs card grid. */}
+        <div className="ml-auto flex items-center gap-0.5">
+          <Button
+            size="icon-sm"
+            variant={viewMode === "table" ? "secondary" : "ghost"}
+            aria-label={t("processes.viewTableAria")}
+            title={t("processes.viewTableTitle")}
+            aria-pressed={viewMode === "table"}
+            onClick={() => changeViewMode("table")}
+          >
+            <LayoutListIcon />
+          </Button>
+          <Button
+            size="icon-sm"
+            variant={viewMode === "cards" ? "secondary" : "ghost"}
+            aria-label={t("processes.viewCardsAria")}
+            title={t("processes.viewCardsTitle")}
+            aria-pressed={viewMode === "cards"}
+            onClick={() => changeViewMode("cards")}
+          >
+            <LayoutGridIcon />
+          </Button>
+        </div>
       </div>
 
-      {/* Scrollable table region: fills the remaining height. */}
+      {/* Scrollable region: table or cards, depending on viewMode. */}
+      {viewMode === "cards" ? (
+        <div className="min-h-0 flex-1 overflow-auto p-4">
+          {table.getRowModel().rows.length ? (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {table.getRowModel().rows.map((row) => {
+                const p = row.original;
+                const isActive = p.id === selectedId;
+                const canStop =
+                  p.stoppedAt == null &&
+                  p.status !== "exited" &&
+                  p.status !== "error";
+                return (
+                  <ContextMenu key={row.id}>
+                    <ContextMenuTrigger
+                      render={
+                        <Card
+                          className="cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--card),var(--color-black)_2%)] data-[state=selected]:bg-[color-mix(in_srgb,var(--card),var(--color-black)_4%)] dark:hover:bg-[color-mix(in_srgb,var(--card),var(--color-white)_2%)] dark:data-[state=selected]:bg-[color-mix(in_srgb,var(--card),var(--color-white)_4%)]"
+                          data-state={isActive ? "selected" : undefined}
+                          onClick={() => onSelectLogs(p)}
+                        />
+                      }
+                    >
+                      <ProcessCardBody
+                        p={p}
+                        now={now}
+                        unreadCount={unread[p.id] ?? 0}
+                      />
+                      <CardPanel className="flex flex-col gap-3 p-4">
+                        <div className="mt-1 flex items-center justify-between gap-2">
+                          {canStop ? (
+                            <Button size="sm" onClick={() => requestStop(p)}>
+                              <SquareIcon />
+                              {t("processes.stopTitle")}
+                            </Button>
+                          ) : (
+                            <Button size="sm" onClick={() => handleRestart(p.id)}>
+                              <PlayIcon />
+                              {t("processes.runTitle")}
+                            </Button>
+                          )}
+                          <ProcessActions
+                            process={p}
+                            favorited={favoritedSignatures.has(favoriteSignature(p))}
+                            onToggleFavorite={onToggleFavorite}
+                            onRestart={handleRestart}
+                            onStop={requestStop}
+                            onDelete={requestDelete}
+                          />
+                        </div>
+                      </CardPanel>
+                    </ContextMenuTrigger>
+                    <ContextMenuPopup>
+                      <ContextMenuItem onClick={() => handleCopyId(p)}>
+                        <CopyIcon aria-hidden="true" />
+                        {t("processes.ctxCopyId")}
+                      </ContextMenuItem>
+                      <ContextMenuItem onClick={() => handleCopyCommand(p)}>
+                        <SquareTerminalIcon aria-hidden="true" />
+                        {t("processes.ctxCopyCommand")}
+                      </ContextMenuItem>
+                      <ContextMenuItem onClick={() => onView(p)}>
+                        <EyeIcon aria-hidden="true" />
+                        {t("processes.ctxView")}
+                      </ContextMenuItem>
+                      <ContextMenuSeparator />
+                      {canStop ? (
+                        <ContextMenuItem
+                          variant="destructive"
+                          onClick={() => requestStop(p)}
+                        >
+                          <SquareIcon aria-hidden="true" />
+                          {t("processes.ctxStop")}
+                        </ContextMenuItem>
+                      ) : (
+                        <ContextMenuItem onClick={() => handleRestart(p.id)}>
+                          <PlayIcon aria-hidden="true" />
+                          {t("processes.ctxRestart")}
+                        </ContextMenuItem>
+                      )}
+                    </ContextMenuPopup>
+                  </ContextMenu>
+                );
+              })}
+            </div>
+          ) : (
+            <Empty className="mx-auto max-w-sm py-16">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <InboxIcon />
+                </EmptyMedia>
+                <EmptyTitle>
+                  {processes.length === 0
+                    ? t("processes.emptyNoProcesses")
+                    : t("processes.emptyNoMatches")}
+                </EmptyTitle>
+                <EmptyDescription>
+                  {processes.length === 0
+                    ? t("processes.emptyDescNoProcesses")
+                    : t("processes.emptyDescNoMatches")}
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )}
+        </div>
+      ) : (
       <div className="min-h-0 flex-1 overflow-auto">
         <Table>
           <TableHeader>
@@ -598,11 +693,7 @@ export function ProcessList({
                 {headerGroup.headers.map((header) => (
                   <TableHead
                     key={header.id}
-                    className={
-                      header.column.id === "actions"
-                        ? STICKY_ACTIONS_HEAD
-                        : undefined
-                    }
+                    className={stickyColClass(header.column.id, true)}
                   >
                     {header.isPlaceholder
                       ? null
@@ -640,11 +731,7 @@ export function ProcessList({
                       {row.getVisibleCells().map((cell) => (
                         <TableCell
                           key={cell.id}
-                          className={
-                            cell.column.id === "actions"
-                              ? STICKY_ACTIONS_CELL
-                              : undefined
-                          }
+                          className={stickyColClass(cell.column.id, false)}
                         >
                           {flexRender(
                             cell.column.columnDef.cell,
@@ -711,6 +798,7 @@ export function ProcessList({
         </TableBody>
         </Table>
       </div>
+      )}
 
       {/* Pagination footer: prev/next + "Viewing X–Y of N". */}
       {rowCount > 0 && (
@@ -850,6 +938,154 @@ function SortableHeader({
         )}
       </span>
     </button>
+  );
+}
+
+// The per-process action buttons (favorite / restart-or-run / stop / delete).
+// Shared by the table's actions cell and the card footer so both stay in sync.
+// `align="end"` right-aligns (table cell); omitted → left-aligned (card footer).
+function ProcessActions({
+  process,
+  favorited,
+  onToggleFavorite,
+  onRestart,
+  onStop,
+  onDelete,
+  align,
+}: {
+  process: ProcessView;
+  favorited: boolean;
+  onToggleFavorite: (p: ProcessView) => void;
+  onRestart: (id: string) => void;
+  onStop: (p: ProcessView) => void;
+  onDelete: (p: ProcessView) => void;
+  align?: "end";
+}) {
+  const { t } = useTranslation();
+  const p = process;
+  // Whether the process can currently be stopped — mirrors the context-menu
+  // Stop item (running/spawning only). Anything else shows a Play button.
+  const canStop =
+    p.stoppedAt == null &&
+    p.status !== "exited" &&
+    p.status !== "error";
+  return (
+    <div
+      className={"flex gap-1.5" + (align === "end" ? " justify-end" : "")}
+      // Prevent row/card-click (open logs) when interacting with an action.
+      onClick={(e) => e.stopPropagation()}
+    >
+      <Button
+        size="icon-sm"
+        variant="ghost"
+        aria-label={
+          favorited
+            ? t("processes.removeFavoriteAria", { name: p.name })
+            : t("processes.addFavoriteAria", { name: p.name })
+        }
+        title={
+          favorited
+            ? t("processes.removeFavoriteTitle")
+            : t("processes.addFavoriteTitle")
+        }
+        onClick={() => onToggleFavorite(p)}
+        className={favorited ? "text-warning" : "text-muted-foreground"}
+      >
+        <StarIcon className={favorited ? "fill-current" : undefined} />
+      </Button>
+      {canStop ? (
+        <>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label={t("processes.restartAria", { name: p.name })}
+            title={t("processes.restartTitle")}
+            onClick={() => onRestart(p.id)}
+            className="text-muted-foreground hover:text-success"
+          >
+            <RotateCwIcon />
+          </Button>
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label={t("processes.stopAria", { name: p.name })}
+            title={t("processes.stopTitle")}
+            onClick={() => onStop(p)}
+            className="text-muted-foreground hover:text-warning"
+          >
+            <SquareIcon />
+          </Button>
+        </>
+      ) : (
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label={t("processes.runAria", { name: p.name })}
+          title={t("processes.runTitle")}
+          onClick={() => onRestart(p.id)}
+          className="text-muted-foreground hover:text-success"
+        >
+          <PlayIcon />
+        </Button>
+      )}
+      <Button
+        size="icon-sm"
+        variant="ghost"
+        aria-label={t("processes.deleteAria", { name: p.name })}
+        title={t("processes.deleteTitle")}
+        onClick={() => onDelete(p)}
+        className="text-muted-foreground hover:text-destructive"
+      >
+        <TrashIcon />
+      </Button>
+    </div>
+  );
+}
+
+// Header of a process card: name + status badge + description, with an unread
+// log badge in the action slot. Rendered as the card's first child so the
+// ContextMenuTrigger (the Card itself) wraps both header and panel.
+function ProcessCardBody({
+  p,
+  unreadCount,
+}: {
+  p: ProcessView;
+  now: number;
+  unreadCount: number;
+}) {
+  const cmd = `${p.script}${p.args?.length ? " " + p.args.join(" ") : ""}`;
+  return (
+    <CardHeader className="border-b p-4">
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <div className="flex items-center gap-2">
+          <span className="truncate font-mono text-sm font-semibold">
+            {p.name}
+          </span>
+          <StatusBadge status={p.status} error={p.error} />
+        </div>
+        {p.desc ? (
+          <span
+            className="text-muted-foreground line-clamp-1 text-xs"
+            title={p.desc ?? undefined}
+          >
+            {p.desc}
+          </span>
+        ) : (
+          <span className="text-muted-foreground text-xs">—</span>
+        )}
+      </div>
+      <CardAction className="row-span-1 self-center">
+        {unreadCount > 0 ? (
+          <Badge variant="info" className="tabular-nums">
+            {unreadCount > 999 ? "999+" : unreadCount}
+          </Badge>
+        ) : null}
+      </CardAction>
+      {/* Command line, shown under the title row. */}
+      <code className="text-foreground/90 line-clamp-2 break-all bg-transparent text-xs">
+        {cmd}
+      </code>
+    </CardHeader>
   );
 }
 

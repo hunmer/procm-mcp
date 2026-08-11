@@ -33,6 +33,7 @@ import { useLanguage } from "@/lib/useLanguage";
 import { LANGUAGES } from "@/i18n";
 import { useDashboardSocket } from "@/lib/ws";
 import { clearAllProcesses, openFolder, startProcess } from "@/lib/api";
+import { readUrlState, writeUrlState } from "@/lib/urlState";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -63,7 +64,8 @@ export function App() {
   const [selected, setSelected] = useState<ProcessView | null>(null);
   // The log panel collapses/expands independently of which process is selected,
   // so closing it keeps the selection and lets you reopen to the same logs.
-  const [logCollapsed, setLogCollapsed] = useState(false);
+  // Initialized from the URL so a refresh/reshare restores the open/closed state.
+  const [logCollapsed, setLogCollapsed] = useState(() => readUrlState().collapsed);
   // Process details dialog (read-only view opened from the row context menu).
   const [viewing, setViewing] = useState<ProcessView | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -120,6 +122,9 @@ export function App() {
   // after it's consumed. The launch response returns before the WS delivers
   // the row, so we can't select directly.
   const pendingSelectRef = useRef<string | null>(null);
+  // On first load, a `?proc=` from the URL seeds the same auto-open path as a
+  // favorite launch: wait for the WS push to deliver the row, then open it.
+  const initialProcRef = useRef<string | null>(readUrlState().procId);
 
   // Live updates from the backend: replace the process list and keep the
   // selected log target in sync with the latest view. This replaces the old
@@ -139,6 +144,17 @@ export function App() {
       pendingSelectRef.current = null;
       if (started) {
         openLogFor(started);
+        return;
+      }
+    }
+    // First-load auto-select from a `?proc=` in the URL: same open-on-arrival
+    // path as a favorite launch. Consumed once.
+    const initial = initialProcRef.current;
+    if (initial && m.data.some((p) => p.id === initial)) {
+      const found = m.data.find((p) => p.id === initial) ?? null;
+      initialProcRef.current = null;
+      if (found) {
+        openLogFor(found);
         return;
       }
     }
@@ -163,6 +179,18 @@ export function App() {
       setSelected(null);
     }
   }, [data, selected]);
+
+  // If the URL's ?proc= doesn't resolve after the first data arrives (stale or
+  // unknown id), clear it so the bar doesn't show a dangling reference.
+  useEffect(() => {
+    if (data && initialProcRef.current && data.processes.length > 0) {
+      const id = initialProcRef.current;
+      if (!data.processes.some((p) => p.id === id)) {
+        initialProcRef.current = null;
+        writeUrlState({ procId: null });
+      }
+    }
+  }, [data]);
 
   // Tick once per second so the uptime display updates live.
   useEffect(() => {
@@ -196,6 +224,12 @@ export function App() {
     if (selected && !logCollapsed) {
       setUnread((cur) => (cur[selected.id] ? { ...cur, [selected.id]: 0 } : cur));
     }
+  }, [selected, logCollapsed]);
+
+  // Reflect the current selection + collapse state into the URL so links and
+  // refreshes restore the same view. replaceState keeps the history stack clean.
+  useEffect(() => {
+    writeUrlState({ procId: selected?.id ?? null, collapsed: logCollapsed });
   }, [selected, logCollapsed]);
 
   const showToast = useCallback(
