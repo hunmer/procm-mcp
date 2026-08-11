@@ -5,7 +5,6 @@ import { ServerDir } from "./server-dir.js";
 import { mkdirp } from "mkdirp";
 import { log } from "./logger.js";
 import { toErrorMessage } from "./error.js";
-import { createLogsRepository } from "./logs-repository.js";
 import { dashboardEvents } from "./events.js";
 
 export type ProcessStdoutChunk = {
@@ -38,34 +37,29 @@ export async function createProcessStdoutClient({
   serverId: string;
 }): Promise<ProcessStdoutClient> {
   const serverDir = ServerDir({ serverId });
-  const filePath = path.join(serverDir, "processes", `${id}-${type}.json`);
   const textFilePath = path.join(serverDir, "processes", `${id}-${type}.log`);
-  await mkdirp(path.dirname(filePath));
-
-  const logsRepository = await createLogsRepository(filePath);
-  await logsRepository.initialize();
+  await mkdirp(path.dirname(textFilePath));
 
   const updateQueue = createUpdateQueue();
+  const recent: ProcessStdoutChunk[] = [];
+  const maxRecent = 2000;
 
   const onData = (chunk: Buffer) => {
     const message = chunk.toString().trim();
     const timestamp = Date.now();
+    if (message) {
+      recent.push({ timestamp: new Date(timestamp), message });
+      if (recent.length > maxRecent) recent.shift();
+    }
 
-    // Broadcast the new log line to live subscribers (e.g. the WebSocket
-    // broadcaster) immediately and independently of disk/db persistence — the
-    // UI should never wait on lowdb's full read+write cycle.
+    // Broadcast immediately; disk persistence is best-effort and bounded.
     if (message) {
       dashboardEvents.emitLog({ processId: id, stream: type, timestamp, message });
     }
 
-    updateQueue.unshift(async () => {
+    updateQueue.push(async () => {
       try {
-        await Promise.all([
-          logsRepository.insert({
-            timestamp,
-            message,
-          }),
-          new Promise<void>((resolve, reject) => {
+        await new Promise<void>((resolve, reject) => {
             // Append with a trailing newline so the on-disk .log file is
             // line-delimited. Without it, the file is one run-on blob and the
             // closed-process log view (which reads this file directly) renders
@@ -82,8 +76,7 @@ export async function createProcessStdoutClient({
                 }
               }
             );
-          }),
-        ]);
+          });
       } catch (error) {
         serverLog(`Error writing log: ${toErrorMessage(error)}`, serverId);
       }
@@ -96,24 +89,16 @@ export async function createProcessStdoutClient({
     top: async (count: number) => {
       await updateQueue.processing;
 
-      const rows = await logsRepository.top(count);
-      return rows.map((row) => ({
-        timestamp: new Date(row.timestamp),
-        message: row.message,
-      }));
+      return recent.slice(-count).reverse();
     },
     search: async (pattern: RegExp, count?: number) => {
       await updateQueue.processing;
 
-      const rows = await logsRepository.search(pattern, count);
-      return rows.map((row) => ({
-        timestamp: new Date(row.timestamp),
-        message: row.message,
-      }));
+      return recent.filter((row) => pattern.test(row.message)).slice(-(count ?? 50)).reverse();
     },
     close: async () => {
       readable.off("data", onData);
-      await logsRepository.close();
+      await updateQueue.processing;
     },
     textFilePath,
   };
@@ -121,10 +106,16 @@ export async function createProcessStdoutClient({
 
 function createUpdateQueue() {
   let processing = Promise.resolve();
+  let pending = 0;
+  const maxPending = 1000;
 
   return {
-    processing,
-    unshift: (fn: () => Promise<void>) => {
+    get processing() {
+      return processing;
+    },
+    push: (fn: () => Promise<void>) => {
+      if (pending >= maxPending) return;
+      pending++;
       processing = processing.then(() => {
         return new Promise<void>(async (resolve, reject) => {
           try {
@@ -132,6 +123,8 @@ function createUpdateQueue() {
             resolve();
           } catch (error) {
             reject(error);
+          } finally {
+            pending--;
           }
         });
       });

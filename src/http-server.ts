@@ -28,7 +28,6 @@ import { ProcessMetadata } from "./types.js";
 import { handleMcpRequest } from "./mcp-http.js";
 import { attachWebsocketServer } from "./websocket-server.js";
 import { scanProjectCommands } from "./project-scanner.js";
-import { createLogsRepository } from "./logs-repository.js";
 
 const HOST = "127.0.0.1";
 
@@ -346,41 +345,13 @@ function grepLogFile(
     .join("\n");
 }
 
-// Read a stopped/expired process's log stream as `[ISO] message` lines.
-// Prefers the sibling lowdb `.json` store (each record has its own timestamp,
-// so lines are correctly separated and sortable), recovering the store path by
-// swapping the persisted `.log` path's extension. Falls back to the raw `.log`
-// text file (now line-delimited) when the JSON store is missing or empty — for
-// records from a previous backend session whose tmp dir no longer exists.
+// Read a stopped/expired process's plain-text log stream.
 async function readRecordLogText(
   logFilePath: string,
   grepPattern: string | null,
   ignoreCase: boolean,
   count: number,
 ): Promise<string> {
-  const jsonPath = logFilePath.replace(/\.log$/, ".json");
-  try {
-    const repo = await createLogsRepository(jsonPath);
-    await repo.initialize();
-    // top()/search() return newest-first; reverse for oldest-first so a tail
-    // shows the most recent `count` lines at the bottom (matching the live view).
-    const records =
-      grepPattern !== null
-        ? await repo.search(new RegExp(grepPattern, ignoreCase ? "i" : ""), count)
-        : await repo.top(count);
-    await repo.close();
-    if (records.length > 0) {
-      return records
-        .slice()
-        .sort((a, b) => a.timestamp - b.timestamp)
-        .map((r) => `[${new Date(r.timestamp).toISOString()}] ${r.message}`)
-        .join("\n");
-    }
-    // Empty JSON store: fall through to the .log file.
-  } catch {
-    // JSON store unreadable (ENOENT / corrupt): fall through to the .log file.
-  }
-
   const fullText = await readLogFile(logFilePath);
   if (grepPattern !== null) {
     return grepLogFile(fullText, grepPattern, ignoreCase ? "1" : null, count);
@@ -595,14 +566,8 @@ function createRequestHandler(token: string | undefined) {
             | "stderr";
           const count = Number(url.searchParams.get("count") || "200");
 
-          // Stopped/expired process: no in-memory client, so serve logs from
-          // disk. Prefer the sibling lowdb `.json` store (one timestamped
-          // record per line, correct & separated) — recover it by swapping the
-          // persisted `.log` path's extension. Fall back to the raw `.log`
-          // text file when the JSON store is unreadable (e.g. a record from a
-          // previous backend session whose tmp dir is gone). The JSON path
-          // yields `[ISO] message` lines matching the live format; the `.log`
-          // fallback has no timestamps (frontend falls back to "now").
+          // Stopped/expired process: no in-memory client, so serve the plain
+          // text log from disk. Historical lines have no timestamps.
           if (rp.kind === "record") {
             const paths = logFilePathsOf(rp);
             const textFilePath =
