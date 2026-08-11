@@ -14,9 +14,15 @@ export type ProcessStdoutChunk = {
 
 export type ProcessStdoutClient = {
   top: (count: number) => Promise<ProcessStdoutChunk[]>;
+  // Search the in-memory buffer for matching lines. `count` caps the number of
+  // matches (newest-first); `after` adds up to that many trailing non-matching
+  // lines following each match as context (deduped so adjacent matches don't
+  // double-count the same lines). Context lines are included in the returned
+  // array in addition to the matches themselves.
   search: (
     pattern: RegExp,
     count?: number,
+    after?: number,
   ) => Promise<ProcessStdoutChunk[]>;
   close: () => Promise<void>;
   // Absolute path to the append-only plain-text log file
@@ -91,10 +97,36 @@ export async function createProcessStdoutClient({
 
       return recent.slice(-count).reverse();
     },
-    search: async (pattern: RegExp, count?: number) => {
+    search: async (pattern: RegExp, count?: number, after?: number) => {
       await updateQueue.processing;
+      const limit = count ?? 50;
+      const afterCount = Math.max(0, after ?? 0);
 
-      return recent.filter((row) => pattern.test(row.message)).slice(-(count ?? 50)).reverse();
+      // `recent` is chronological (oldest -> newest). Collect indices of
+      // matching lines, keep only the most recent `limit` matches, then (if
+      // requested) expand each match with up to `afterCount` trailing entries
+      // as context. A Set dedupes so a line claimed as context by one match
+      // and as a match (or context) by another isn't returned twice.
+      const matchedIdx: number[] = [];
+      for (let i = 0; i < recent.length; i++) {
+        if (pattern.test(recent[i].message)) matchedIdx.push(i);
+      }
+      if (matchedIdx.length === 0) return [];
+
+      const recentMatches = matchedIdx.slice(-limit);
+      if (afterCount === 0) {
+        return recentMatches.map((i) => recent[i]).reverse();
+      }
+
+      const keep = new Set<number>(recentMatches);
+      for (const start of recentMatches) {
+        const end = Math.min(recent.length - 1, start + afterCount);
+        for (let j = start + 1; j <= end; j++) keep.add(j);
+      }
+      return Array.from(keep)
+        .sort((a, b) => a - b)
+        .map((i) => recent[i])
+        .reverse();
     },
     close: async () => {
       readable.off("data", onData);

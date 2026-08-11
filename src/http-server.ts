@@ -317,31 +317,61 @@ function tailLogFile(fullText: string, count: number): string {
 }
 
 // Grep a raw log blob (record-sourced): keep lines matching the regex, capped
-// at `count` matches. Invalid regex falls back to a literal substring match.
+// at `count` matches. `after` adds up to that many trailing lines following
+// each match as context (deduped). Invalid regex falls back to a literal
+// substring match.
 function grepLogFile(
   fullText: string,
   pattern: string,
   ignoreCaseParam: string | null,
   count: number,
+  after = 0,
 ): string {
   const ignoreCase = (ignoreCaseParam || "").toLowerCase() === "1";
+  const afterCount = Math.max(0, after);
+  const lines = fullText.split("\n");
+
+  // Returns the indices of the most recent `count` matching lines.
+  const matchIndices = (test: (l: string) => boolean): number[] => {
+    const idx: number[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (test(lines[i])) idx.push(i);
+    }
+    return idx.slice(-count);
+  };
+
   let regex: RegExp;
   try {
     regex = new RegExp(pattern, ignoreCase ? "i" : "");
   } catch {
     // Fall back to literal substring matching on regex parse failure.
     const needle = ignoreCase ? pattern.toLowerCase() : pattern;
-    const matched = fullText
-      .split("\n")
-      .filter((l) =>
-        ignoreCase ? l.toLowerCase().includes(needle) : l.includes(needle),
-      );
-    return matched.slice(0, count).join("\n");
+    const test = (l: string) =>
+      ignoreCase ? l.toLowerCase().includes(needle) : l.includes(needle);
+    const matched = matchIndices(test);
+    if (matched.length === 0) return "";
+    if (afterCount === 0) return matched.map((i) => lines[i]).join("\n");
+    const keep = new Set<number>(matched);
+    for (const start of matched) {
+      const end = Math.min(lines.length - 1, start + afterCount);
+      for (let j = start + 1; j <= end; j++) keep.add(j);
+    }
+    return Array.from(keep)
+      .sort((a, b) => a - b)
+      .map((i) => lines[i])
+      .join("\n");
   }
-  return fullText
-    .split("\n")
-    .filter((l) => regex.test(l))
-    .slice(0, count)
+  const matched = matchIndices((l) => regex.test(l));
+  if (matched.length === 0) return "";
+  if (afterCount === 0) return matched.map((i) => lines[i]).join("\n");
+  const keep = new Set<number>(matched);
+  for (const start of matched) {
+    const end = Math.min(lines.length - 1, start + afterCount);
+    for (let j = start + 1; j <= end; j++) keep.add(j);
+  }
+  return Array.from(keep)
+    .sort((a, b) => a - b)
+    .map((i) => lines[i])
     .join("\n");
 }
 
@@ -351,10 +381,17 @@ async function readRecordLogText(
   grepPattern: string | null,
   ignoreCase: boolean,
   count: number,
+  after = 0,
 ): Promise<string> {
   const fullText = await readLogFile(logFilePath);
   if (grepPattern !== null) {
-    return grepLogFile(fullText, grepPattern, ignoreCase ? "1" : null, count);
+    return grepLogFile(
+      fullText,
+      grepPattern,
+      ignoreCase ? "1" : null,
+      count,
+      after,
+    );
   }
   return tailLogFile(fullText, count);
 }
@@ -579,12 +616,14 @@ function createRequestHandler(token: string | undefined) {
             const grepPattern = url.searchParams.get("grep");
             const ignoreCase =
               (url.searchParams.get("ignoreCase") || "").toLowerCase() === "1";
+            const after = Number(url.searchParams.get("after") || "0");
 
             const text = await readRecordLogText(
               textFilePath,
               grepPattern,
               ignoreCase,
               count,
+              after,
             );
             json(res, 200, { stream, text });
             return;
@@ -599,6 +638,7 @@ function createRequestHandler(token: string | undefined) {
           if (grepPattern !== null) {
             const ignoreCase =
               (url.searchParams.get("ignoreCase") || "").toLowerCase() === "1";
+            const after = Number(url.searchParams.get("after") || "0");
             let regex: RegExp;
             try {
               regex = new RegExp(grepPattern, ignoreCase ? "i" : "");
@@ -606,7 +646,7 @@ function createRequestHandler(token: string | undefined) {
               json(res, 400, { error: `Invalid regex: ${toErrorMessage(e)}` });
               return;
             }
-            const chunks = await client.search(regex, count);
+            const chunks = await client.search(regex, count, after);
             const text = chunks
               .map((c) => `[${c.timestamp.toISOString()}] ${c.message}`)
               .join("\n");

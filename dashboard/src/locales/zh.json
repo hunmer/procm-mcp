@@ -111,6 +111,7 @@
     "collapseTitle": "折叠",
     "searchPlaceholder": "搜索完整日志历史（正则）…",
     "clearSearch": "清除搜索",
+    "contextAfter": "后续行数",
     "filterByTerm": "按“{{term}}”筛选",
     "commandLabel": "命令",
     "commandIn": "{{cmd}}  （位于 {{cwd}}）",

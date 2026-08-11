@@ -60,6 +60,7 @@ import {
   PopoverTrigger,
 } from "@/registry/default/ui/popover";
 import { Checkbox } from "@/registry/default/ui/checkbox";
+import { Slider } from "@/registry/default/ui/slider";
 import {
   downloadLogUrl,
   getLogFiles,
@@ -116,6 +117,9 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
   const [search, setSearch] = useState("");
   const [activeGrep, setActiveGrep] = useState("");
   const [searching, setSearching] = useState(false);
+  // Trailing context lines shown after each grep match. Driven by the slider
+  // that appears under the search box while search results are displayed.
+  const [afterContext, setAfterContext] = useState(0);
   // Whether the per-line timestamp is shown. Toggleable from the footer.
   const [showTime, setShowTime] = useState(true);
   // Whether a line-number badge is shown at the start of each row.
@@ -380,6 +384,7 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
     setEntries([]);
     setSearch("");
     setActiveGrep("");
+    setAfterContext(0);
     void load();
     return () => {
       cancelled = true;
@@ -433,11 +438,13 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
   // Debounced grep: when the search input settles, run the backend grep across
   // both streams and show the merged results. Clears reload the recent tail.
   //
-  // A ref tracks the search term currently reflected in the view, so we only
-  // act when the intent actually changes. This deliberately does NOT depend on
-  // `activeGrep` (the state we set here) — depending on it caused a redundant
-  // second effect run after setActiveGrep, which raced with the reload and
-  // could leave the panel stuck showing stale grep results after clearing.
+  // A ref tracks the "term|after" key currently reflected in the view, so we
+  // only act when the intent actually changes — covering both a new search
+  // term and a changed context-lines slider. This deliberately does NOT depend
+  // on `activeGrep` (the state we set here) — depending on it caused a
+  // redundant second effect run after setActiveGrep, which raced with the
+  // reload and could leave the panel stuck showing stale grep results after
+  // clearing.
   const appliedSearchRef = useRef("");
   useEffect(() => {
     const trimmed = search.trim();
@@ -468,17 +475,25 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
       };
     }
 
-    // New/changed search term: debounce, then grep both streams.
+    // New/changed search term OR context-lines value: debounce, then grep
+    // both streams (with the current after-context count).
+    const key = `${trimmed}|${afterContext}`;
     const handle = setTimeout(() => {
-      if (appliedSearchRef.current === trimmed) return; // already applied
-      appliedSearchRef.current = trimmed;
+      if (appliedSearchRef.current === key) return; // already applied
+      appliedSearchRef.current = key;
       let cancelled = false;
       const id = ++reqId.current;
       setActiveGrep(trimmed);
       setSearching(true);
       (async () => {
         try {
-          const rows = await grepMergedLogs(process.id, trimmed, false, GREP_COUNT);
+          const rows = await grepMergedLogs(
+            process.id,
+            trimmed,
+            false,
+            GREP_COUNT,
+            afterContext,
+          );
           if (cancelled || reqId.current !== id) return;
           setEntries(rows);
           stickToBottom.current = true;
@@ -494,7 +509,7 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
       };
     }, 350);
     return () => clearTimeout(handle);
-  }, [search, process.id]);
+  }, [search, process.id, afterContext]);
 
   // Keep pinned to the latest line when new content arrives.
   useEffect(() => {
@@ -511,6 +526,19 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
     const firstHour = new Date(entries[0].timestamp).getHours();
     return entries.some((e) => new Date(e.timestamp).getHours() !== firstHour);
   }, [entries]);
+
+  // Regex used to highlight the active search term in displayed lines. Same
+  // compile rules as the backend grep: try the term as a regex, fall back to
+  // an escaped literal match on parse failure. Null when no search is active.
+  const highlightRegex = useMemo(() => {
+    const term = activeGrep.trim();
+    if (!term) return null;
+    try {
+      return new RegExp(term, "g");
+    } catch {
+      return new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g");
+    }
+  }, [activeGrep]);
 
   const formatTime = (ts: number) => {
     const d = new Date(ts);
@@ -621,6 +649,30 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
             </button>
           )}
         </div>
+
+        {/* Context-lines slider: only relevant while viewing search results.
+            Controls how many trailing lines are shown after each match; moving
+            it re-runs the debounced grep with the new after-context count. */}
+        {activeGrep && !searching && entries.length > 0 && (
+          <div className="flex items-center gap-2 px-0.5">
+            <span className="text-muted-foreground w-20 shrink-0 text-xs">
+              {t("logs.contextAfter")}
+            </span>
+            <Slider
+              value={afterContext}
+              onValueChange={(v) =>
+                setAfterContext(Array.isArray(v) ? v[0] : (v as number))
+              }
+              min={0}
+              max={10}
+              aria-label={t("logs.contextAfter")}
+              className="flex-1"
+            />
+            <span className="text-muted-foreground w-6 shrink-0 text-right text-xs tabular-nums">
+              {afterContext}
+            </span>
+          </div>
+        )}
 
         {/* Quick-filter keywords: click to drop the term into the search box
             (grep is regex, these are plain words so they match literally). */}
@@ -780,6 +832,7 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
                   showTime={showTime}
                   showLineNumbers={showLineNumbers}
                   formatTime={formatTime}
+                  highlight={highlightRegex}
                 />
               ))}
             </pre>
@@ -1002,12 +1055,14 @@ function Line({
   showTime,
   showLineNumbers,
   formatTime,
+  highlight,
 }: {
   entry: LogEntry;
   index: number;
   showTime: boolean;
   showLineNumbers: boolean;
   formatTime: (ts: number) => string;
+  highlight: RegExp | null;
 }) {
   const isErr = entry.stream === "stderr";
   return (
@@ -1026,9 +1081,41 @@ function Line({
         <span className="text-destructive">[{entry.stream}] </span>
       )}
       <span className={isErr ? "text-destructive" : "text-foreground"}>
-        {entry.message}
+        <Highlighted text={entry.message} highlight={highlight} />
       </span>
       {"\n"}
     </span>
   );
+}
+
+// Wrap every match of `highlight` in the text with a <mark>. Uses String.split
+// (stateless, so the global regex's lastIndex can't leak across renders) and
+// re-inserts the captured delimiter so the highlighted span shows the actual
+// matched text. When no highlight is active, the text is returned as-is.
+function Highlighted({
+  text,
+  highlight,
+}: {
+  text: string;
+  highlight: RegExp | null;
+}) {
+  if (!highlight || !text) return text;
+  const parts = text.split(highlight);
+  const matches = text.match(highlight);
+  if (!matches || matches.length === 0) return text;
+  const nodes: React.ReactNode[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i]) nodes.push(parts[i]);
+    if (i < matches.length) {
+      nodes.push(
+        <mark
+          key={i}
+          className="rounded-[2px] bg-yellow-300/50 px-0.5 text-foreground dark:bg-yellow-400/40"
+        >
+          {matches[i]}
+        </mark>,
+      );
+    }
+  }
+  return <>{nodes}</>;
 }

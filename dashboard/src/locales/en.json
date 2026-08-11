@@ -111,6 +111,7 @@
     "collapseTitle": "Collapse",
     "searchPlaceholder": "Search full log history (regex)…",
     "clearSearch": "Clear search",
+    "contextAfter": "Context after",
     "filterByTerm": "Filter by “{{term}}”",
     "commandLabel": "Command",
     "commandIn": "{{cmd}}  (in {{cwd}})",

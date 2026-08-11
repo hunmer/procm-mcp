@@ -62,16 +62,18 @@ export function getLogs(
 }
 
 // Search a single stream for a regex pattern (backed by the /logs?grep= route).
+// `after` requests up to that many trailing context lines following each match.
 export function grepLogs(
   id: string,
   stream: ProcessStream,
   grep: string,
   ignoreCase = false,
   count = 500,
+  after = 0,
 ): Promise<LogsResponse> {
   const qs = `stream=${stream}&grep=${encodeURIComponent(grep)}${
     ignoreCase ? "&ignoreCase=1" : ""
-  }&count=${count}`;
+  }&count=${count}&after=${after}`;
   return api<LogsResponse>(
     "GET",
     `/api/processes/${encodeURIComponent(id)}/logs?${qs}`,
@@ -100,10 +102,11 @@ export async function grepMergedLogs(
   grep: string,
   ignoreCase = false,
   count = 500,
+  after = 0,
 ): Promise<LogEntry[]> {
   const [out, err] = await Promise.all([
-    grepLogs(id, "stdout", grep, ignoreCase, count).catch(() => null),
-    grepLogs(id, "stderr", grep, ignoreCase, count).catch(() => null),
+    grepLogs(id, "stdout", grep, ignoreCase, count, after).catch(() => null),
+    grepLogs(id, "stderr", grep, ignoreCase, count, after).catch(() => null),
   ]);
   return mergeEntries([
     ...(out ? parseLogText(out.text, "stdout") : []),

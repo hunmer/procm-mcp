@@ -288,6 +288,15 @@ export async function startProcess(
       applyProcessState();
     });
 
+    // Do not register a process until spawn has actually succeeded. On a
+    // launch error Node may still assign a PID before emitting `error`; that
+    // stale PID later makes cleanup try to kill an already-dead process.
+    const spawnOutcome = new Promise<void>((resolve, reject) => {
+      childProcess.once("spawn", () => resolve());
+      childProcess.once("error", (error) => reject(error));
+    });
+    await spawnOutcome;
+
     const [stdoutClient, stderrClient] = await Promise.all([
       await createProcessStdoutClient({
         id: processId,
@@ -325,6 +334,9 @@ export async function startProcess(
       stdoutClient,
       stderrClient,
     };
+    // The child can exit between the spawn event and metadata registration.
+    // Apply the latest lifecycle state before returning it to the caller.
+    applyProcessState();
     return processMetadata;
   } catch (error) {
     serverLog(`Error starting process: ${name || script} - ${error}`);
@@ -341,30 +353,36 @@ export async function killProcess(processMetadata: ProcessMetadata) {
   try {
     const pid = processMetadata.process.pid;
     if (pid) {
+      let forceKillTimeoutId!: NodeJS.Timeout;
+      let onExit!: () => void;
       const processExited = new Promise<void>((resolve) => {
-        const onExit = () => {
+        onExit = () => {
           clearTimeout(forceKillTimeoutId);
           serverLog(
             `Process exited: ${processMetadata.name} (ID: ${processMetadata.id})`,
           );
           resolve();
         };
-        const forceKillTimeoutId = setTimeout(() => {
+        forceKillTimeoutId = setTimeout(() => {
           processMetadata.process.off("exit", onExit);
 
           serverLog(
             `Process did not exit in time, force killing: ${processMetadata.name} (ID: ${processMetadata.id})`,
           );
-          killProcessTree(pid, processMetadata, true);
+          void killProcessTree(pid, processMetadata, true);
 
           resolve();
         }, 10 * 1000);
         processMetadata.process.on("exit", onExit);
       });
 
-      await killProcessTree(pid, processMetadata);
-
-      await processExited;
+      const killSucceeded = await killProcessTree(pid, processMetadata);
+      if (killSucceeded) {
+        await processExited;
+      } else {
+        clearTimeout(forceKillTimeoutId);
+        processMetadata.process.off("exit", onExit);
+      }
 
       await Promise.all([
         processMetadata.stdoutClient.close(),
@@ -713,24 +731,26 @@ async function killProcessTree(
   pid: number,
   processMetadata: ProcessMetadata,
   force = false,
-): Promise<void> {
+): Promise<boolean> {
   // On Windows, SIGTERM is not supported — always use SIGKILL which maps to
   // `taskkill /T /F` in tree-kill, ensuring cmd /c child processes are also terminated.
   const signal =
     process.platform === "win32" ? "SIGKILL" : force ? "SIGKILL" : "SIGTERM";
 
-  return new Promise<void>((resolve, reject) => {
+  return new Promise<boolean>((resolve) => {
     kill(pid, signal, async (err) => {
       if (err) {
         serverLog(
           `Error killing process: ${processMetadata.name} (ID: ${processMetadata.id}) - ${err}`,
         );
-        reject(err);
+        // A stale/already-exited PID must not block restart or shutdown.
+        // Treat the kill as best-effort; the next lifecycle step owns recovery.
+        resolve(false);
       } else {
         serverLog(
           `Process killed successfully: ${processMetadata.name} (ID: ${processMetadata.id})`,
         );
-        resolve();
+        resolve(true);
       }
     });
   });

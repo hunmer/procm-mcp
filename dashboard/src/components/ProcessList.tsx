@@ -126,6 +126,19 @@ const STATUS_OPTIONS: { value: StatusFilter; labelKey: string }[] = [
 
 const PAGE_SIZE = 8;
 
+// Sticky styling for the pinned rightmost actions column. Keeps the action
+// buttons always visible (outside the horizontal scroll) and syncs the cell
+// background with the row's hover/selected state so the highlight carries
+// across the pinned cell. Applied to the actions <th>/<td> in the render loop.
+const STICKY_ACTIONS_HEAD =
+  "sticky right-0 z-20 bg-background border-l border-border";
+const STICKY_ACTIONS_CELL =
+  "sticky right-0 z-10 bg-background border-l border-border " +
+  "group-hover:bg-[color-mix(in_srgb,var(--background),var(--color-black)_2%)] " +
+  "group-data-[state=selected]:bg-[color-mix(in_srgb,var(--background),var(--color-black)_4%)] " +
+  "dark:group-hover:bg-[color-mix(in_srgb,var(--background),var(--color-white)_2%)] " +
+  "dark:group-data-[state=selected]:bg-[color-mix(in_srgb,var(--background),var(--color-white)_4%)]";
+
 export function ProcessList({
   processes,
   selectedId,
@@ -153,23 +166,37 @@ export function ProcessList({
   // Process awaiting stop confirmation in the alert dialog.
   const [pendingStop, setPendingStop] = useState<ProcessView | null>(null);
 
-  // Open the alert dialog to confirm deleting a process.
+  // Deleting a running process needs confirmation (it's stopped first, then
+  // erased); already-stopped records are deleted immediately without a dialog.
   function requestDelete(p: ProcessView) {
-    setPendingDelete(p);
+    const running =
+      p.stoppedAt == null &&
+      p.status !== "exited" &&
+      p.status !== "error";
+    if (running) {
+      setPendingDelete(p);
+    } else {
+      void doDelete(p);
+    }
   }
 
   // Actually delete (stops first if running, then erases the record). The
   // backend emits a process-change event so the list refreshes over WS.
-  async function confirmDelete() {
-    const p = pendingDelete;
-    if (!p) return;
-    setPendingDelete(null);
+  async function doDelete(p: ProcessView) {
     try {
       await deleteProcessCall(p.id);
       onToast(t("processes.toastDeleted", { name: p.name }));
     } catch (err) {
       onToast(err instanceof Error ? err.message : String(err), true);
     }
+  }
+
+  // Confirmed from the alert dialog (running processes only).
+  async function confirmDelete() {
+    const p = pendingDelete;
+    if (!p) return;
+    setPendingDelete(null);
+    await doDelete(p);
   }
 
   // Open the alert dialog to confirm stopping a process. Only running/spawning
@@ -569,7 +596,14 @@ export function ProcessList({
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
+                  <TableHead
+                    key={header.id}
+                    className={
+                      header.column.id === "actions"
+                        ? STICKY_ACTIONS_HEAD
+                        : undefined
+                    }
+                  >
                     {header.isPlaceholder
                       ? null
                       : flexRender(
@@ -597,14 +631,21 @@ export function ProcessList({
                       // opens the context menu. render as the row itself.
                       render={
                         <TableRow
-                          className="cursor-pointer"
+                          className="group cursor-pointer"
                           data-state={isActive ? "selected" : undefined}
                           onClick={() => onSelectLogs(p)}
                         />
                       }
                     >
                       {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id}>
+                        <TableCell
+                          key={cell.id}
+                          className={
+                            cell.column.id === "actions"
+                              ? STICKY_ACTIONS_CELL
+                              : undefined
+                          }
+                        >
                           {flexRender(
                             cell.column.columnDef.cell,
                             cell.getContext(),
