@@ -85,17 +85,29 @@ export function attachWebsocketServer(
 
   wss.on("connection", (ws) => {
     serverLog("WebSocket dashboard client connected");
+    // Serialize async process snapshots per connection. Lifecycle changes can
+    // arrive while an earlier listProcessRecords() call is still reading the
+    // store; without a queue, the older snapshot may resolve last and leave
+    // the dashboard showing stale status/pid data.
+    let processPush = Promise.resolve();
+    const enqueueProcesses = (snapshot = false) => {
+      processPush = processPush
+        .then(() => buildProcessesMessage(snapshot))
+        .then((msg) => {
+          if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+        })
+        .catch((err) => {
+          serverLog(`Failed to build WebSocket process snapshot: ${String(err)}`);
+        });
+    };
+
     // Send an immediate snapshot so the UI can render without an extra REST
     // round-trip on connect/reconnect.
-    void buildProcessesMessage(true).then((msg) => {
-      if (ws.readyState === WebSocket.OPEN) ws.send(msg);
-    });
+    enqueueProcesses(true);
 
     const onProcessChange = () => {
       if (ws.readyState !== WebSocket.OPEN) return;
-      void buildProcessesMessage(false).then((msg) => {
-        if (ws.readyState === WebSocket.OPEN) ws.send(msg);
-      });
+      enqueueProcesses();
     };
     const onLog = (payload: LogAppendPayload) => {
       if (ws.readyState === WebSocket.OPEN) {

@@ -126,6 +126,44 @@ async function main() {
   );
   console.log("OK: received live log push with marker");
 
+  // Restart keeps the id but replaces the child process. The final WS view
+  // must match REST; otherwise an older async snapshot arrived last and left
+  // the dashboard showing stale status/pid data.
+  const beforeRestart = processMessages
+    .flatMap((m) => m.data)
+    .find((p) => p.id === started.id);
+  const restartRes = await fetch(
+    `http://127.0.0.1:${PORT}/api/processes/${started.id}/restart`,
+    { method: "POST" },
+  );
+  if (!restartRes.ok) throw new Error(`restart failed: ${restartRes.status}`);
+
+  await waitFor(
+    () => processMessages.some((m) => {
+      const p = m.data.find((candidate) => candidate.id === started.id);
+      return p && p.lastStartedAt !== beforeRestart?.lastStartedAt;
+    }),
+    { timeout: 8000 },
+  );
+  await delay(250);
+  const restProcesses = await fetch(
+    `http://127.0.0.1:${PORT}/api/processes`,
+  ).then((r) => r.json());
+  const expected = restProcesses.processes.find((p) => p.id === started.id);
+  const finalMessage = processMessages.at(-1);
+  const actual = finalMessage?.data.find((p) => p.id === started.id);
+  if (
+    !actual ||
+    actual.status !== expected?.status ||
+    actual.pid !== expected?.pid ||
+    actual.lastStartedAt !== expected?.lastStartedAt
+  ) {
+    throw new Error(
+      `final WS state is stale: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`,
+    );
+  }
+  console.log("OK: final process push matches REST after restart");
+
   ws.close();
   console.log("ALL CHECKS PASSED");
   process.exit(0);

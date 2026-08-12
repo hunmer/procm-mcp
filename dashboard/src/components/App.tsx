@@ -32,7 +32,12 @@ import { useTheme } from "@/lib/useTheme";
 import { useLanguage } from "@/lib/useLanguage";
 import { LANGUAGES } from "@/i18n";
 import { useDashboardSocket } from "@/lib/ws";
-import { clearAllProcesses, openFolder, startProcess } from "@/lib/api";
+import {
+  clearAllProcesses,
+  listProcesses,
+  openFolder,
+  startProcess,
+} from "@/lib/api";
 import { readUrlState, writeUrlState } from "@/lib/urlState";
 import {
   AlertDialog,
@@ -127,8 +132,7 @@ export function App() {
   const initialProcRef = useRef<string | null>(readUrlState().procId);
 
   // Live updates from the backend: replace the process list and keep the
-  // selected log target in sync with the latest view. This replaces the old
-  // 3s polling loop.
+  // selected log target in sync with the latest view.
   onProcessesMessage((m) => {
     setData({
       serverId: m.serverId ?? data?.serverId ?? "",
@@ -172,6 +176,36 @@ export function App() {
       setUnread((cur) => ({ ...cur, [m.processId]: (cur[m.processId] ?? 0) + 1 }));
     }
   });
+
+  // Poll as a fallback for missed WebSocket process updates. Keep requests
+  // non-overlapping; a transient failure is retried on the next interval.
+  useEffect(() => {
+    let cancelled = false;
+    let inFlight = false;
+
+    const refresh = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const latest = await listProcesses();
+        if (cancelled) return;
+        setData(latest);
+        setSelected((cur) =>
+          cur ? latest.processes.find((p) => p.id === cur.id) ?? null : null,
+        );
+      } catch {
+        // WebSocket status already reports connectivity; retry next interval.
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    const timer = setInterval(() => void refresh(), 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
 
   // Drop the selected process if it no longer exists (e.g. after being stopped).
   useEffect(() => {
