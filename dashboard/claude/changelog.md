@@ -2,6 +2,12 @@
 
 > 仅记录本索引体系的生成/更新，保留最近 5 条，倒序。
 
+## 2026-08-14 — 增量更新（移除 allow-x 残留）
+
+- **背景**：后端 allow-x / `allowed-process` 白名单功能已从源码移除，dashboard 文档仍残留 3 处过期引用。dashboard 源码与架构本身无变动，故做增量修正而非全量重写。
+- **修正**：`overview.md`、`public-interfaces.md`（`POST /api/processes` 启动不再说「绕过 allow-x」，改为「直接执行」）；`dependencies-and-config.md`（删 `PROCM_ALLOW_ALL`）。
+- **确认**：`dashboard/CLAUDE.md` 与其余详情文件无 allow-x 引用，保持不变。
+
 ## 2026-08-01 — 全量重写（适配 WebSocket + Favorites 新架构）
 
 - **范围**：dashboard 工程重新全量扫描。

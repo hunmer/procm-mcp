@@ -57,7 +57,7 @@ Enable it by setting `PROCM_HTTP_PORT` in the MCP server environment:
 
 Then open `http://127.0.0.1:7331`. Optional `PROCM_HTTP_TOKEN` requires an `Authorization: Bearer <token>` header on every request.
 
-The dashboard can list processes, view stdout/stderr, and start, stop, or restart processes. **Starting a process from the dashboard intentionally bypasses the allow-x gate** — the dashboard is a human-driven localhost UI, so starting a process there is equivalent to running the command yourself in a terminal. The allow-x gate only governs the LLM/MCP path.
+The dashboard can list processes, view stdout/stderr, and start, stop, or restart processes. Starting a process from the dashboard is a human-driven localhost action, equivalent to running the command yourself in a terminal.
 
 HTTP API (same origin):
 
@@ -107,7 +107,7 @@ Then point your MCP client at it:
 ```
 
 Notes:
-- The same 5 tools are available over `/mcp` as over stdio, and the **allow-x gate still applies** (the HTTP MCP path is treated like the LLM/MCP path, not like the human-driven dashboard).
+- **4 tools** are available over `/mcp` — `start-process`, `process`, `process-logs`, `procm-command`. That is one fewer than stdio, which also exposes `process-input` (write to a process's stdin / send a signal).
 - Process state is shared: a process started via `/mcp` is visible in the dashboard and REST API, and vice versa.
 - If `PROCM_HTTP_TOKEN` is set, add it to the client config (`"headers": { "Authorization": "Bearer <token>" }`) where supported.
 - `/mcp` runs in **stateless** mode (no session ID) — each request is independent.
@@ -126,7 +126,7 @@ Define reusable named commands in a `procm-commands.json` file at the root of yo
 }
 ```
 
-The `procm-command` tool (action `list`) returns the file's contents and the available command names. Use `procm-command` (action `start`) to start one by name. Each command's `cwd` is resolved relative to the project directory (the directory containing `procm-commands.json`). Starting a command **still goes through the allow-x gate**, so you must allow the exact script/args/cwd first with `allowed-process`.
+The `procm-command` tool (action `list`) returns the file's contents and the available command names. Use `procm-command` (action `start`) to start one by name. Each command's `cwd` is resolved relative to the project directory (the directory containing `procm-commands.json`).
 
 ## Installation
 
@@ -148,28 +148,11 @@ npm i -D procm-mcp
 }
 ```
 
-## Secure process creation
+## Process creation has no built-in gate
 
-You can permit LLMs to use `start-process` tool without confirmation, because procm-mcp only allow whitelisted process creations.
+`start-process` and `procm-command` (action `start`) execute the given command directly. procm-mcp does **not** restrict which commands can be started — there is no whitelist, allow-list, or approval gate. Treat `start-process` like any tool that runs arbitrary shell commands: keep it under human confirmation (the default in most MCP clients) and only run procm-mcp where the command set it implies is acceptable.
 
-LLMs will ask you to use the `allowed-process` tool (action `allow`) to add specific process creation to the whitelist.
-
-Once you allow a process creation, you don't have to confirming it anymore as long as the command and the working directory are the same.
-
-I call it "allow-x pattern", which can balances security and usability in MCP.
-
-**Warning: Do not permit LLMs to use `allowed-process` without confirmation.That means "Do anything you want to".**
-
-### Disabling the gate (`--allow-all`)
-
-In trusted environments you can disable the gate entirely so `start-process` and `procm-command` (action `start`) run without pre-approval:
-
-- CLI flag: `--allow-all`
-- Env var: `PROCM_ALLOW_ALL=1` (also accepts `true`/`yes`/`on`)
-
-When enabled, the server prints a `WARNING — allow-start-process gate is DISABLED` banner on startup. This flag only affects the **LLM/MCP** path (`start-process` / `procm-command`); the HTTP dashboard already starts processes without the gate since it is a human-driven UI.
-
-> ⚠️ **Dangerous.** With `--allow-all`, an LLM can start any process without confirmation. Only use it in sandboxed, throwaway, or otherwise trusted environments — never expose it to untrusted clients or networks.
+For network-facing setups, optional `PROCM_HTTP_TOKEN` requires an `Authorization: Bearer <token>` header on every HTTP / `/mcp` / dashboard request, so the locally-bound server is not driven by anything else that can reach `127.0.0.1`.
 
 ## Tools
 
@@ -190,12 +173,12 @@ When enabled, the server prints a `WARNING — allow-start-process gate is DISAB
   - `stream` (optional): `"stdout"` or `"stderr"`. Tail defaults to `"stdout"`; in grep mode, omit to search both.
   - `count` (optional): Number of entries to return (tail default: 10, grep default: 50)
   - `ignoreCase` (optional): Case-insensitive matching (default: false)
-- `allowed-process` Manage the process-creation allow list (the allow-x gate)
-  - `action` (required): `allow` | `delete` | `list`
-  - `script` (required for allow/delete): The script/command
-  - `args` (optional): Array of arguments
-  - `cwd` (optional): Working directory (default: current working directory)
-- `procm-command` Manage processes defined in `procm-commands.json` (still subject to allow-x)
+- `process-input` Write to a process's stdin or send it an OS signal (stdio MCP only — not exposed over `/mcp`; use the dashboard or REST instead)
+  - `id` (required): The process ID
+  - `text` (optional): String to write to the process's stdin
+  - `newline` (optional): Append a trailing newline to `text` (default: true; set false to send raw bytes)
+  - `signal` (optional): Send an OS signal instead — one of `SIGINT` `SIGTERM` `SIGKILL` `SIGHUP` `SIGUSR1` `SIGUSR2` `SIGTSTP` `SIGCONT` `SIGQUIT`. Provide exactly one of `text` / `signal`.
+- `procm-command` Manage processes defined in `procm-commands.json`
   - `action` (required): `list` | `start`
   - `name` (required for start): The command name as defined in the file
   - `cwd` (optional): Project directory containing `procm-commands.json` (default: current working directory)

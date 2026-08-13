@@ -1,54 +1,24 @@
 # 架构总览
 
-procm-mcp 是一个 **进程管理 MCP 服务器**：让 LLM（以及人类操作者）通过统一接口启动、监控、重启、停止子进程，并读取其 stdout / stderr 日志。
+procm-mcp 让 LLM（经 MCP）与人类操作者（经 dashboard / CLI）管理子进程：启动、查看、重启、停止、写 stdin / 发信号、读 stdout/stderr。
 
-## 解决的问题
+## 运行形态（共享同一份模块级状态）
 
-LLM 在辅助开发时常需要启动长期运行的进程（dev server、docker-compose、test watcher）。直接让模型调用 shell 不安全——无法收敛可执行的命令范围。procm-mcp 用 **allow-x 模式** 平衡安全与易用：
+1. **stdio MCP（默认）**：`node build/index.js`，经 stdio 说 MCP 协议，注册 **5 个工具**。
+2. **HTTP 后端（`--server`）**：不跑 stdio MCP，dashboard 必启，进程常驻服务 HTTP。
+3. **CLI 客户端**：`node build/index.js ps|info|logs|grep|start|restart|stop|ping`，连接一个已运行的后端（不发起新后端）。
 
-- 模型想启动某进程时，先调用 `allowed-process`（action `allow`）把「script + args + cwd」三元组加入白名单（**此步需要人类确认**）。
-- 一旦放行，后续相同三元组的 `start-process` / `procm-command`（action `start`）无需再确认即可执行。
+额外两个 HTTP 入口（`--server` 或设了 `--port`/`PROCM_HTTP_PORT` 时启用，均只绑 `127.0.0.1`）：
+
+- **`/mcp`**：Streamable HTTP 传输的 MCP 端点，**stateless**（每请求新建 transport+server），注册 **4 个工具**（比 stdio 少 `process-input`）。
+- **dashboard**：`GET /` 托管的 React 静态包 + 同源 REST `/api/*` + WebSocket `/ws`。
+
+进程列表（`processes: ProcessMetadata[]`）、server id 都是模块级变量。因此 stdio MCP、HTTP REST、`/mcp` HTTP、dashboard 四条路径看到的是**同一份**进程状态——一个进程在任意路径启动后，其余路径立即可见。`/mcp` 之所以选 stateless，正是因为状态不依赖会话。
 
 ## 关键设计取舍
 
-### 1. 两种运行形态共享同一套核心
-后端有三种入口，但都落到同一组「模块级单例」状态上：
-
-- **stdio MCP 模式**（默认）：作为 MCP 服务器经 stdin/stdout 协议通信；可选附带 HTTP dashboard。
-- **HTTP 后端模式**（`--server`）：纯 HTTP 服务，不带 stdio MCP transport，dashboard 始终启动，进程常驻。
-- **CLI 客户端模式**（`ps`/`info`/`start`/...）：连接到一个已在运行的 `--server` 后端，发 HTTP 请求后退出。**不启动后端**。
-
-`/mcp` 端点在 HTTP 端口上额外暴露 **Streamable HTTP transport** 的 MCP 协议（无状态），让只能讲 HTTP 的 MCP 客户端也能接入。
-
-### 2. 状态在模块级单例里，不在 MCP 会话里
-进程列表（`processes: ProcessMetadata[]`）、allow-all 开关、server id 都是模块级变量。因此 stdio MCP、HTTP REST、`/mcp` HTTP、dashboard 四条路径看到的是**同一份**进程状态——一个进程在任意路径启动后，其余路径立即可见。`/mcp` 之所以选 **stateless**（每请求新建 transport+server），正是因为状态不依赖会话。
-
-### 3. allow-x 只守 LLM 路径
-- `start-process` / `procm-command`（action `start`，MCP 工具）→ 受 allow-x 约束。
-- dashboard 的 `POST /api/processes`、CLI 客户端的 `start` → **故意绕过** allow-x，因为它们是人类驱动的本地 UI/CLI，等价于你在终端敲命令。
-- `--allow-all` / `PROCM_ALLOW_ALL=1` 可在受信任环境整体关闭 allow-x（仅影响 LLM 路径）。
-
-### 4. 日志三路分发：实时推送 + 结构化 JSON + 行分隔文本
-每个进程的 stdout/stderr 各自被一个 `ProcessStdoutClient` 消费，每条 chunk 经三路：
-- **实时** `dashboardEvents.emitLog()` 推 WebSocket（不等磁盘，UI 不被 lowdb 拖慢）。
-- **lowdb JSON 文件**（`<id>-<stdout|stderr>.json`）：结构化记录 `{timestamp, message}`，供 `top`(取最近 N 条) 与 `search`(正则) 查询。
-- **append 文本文件**（`<id>-<stdout|stderr>.log`）：行分隔文本，供停止/过期进程的日志读取（优先 lowdb，回退 `.log`）与合并下载。
-- 写入经一个串行 `updateQueue`，保证顺序且 `top`/`search` 会等待队列排空（`await updateQueue.processing`）后再读，避免读到半截状态。
-
-### 5. 进程树清理
-停止进程用 `tree-kill`。在 Windows 上 SIGTERM 不被支持，统一走 SIGKILL（映射到 `taskkill /T /F`），确保 `cmd /c` 衍生的子进程也被回收。默认先 SIGTERM，10 秒未退出则强制 SIGKILL（Windows 始终 SIGKILL）。进程退出时通过 `beforeExit`/`SIGINT`/`SIGTERM`/`uncaughtException`/stdin-close 触发幂等的 `cleanup()` 回收全部子进程。
-
-### 6. 临时目录即数据目录
-运行时数据落在 `os.tmpdir()/procm-mcp/` 下：`allowed-process-creations.json`（白名单，全局）、`processes.json`（进程历史，全局，跨重启）在根级；`<serverId>/` 下有 `debug.log` 与每个进程的 `processes/<id>-*.json|log`。`serverId` 是启动时生成的 6 位 nanoid，每次重启变化（日志按实例隔离，历史全局共享）。
-
-### 7. 持久化历史 + 启动回收
-活进程状态每次变更都 fire-and-forget `persist()` 到全局 `processes.json`（`ProcessRecord` 形状，剥离内部字段加时间戳与日志路径）。`listProcessRecords()` 合并内存活进程与持久化历史，停止/退出的进程仍可见。后端启动时 `reconcileStaleProcesses()` 把上一轮残留的 `running` 记录回收（孤儿 PID 杀掉）并标记 exited，避免 dashboard 显示僵尸行。
-
-### 8. WebSocket 实时推送
-HTTP 服务器同端口挂 `/ws`（`attachWebsocketServer` 接管 `server.on("upgrade")`）。进程状态变更（`emitProcessChange`，微任务内合并 burst）和每条新日志（`emitLog`）实时推给所有 dashboard 客户端；连接即发进程快照。前端指数退避自动重连。REST API 仍可独立用。
-
-## 运行时边界
-
-- HTTP dashboard **只绑定 `127.0.0.1`**，不对外暴露。
-- 可选 `PROCM_HTTP_TOKEN`：所有 HTTP 请求需带 `Authorization: Bearer <token>`（dashboard、REST、`/mcp` 一并受保护）。
-- 请求体上限 1 MiB（`readBody`）。
+- **进程启动无门控**：`start-process` / `procm-command(start)` 直接执行命令，没有白名单/审批。三条启动路径（MCP 工具、dashboard `POST /api/processes`、CLI `start`）行为一致——都等价于在终端敲命令。把 `start-process` 当作任意 shell 命令工具对待，保留客户端的人工确认。
+- **历史全局、日志按实例隔离**：`processes.json`（进程历史）在 `<tmpdir>/procm-mcp/` 根级，跨重启/跨 server 共享；而 `debug.log` 与每个进程的 `.log` 在 `<serverId>/` 子目录下，按实例隔离。`serverId` 是启动时生成的 6 位 nanoid，每次重启变化。
+- **日志双写**：内存环形缓冲（2000 行/流，供 tail/grep）+ 磁盘 append-only `.log`（供停止后仍可读、可下载）。
+- **实时推送解耦**：生产者（`process-manager`、`process-stdout-client`）只 `emit` 到 `events.ts` 的 EventEmitter；`websocket-server.ts` 订阅并广播给 `/ws` 连接。进程状态变更在微任务内合并，避免短时风暴。
+- **本地绑定 + 可选 token**：HTTP/WS 仅 `127.0.0.1`；`PROCM_HTTP_TOKEN` 开启后所有 HTTP/`/mcp`/dashboard 请求需 `Authorization: Bearer <token>`，WS 用 `?token=` 或 `bearer.<token>` 子协议。

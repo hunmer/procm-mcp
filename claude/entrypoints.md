@@ -1,49 +1,25 @@
-# 入口与启动
+# 入口与启动流程
 
-## 入口文件
+## `src/index.ts` 主入口
 
-- **`src/index.ts`**（编译后 `build/index.js`）— 唯一主入口。`package.json` 的 `bin.procm-mcp` 指向它，`main` 也指向它。带 `#!/usr/bin/env node`。
+`parseArgs(argv)` 识别 `--server` / `--port <n>` / `--port=<n>` / `-h,--help`。分流顺序：
 
-## 启动流程（`index.ts`）
+1. **CLI 客户端**（最高优先级）：首个位置参数属于 `ps/info/logs/grep/start/restart/stop/ping` 时，`runClient` 连一个已运行后端并退出，**不**起后端。
+2. **`--server`（HTTP 后端）**：端口取 `--port` → `PROCM_HTTP_PORT` → `7331`；跑 `reconcileStaleProcesses()` → `startHttpServer(port)` → 安装信号处理器 → 常驻服务。无 stdio MCP。
+3. **默认（stdio MCP）**：建 `McpServer`，注册 5 工具，`reconcileStaleProcesses()`，安装信号处理器（stdio 模式额外：stdin-close → cleanup+exit），按需启 dashboard（`--port` 或 `PROCM_HTTP_PORT`），最后连 `StdioServerTransport`。
 
-1. `parseArgs(argv)` 解析 `--server` / `--port <n>` / `--allow-all` / `-h,--help`。
-2. 计算 `allowAll = cli.allowAll || envFlag("PROCM_ALLOW_ALL")`；若开启，调用 `setAllowAll(true)` 并打印醒目 WARNING banner（stderr）。
-3. **客户端模式优先判定**：首个非 `-` 位置参数若属于 `ps/info/logs/grep/start/restart/stop/ping`，则 `runClient()` 后 `exitProcess(0)`——**不启动后端**，只连一个已存在的 `--server`。
-4. 分支：
-   - `--server`（HTTP 后端模式）：确定端口（`--port` > `PROCM_HTTP_PORT` > `7331`），校验端口范围，`reconcileStaleProcesses()`（回收上一轮残留 running 记录的孤儿 PID），`startHttpServer(port)`（内含 `attachWebsocketServer`），打印 banner，`installSignalHandlers()`。**不建 stdio MCP transport**。
-   - 否则（stdio MCP 模式）：
-     - `new McpServer({name:"procm-mcp", version:"1.0.0"})`。
-     - 依次注册 4 组工具：`allowed-process`、`process`、`process-logs`、`procm-commands`。
-     - `reconcileStaleProcesses()`（同上，dashboard 启动前清理僵尸记录）。
-     - `installSignalHandlers({onStdinClose: true})`。
-     - 可选 dashboard：`--port` 直接 `startHttpServer(cli.port)`，否则 `startHttpServerIfConfigured()`（读 `PROCM_HTTP_PORT`）。
-     - `new StdioServerTransport()` + `server.connect(transport)`。
+`serverId` 在 `server-log.ts` 启动时生成（6 位 nanoid），每次重启变化；进程历史全局共享故跨重启可见。
 
-## 启动失败处理
+## 信号处理
 
-- 端口被占用（`EADDRINUSE`）→ `startHttpServer` reject 友好提示，`index.ts` catch 后 `console.error` + `exitProcess(1)`。
-- 端口非法 / 越界 → 直接报错退出。
+`installSignalHandlers`：`beforeExit`/`SIGINT`/`SIGTERM`/`uncaughtException` 均调用幂等 `cleanup()`（停所有子进程并落盘）；stdio 模式下 stdin 关闭（客户端断开）也触发 cleanup+exit。`cleanup` 幂等，多处理器调用安全。
 
-## 信号处理（`installSignalHandlers`）
+## 启动回收 `reconcileStaleProcesses`
 
-`cleanup()` 幂等（内部 `cleanupped` Promise 缓存），可被多处理器安全调用：
+两模式启动时都先跑：把上次后端崩溃/SIGKILL 留下的「running」记录的孤儿 PID kill 掉并标记 exited，再开始服务（dashboard 才不会显示幽灵进程）。
 
-| 事件 | 行为 |
-|---|---|
-| `beforeExit` | `cleanup()` |
-| `SIGINT` | `cleanup()` → `exitProcess(0)` |
-| `SIGTERM` | `cleanup()` → `exitProcess(0)` |
-| `uncaughtException` | 记录 → `cleanup()` → `exitProcess(1)` |
-| `stdin` close（仅 stdio 模式） | `cleanup()` → `exitProcess(0)` |
+## 构建
 
-stdio 模式下 stdin 关闭（客户端断开）即触发退出，是「MCP 客户端退出 → 清理子进程」的关键机制。
-
-## 构建流程
-
-- `tsc`（`tsconfig.json`）：`rootDir: src`、`outDir: build`、ES2022/Node16/strict。`src` → `build` 平铺，`.js` 扩展名 import 对齐。
-- dashboard 是独立 Vite 工程（`dashboard/`），`npm run build:dashboard` 产出 `dashboard/dist`，由 `files` 字段打包进 npm 包。
-- CI（`.github/workflows/publish.yml`）：push main → `npm ci` → `npm run build` → `npm publish` → 用 `mcp-publisher` 发布到 MCP Registry（GitHub OIDC 鉴权）。
-
-## 全局安装（开发用）
-
-`scripts/link-global.mjs`：`npm run build` + `npm link`，并尝试把 npm 全局 bin 目录加进 PATH（Windows 自动改 User PATH；其他平台打印指引）。之后任意终端可用 `procm-mcp`，指向当前 checkout，每次 rebuild 自动生效。
+- `npm run build` = `build:dashboard`（`npm --prefix dashboard run build` → `dashboard/dist`）再 `tsc`（→ `build/`）。运行入口 `build/index.js`。
+- `tsc` **不删除**源已删的产物——若从源里删了 `.ts`，对应 `build/*.js` 会残留成孤儿。清理需 `rm -rf build && npm run build`（如本轮移除 allow-x 后即如此）。
+- `package.json` `files` 发布 `["build","dashboard/dist"]`。

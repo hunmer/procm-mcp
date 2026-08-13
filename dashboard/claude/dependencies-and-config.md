@@ -41,7 +41,7 @@
 | `PROCM_DEV_BACKEND` | dev 模式 proxy 转发目标（`/api`、`/mcp`、`/assets`、`/ws`） | `http://127.0.0.1:7331` |
 | `REACT_EDITOR` | dev 模式 inspector 打开源码用的编辑器 | 编辑器自动探测 |
 
-运行时行为由**后端**的环境决定（`PROCM_HTTP_PORT`、`PROCM_HTTP_TOKEN`、`PROCM_ALLOW_ALL`，见根 [claude/dependencies-and-config.md](../claude/dependencies-and-config.md)）。
+运行时行为由**后端**的环境决定（`PROCM_HTTP_PORT`、`PROCM_HTTP_TOKEN`，见根 [claude/dependencies-and-config.md](../claude/dependencies-and-config.md)）。
 
 ## 版本差异注意
 

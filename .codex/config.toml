@@ -4,9 +4,6 @@
 command = "node"
 args = ["./build/index.js"]
 
-[mcp_servers."procm-mcp".tools.list-allowed-processes-in-cwd]
-approval_mode = "approve"
-
 [mcp_servers."procm-mcp".tools.start-process]
 approval_mode = "approve"
 
@@ -26,9 +23,6 @@ approval_mode = "approve"
 approval_mode = "approve"
 
 [mcp_servers."procm-mcp".tools.delete-process]
-approval_mode = "approve"
-
-[mcp_servers."procm-mcp".tools.delete-allowed-process]
 approval_mode = "approve"
 
 [mcp_servers."procm-mcp".tools.get-server-id]

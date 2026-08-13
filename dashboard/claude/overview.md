@@ -15,7 +15,7 @@ procm-mcp 的 Web UI，由后端在 `GET /` 静态托管。独立的 React + Vit
 - 实时更新走**同源** WebSocket `/ws`（`src/lib/ws.ts`，自动重连指数退避），不经 REST 轮询。
 - 操作与历史拉取走同源 REST `/api/*`（`src/lib/api.ts`），不直连 `/mcp`。
 - 类型镜像后端 `toPublicRecord`：`src/lib/types.ts` 的 `ProcessView`（含 `startedAt?`/`stoppedAt?`）/ `ProcessListResponse` / `LogsResponse` / `WsProcessesMessage` / `WsLogMessage`。
-- dashboard 是**人类驱动的本地 UI**，`POST /api/processes` 启动进程**绕过 allow-x**（等价于在终端敲命令）。
+- dashboard 是**人类驱动的本地 UI**，`POST /api/processes` 启动进程直接执行（等价于在终端敲命令）。
 
 ## 核心数据流
 

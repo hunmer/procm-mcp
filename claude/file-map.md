@@ -1,85 +1,50 @@
-# 文件地图
-
-## 仓库根
+# 文件定位速查
 
 ```
 procm-mcp/
-├── src/                       # 后端 TypeScript 源（编译 → build/）
-│   ├── index.ts               # 主入口：CLI 解析 + 三模式分流 + 信号处理
-│   ├── cli-client.ts          # CLI 客户端模式（ps/info/logs/grep/start/restart/stop/ping）
-│   ├── http-server.ts         # HTTP 服务器：REST + 静态资源 + /mcp 路由 + token 鉴权
-│   ├── mcp-http.ts            # /mcp Streamable HTTP transport（stateless）
-│   ├── dashboard-html.ts      # dashboard dist 解析 + /assets 服务 + 路径穿越防护
-│   ├── process-manager.ts     # ★ 进程生命周期核心（模块级单例 processes[] + 持久化）
-│   ├── allowed-process-creations.ts  # allow-x 白名单 JSON CRUD
-│   ├── processes-repository.ts      # 进程历史持久化（lowdb processes.json）
-│   ├── process-stdout-client.ts      # 日志消费 + 实时emit + 双写 + updateQueue
-│   ├── logs-repository.ts     # lowdb 日志存储（insert/top/search/close）
-│   ├── events.ts              # 进程内事件总线（emitProcessChange/emitLog）
-│   ├── websocket-server.ts    # /ws 实时推送（挂到 http.Server upgrade）
-│   ├── project-scanner.ts     # 扫描 package.json/pyproject.toml/Cargo.toml → favorites 候选
-│   ├── server-log.ts          # serverId/logServerId + serverLog/logTool*
-│   ├── logger.ts              # debug.log 追加
-│   ├── procm-mcp-dir.ts       # <tmpdir>/procm-mcp
-│   ├── server-dir.ts          # <procmMcpDir>/<serverId>
-│   ├── types.ts               # ProcessStatus / ProcessMetadata
-│   ├── error.ts               # isError / toErrorMessage
-│   ├── sleep.ts               # sleep(ms)
-│   ├── tool-helpers.ts        # textResult / notFoundResult
+├── src/
+│   ├── index.ts              # 入口/分流/信号处理（注册 5 个 stdio 工具）
+│   ├── cli-client.ts         # HTTP 客户端（ps/info/logs/grep/start/restart/stop/ping）
+│   ├── process-manager.ts    # ★ 进程生命周期核心（spawn/kill/restart/persist/输入/回收）
+│   ├── process-stdout-client.ts  # 每流捕获：2000 行环形缓冲 + .log 双写 + tail/grep
+│   ├── processes-repository.ts   # lowdb 持久化历史 processes.json
+│   ├── events.ts             # 进程内事件总线（burst 合并）
+│   ├── websocket-server.ts   # /ws 实时推送（processes + log）
+│   ├── http-server.ts        # REST + dashboard + /mcp 委托 + WS 挂载（127.0.0.1）
+│   ├── mcp-http.ts           # /mcp stateless，注册 4 工具（无 process-input）
+│   ├── dashboard-html.ts     # 托管 dashboard/dist 静态包
+│   ├── project-scanner.ts    # 项目清单扫描 → favorites 候选
+│   ├── server-log.ts         # serverId(nanoid) + 日志包装
+│   ├── server-dir.ts         # <serverId> 子目录
+│   ├── procm-mcp-dir.ts      # <tmpdir>/procm-mcp 根
+│   ├── logger.ts             # 写 debug.log
+│   ├── tool-helpers.ts       # textResult / notFoundResult
+│   ├── error.ts              # toErrorMessage
+│   ├── types.ts              # ProcessStatus / ProcessMetadata
+│   ├── sleep.ts
 │   └── tools/
-│       ├── allowed-process.ts # allowed-process (action: allow/delete/list)
-│       ├── process.ts         # start-process / process (action: get/delete/restart/list)
-│       ├── process-logs.ts    # process-logs (tail 或 grep)
-│       └── procm-commands.ts  # procm-command (action: list/start)
-├── tests/
-│   ├── _helpers.mjs           # 断言 + startBackend/http/mcpCalls/mcpHttp
-│   ├── run-all.mjs            # 串行跑 6 套
-│   ├── lifecycle.mjs          # 生命周期
-│   ├── logs-grep.mjs          # 日志 grep
-│   ├── http-api.mjs           # REST
-│   ├── mcp-http.mjs           # /mcp
-│   ├── allow-x.mjs            # allow-x
-│   ├── cli-roundtrip.mjs      # CLI 客户端
-│   ├── example-process.js     # 长寿无操作子进程替身
-│   ├── docker-compose.yml     # 手工验证用
-│   └── nginx-test.conf        # 手工验证用
-├── scripts/
-│   ├── link-global.mjs        # build + npm link + 修 PATH
-│   └── demo/                  # 演示进程（dashboard presets 用）
-│       ├── counter.mjs        # 每秒自增计数（stdout）
-│       ├── slow-log.mjs       # stdout/stderr 交替
-│       └── http-server.mjs    # 微型 HTTP 服务器（记请求日志）
-├── dashboard/                 # ★ 独立 React/Vite 工程（见 dashboard/CLAUDE.md）
-├── .github/workflows/publish.yml   # npm + MCP Registry 发布
-├── package.json               # bin/scripts/deps
-├── tsconfig.json              # ES2022/Node16/strict
-├── server.json                # MCP Registry 元数据
-├── .mcp.json                  # 仓库示例客户端配置
-├── .gitignore
-├── skills-lock.json           # agent skills 锁（非运行时）
-└── README.md                  # 用户文档
+│       ├── process.ts        # start-process / process(get/delete/restart/list)
+│       ├── process-logs.ts   # process-logs(tail/grep)
+│       ├── process-input.ts  # process-input(stdin/signal，stdio 限定)
+│       └── procm-commands.ts # procm-command(list/start)
+├── tests/                    # 5 套（run-all）+ ws-livecheck + _helpers + example-process.js
+├── build/                    # tsc 产物，入口 build/index.js（勿手改；删源后需 clean 重建防孤儿）
+├── dashboard/                # 独立 React+Vite 工程，见 dashboard/CLAUDE.md
+├── scripts/                  # link-global.mjs 等
+├── package.json              # scripts/files：发布 ["build","dashboard/dist"]
+├── tsconfig.json             # ESM/Node16，import 需 .js 后缀
+└── .mcp.json / server.json   # MCP 配置/元数据
 ```
 
-## 被忽略的目录（生成物 / 依赖）
+**关键定位**
 
-- `node_modules/`、`dashboard/node_modules/` — 依赖。
-- `build/` — `tsc` 产物。
-- `dashboard/dist/` — Vite 产物。
-- `.git/`、`.zcode/`、`.codex/`、`.agents/`、`.claude/` — 工具/agent 配置（非项目源码）。
-
-## 关键文件定位速查
-
-| 想找... | 去哪 |
+| 要找 | 去哪 |
 |---|---|
-| 进程是怎么 spawn/kill 的 | `src/process-manager.ts` |
-| 某个 MCP 工具的实现 | `src/tools/<area>.ts` |
-| 某条 REST 路由 | `src/http-server.ts` 的 `createRequestHandler` |
-| allow-x 校验逻辑 | `src/allowed-process-creations.ts` `checkProcessCreationAllowed` |
-| 日志怎么存/查 | `src/process-stdout-client.ts` + `src/logs-repository.ts` |
-| 进程历史持久化/跨重启 | `src/processes-repository.ts` + `process-manager.ts` 的 `persist`/`listProcessRecords` |
-| WebSocket 实时推送 | `src/websocket-server.ts` + `src/events.ts` |
-| dashboard 实时日志的数据流 | `process-stdout-client` → `events.emitLog` → `websocket-server` → `dashboard/src/lib/ws.ts` |
-| favorites 扫描 | `src/project-scanner.ts`（后端）+ `dashboard/src/lib/favorites.ts`（前端存储） |
-| 启动模式判定 | `src/index.ts` 的 `parseArgs` 与 try 块 |
-| CLI 子命令实现 | `src/cli-client.ts` |
-| 运行时数据落盘位置 | `src/procm-mcp-dir.ts` + `src/server-dir.ts` |
+| 进程生命周期/spawn/persist | `src/process-manager.ts` |
+| 日志捕获/tail/grep | `src/process-stdout-client.ts` |
+| REST 路由 | `src/http-server.ts` |
+| MCP 工具注册（stdio / HTTP） | `src/index.ts` / `src/mcp-http.ts` |
+| `/mcp` 传输 | `src/mcp-http.ts` |
+| `/ws` 推送 | `src/websocket-server.ts` + `src/events.ts` |
+| 命令重建（粘贴运行） | `http-server.ts` `buildCommand` |
+| 允许发送的信号枚举 | `process-manager.ts` `ALLOWED_INPUT_SIGNALS` |

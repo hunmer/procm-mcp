@@ -24,7 +24,7 @@ dashboard 自身是后端 `GET /` 托管的静态页面，**不对外暴露接�
 | `getLogFiles(id)` | `GET /api/processes/:id/log-files` | `{stdoutPath, stderrPath}`（复制文件位置） |
 | `downloadLogUrl(id)` | `GET /api/processes/:id/log-download`（返回 URL，`<a download>` 用） | 下载合并日志 |
 | `getProcessCommand(id)` | `GET /api/processes/:id/command` | 复现命令（复制到剪贴板） |
-| `startProcess(body)` | `POST /api/processes` | NewProcessDialog / Favorites launch 启动（**绕过 allow-x**） |
+| `startProcess(body)` | `POST /api/processes` | NewProcessDialog / Favorites launch 启动（直接执行） |
 | `stopProcess(id)` | `POST /api/processes/:id/stop` | ProcessList 停止并删除 |
 | `restartProcess(id)` | `POST /api/processes/:id/restart` | ProcessList 重启 |
 | `deleteProcessCall(id)` | `DELETE /api/processes/:id` | 删除单进程记录 |
