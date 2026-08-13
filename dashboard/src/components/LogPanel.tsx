@@ -77,6 +77,7 @@ import type {
   ProcessView,
   WsLogMessage,
 } from "@/lib/types";
+import { TerminalLog, stripAnsi } from "./TerminalLog";
 
 interface LogPanelProps {
   process: ProcessView;
@@ -277,7 +278,9 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
       .map((e) => {
         const time = `[${formatTime(e.timestamp)}]`;
         const tag = e.stream === "stderr" ? ` [${e.stream}]` : "";
-        return `${time}${tag} ${e.message}`;
+        // Strip ANSI escapes so the clipboard gets clean text instead of raw
+        // escape codes.
+        return `${time}${tag} ${stripAnsi(e.message)}`;
       })
       .join("\n");
     try {
@@ -789,7 +792,11 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
           height. Uses bg-muted so it adapts to light/dark themes instead of a
           hardcoded black. The log-selectable class re-enables text selection
           (disabled app-wide) so users can copy log lines. */}
-      <ScrollArea className="log-selectable bg-muted text-foreground min-h-0 flex-1">
+      {/* Log body: a dark "terminal" surface so the ANSI color palette renders
+          with the contrast its authors intended (mirrors the embedded-terminal
+          convention used by VS Code / xterm). The log-selectable class
+          re-enables text selection (disabled app-wide) so users can copy lines. */}
+      <ScrollArea className="log-selectable bg-zinc-950 text-zinc-300 min-h-0 flex-1">
         <div className="min-h-full p-4">
           {closedNotice && (
             <Alert variant="warning" className="mb-3">
@@ -804,18 +811,18 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
           )}
           {error ? (
             <pre className={`m-0 whitespace-pre-wrap break-words ${fontTextClass} ${fontLineClass}`}>
-              <span className="text-destructive">{t("logs.errorPrefix", { message: error })}</span>
+              <span className="text-red-400">{t("logs.errorPrefix", { message: error })}</span>
             </pre>
           ) : entries.length === 0 ? (
-            <Empty className="min-h-[200px]">
+            <Empty className="min-h-[200px] text-zinc-400">
               <EmptyHeader>
-                <EmptyMedia variant="icon">
+                <EmptyMedia variant="icon" className="bg-zinc-800 text-zinc-400">
                   <FileTextIcon />
                 </EmptyMedia>
-                <EmptyTitle>
+                <EmptyTitle className="text-zinc-300">
                   {activeGrep ? t("logs.emptyNoMatches") : t("logs.emptyNoLogs")}
                 </EmptyTitle>
-                <EmptyDescription>
+                <EmptyDescription className="text-zinc-500">
                   {activeGrep
                     ? t("logs.emptyNoMatchesDesc", { grep: activeGrep })
                     : t("logs.emptyNoLogsDesc")}
@@ -823,19 +830,14 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
               </EmptyHeader>
             </Empty>
           ) : (
-            <pre className={`m-0 whitespace-pre-wrap break-words ${fontTextClass} ${fontLineClass}`}>
-              {entries.map((e, i) => (
-                <Line
-                  key={i}
-                  index={i}
-                  entry={e}
-                  showTime={showTime}
-                  showLineNumbers={showLineNumbers}
-                  formatTime={formatTime}
-                  highlight={highlightRegex}
-                />
-              ))}
-            </pre>
+            <TerminalLog
+              entries={entries}
+              showTime={showTime}
+              showLineNumbers={showLineNumbers}
+              formatTime={formatTime}
+              highlight={highlightRegex}
+              className={`${fontTextClass} ${fontLineClass}`}
+            />
           )}
         </div>
       </ScrollArea>
@@ -1045,77 +1047,3 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
   );
 }
 
-// A single rendered log line. stderr is highlighted in red so the merged view
-// still distinguishes the two streams at a glance. The timestamp prefix is
-// optional (toggleable) and bracketed; an optional non-copyable line-number
-// badge can lead each row.
-function Line({
-  entry,
-  index,
-  showTime,
-  showLineNumbers,
-  formatTime,
-  highlight,
-}: {
-  entry: LogEntry;
-  index: number;
-  showTime: boolean;
-  showLineNumbers: boolean;
-  formatTime: (ts: number) => string;
-  highlight: RegExp | null;
-}) {
-  const isErr = entry.stream === "stderr";
-  return (
-    <span>
-      {showLineNumbers && (
-        // Non-copyable line-number badge (user-select: none) so selecting log
-        // text doesn't drag the numbers along.
-        <span className="text-muted-foreground/60 select-none mr-2 font-mono tabular-nums">
-          {String(index + 1).padStart(3, " ")}
-        </span>
-      )}
-      {showTime && (
-        <span className="text-muted-foreground">[{formatTime(entry.timestamp)}] </span>
-      )}
-      {isErr && (
-        <span className="text-destructive">[{entry.stream}] </span>
-      )}
-      <span className={isErr ? "text-destructive" : "text-foreground"}>
-        <Highlighted text={entry.message} highlight={highlight} />
-      </span>
-      {"\n"}
-    </span>
-  );
-}
-
-// Wrap every match of `highlight` in the text with a <mark>. Uses String.split
-// (stateless, so the global regex's lastIndex can't leak across renders) and
-// re-inserts the captured delimiter so the highlighted span shows the actual
-// matched text. When no highlight is active, the text is returned as-is.
-function Highlighted({
-  text,
-  highlight,
-}: {
-  text: string;
-  highlight: RegExp | null;
-}) {
-  if (!highlight || !text) return text;
-  const parts = text.split(highlight);
-  const matches = text.match(highlight);
-  if (!matches || matches.length === 0) return text;
-  const nodes: React.ReactNode[] = [];
-  for (let i = 0; i < parts.length; i++) {
-    if (parts[i]) nodes.push(parts[i]);
-    if (i < matches.length) {
-      nodes.push(
-        <mark
-          key={i}
-          className="rounded-[2px] bg-yellow-300/50 px-0.5 text-foreground dark:bg-yellow-400/40"
-        >
-          {matches[i]}
-        </mark>,
-      );
-    }
-  }
-  return <>{nodes}</>;
-}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import {
   type ColumnDef,
@@ -142,39 +142,37 @@ function loadViewMode(): ViewMode {
   return localStorage.getItem(VIEW_KEY) === "cards" ? "cards" : "table";
 }
 
-// Sticky styling for the pinned columns. The name column pins left and the
-// actions column pins right so both stay visible outside the horizontal scroll.
-// Cell variants sync their background with the row's hover/selected state so
-// the highlight carries across the pinned cell. Applied to the matching <th>/
-// <td> in the render loop.
-const STICKY_NAME_HEAD =
-  "sticky left-0 z-20 bg-background border-r border-border";
-const STICKY_NAME_CELL =
-  "sticky left-0 z-10 bg-background border-r border-border " +
-  "group-hover:bg-[color-mix(in_srgb,var(--background),var(--color-black)_2%)] " +
-  "group-data-[state=selected]:bg-[color-mix(in_srgb,var(--background),var(--color-black)_4%)] " +
-  "dark:group-hover:bg-[color-mix(in_srgb,var(--background),var(--color-white)_2%)] " +
-  "dark:group-data-[state=selected]:bg-[color-mix(in_srgb,var(--background),var(--color-white)_4%)]";
-const STICKY_ACTIONS_HEAD =
-  "sticky right-0 z-20 bg-background border-l border-border";
-const STICKY_ACTIONS_CELL =
-  "sticky right-0 z-10 bg-background border-l border-border " +
-  "group-hover:bg-[color-mix(in_srgb,var(--background),var(--color-black)_2%)] " +
-  "group-data-[state=selected]:bg-[color-mix(in_srgb,var(--background),var(--color-black)_4%)] " +
-  "dark:group-hover:bg-[color-mix(in_srgb,var(--background),var(--color-white)_2%)] " +
-  "dark:group-data-[state=selected]:bg-[color-mix(in_srgb,var(--background),var(--color-white)_4%)]";
-
-// Class for a pinned column, or undefined if the column isn't pinned. `head`
-// selects the header variant (higher z so it stays above body cells).
-function stickyColClass(colId: string, head: boolean): string | undefined {
-  switch (colId) {
-    case "name":
-      return head ? STICKY_NAME_HEAD : STICKY_NAME_CELL;
-    case "actions":
-      return head ? STICKY_ACTIONS_HEAD : STICKY_ACTIONS_CELL;
-    default:
-      return undefined;
-  }
+// Sticky-column styling backed by TanStack's column-pinning API. The table
+// pins `name` left and `actions` right (see `columnPinning` in the table's
+// initialState), so both stay visible during horizontal scroll. Geometry
+// (position / left / right / z-index) is computed via the pinning API, so
+// multiple columns per side would stack with correct offsets; the opaque
+// background, edge border, and hover/selected tints stay as Tailwind classes
+// so a pinned cell tracks its row's highlight (otherwise it would stay flat
+// while the row lights up on hover). Returns empty attrs for non-pinned cols.
+function pinnedColAttrs(
+  column: Column<ProcessView>,
+  head: boolean,
+): { className?: string; style?: CSSProperties } {
+  const side = column.getIsPinned();
+  if (!side) return {};
+  const edge =
+    side === "left" ? "border-r border-border" : "border-l border-border";
+  const hover = head
+    ? ""
+    : "group-hover:bg-[color-mix(in_srgb,var(--background),var(--color-black)_2%)] " +
+      "group-data-[state=selected]:bg-[color-mix(in_srgb,var(--background),var(--color-black)_4%)] " +
+      "dark:group-hover:bg-[color-mix(in_srgb,var(--background),var(--color-white)_2%)] " +
+      "dark:group-data-[state=selected]:bg-[color-mix(in_srgb,var(--background),var(--color-white)_4%)]";
+  return {
+    style: {
+      position: "sticky",
+      left: side === "left" ? `${column.getStart("left")}px` : undefined,
+      right: side === "right" ? `${column.getAfter("right")}px` : undefined,
+      zIndex: head ? 20 : 10,
+    },
+    className: `bg-background ${edge} ${hover}`.trim() || undefined,
+  };
 }
 
 export function ProcessList({
@@ -491,6 +489,13 @@ export function ProcessList({
     // Don't reset to page 0 on every sort change — let the user stay oriented;
     // the index is clamped by tanstack anyway.
     autoResetPageIndex: false,
+    // Pin the name column to the left and actions to the right so both stay
+    // visible during horizontal scroll. Uncontrolled (no state/onChange pair),
+    // so pinning is fixed for this view; pinnedColAttrs reads it back via the
+    // column API (getIsPinned / getStart / getAfter).
+    initialState: {
+      columnPinning: { left: ["name"], right: ["actions"] },
+    },
     state: { pagination, sorting },
   });
 
@@ -690,19 +695,23 @@ export function ProcessList({
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead
-                    key={header.id}
-                    className={stickyColClass(header.column.id, true)}
-                  >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext(),
-                        )}
-                  </TableHead>
-                ))}
+                {headerGroup.headers.map((header) => {
+                  const pin = pinnedColAttrs(header.column, true);
+                  return (
+                    <TableHead
+                      key={header.id}
+                      className={pin.className}
+                      style={pin.style}
+                    >
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext(),
+                          )}
+                    </TableHead>
+                  );
+                })}
               </TableRow>
             ))}
           </TableHeader>
@@ -728,17 +737,21 @@ export function ProcessList({
                         />
                       }
                     >
-                      {row.getVisibleCells().map((cell) => (
-                        <TableCell
-                          key={cell.id}
-                          className={stickyColClass(cell.column.id, false)}
-                        >
-                          {flexRender(
-                            cell.column.columnDef.cell,
-                            cell.getContext(),
-                          )}
-                        </TableCell>
-                      ))}
+                      {row.getVisibleCells().map((cell) => {
+                        const pin = pinnedColAttrs(cell.column, false);
+                        return (
+                          <TableCell
+                            key={cell.id}
+                            className={pin.className}
+                            style={pin.style}
+                          >
+                            {flexRender(
+                              cell.column.columnDef.cell,
+                              cell.getContext(),
+                            )}
+                          </TableCell>
+                        );
+                      })}
                     </ContextMenuTrigger>
                     <ContextMenuPopup>
                       <ContextMenuItem onClick={() => handleCopyId(p)}>
