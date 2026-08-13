@@ -169,7 +169,7 @@ function pinnedColAttrs(
       position: "sticky",
       left: side === "left" ? `${column.getStart("left")}px` : undefined,
       right: side === "right" ? `${column.getAfter("right")}px` : undefined,
-      zIndex: head ? 20 : 10,
+      zIndex: head ? 2 : 1,
     },
     className: `bg-background ${edge} ${hover}`.trim() || undefined,
   };
@@ -586,9 +586,13 @@ export function ProcessList({
 
       {/* Scrollable region: table or cards, depending on viewMode. */}
       {viewMode === "cards" ? (
-        <div className="min-h-0 flex-1 overflow-auto p-4">
+        <div className="@container min-h-0 flex-1 overflow-auto p-4">
+          {/* `@container` makes the card grid track the list's own width (not
+              the viewport), so it collapses to one column when the log panel
+              squeezes this side — each card keeps a usable minimum width
+              instead of being crushed two-wide. */}
           {table.getRowModel().rows.length ? (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2 @5xl:grid-cols-3">
               {table.getRowModel().rows.map((row) => {
                 const p = row.original;
                 const isActive = p.id === selectedId;
@@ -613,7 +617,7 @@ export function ProcessList({
                         unreadCount={unread[p.id] ?? 0}
                       />
                       <CardPanel className="flex flex-col gap-3 p-4">
-                        <div className="mt-1 flex items-center justify-between gap-2">
+                        <div className="mt-1 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
                           {canStop ? (
                             <Button size="sm" onClick={() => requestStop(p)}>
                               <SquareIcon />
@@ -690,7 +694,11 @@ export function ProcessList({
           )}
         </div>
       ) : (
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="isolate min-h-0 flex-1 overflow-auto">
+        {/* `isolate` scopes the table into its own stacking context so pinned
+            columns' z-index only orders them against sibling columns during
+            horizontal scroll — never against floating UI outside the table
+            (select popups, context menus, dialogs). */}
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
