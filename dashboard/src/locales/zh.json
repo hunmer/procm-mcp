@@ -208,6 +208,7 @@
     "timestampsOption": "时间戳",
     "lineNumbersOption": "行号",
     "autoScrollOption": "自动滚动",
+    "jsonOption": "JSON 结构化输出",
     "fontSizeOption": "字体大小",
     "fontSizeSmall": "小",
     "fontSizeMedium": "中",

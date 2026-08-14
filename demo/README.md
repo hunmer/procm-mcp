@@ -15,6 +15,8 @@ Both start commands load `.env.defaults`, which uses room `room-demo` and `ws://
 
 When started through procm-mcp with `roomId: "room-demo"`, the connection variables are injected automatically. The Electron UI waits for the backend's retained `backend:ready` message, sends ping requests, subscribes to replies, and displays structured Logger messages.
 
+The backend also serves a matching browser console at `http://127.0.0.1:4444`. Its `/api/electron-data` route uses `executeCustom()` on the connected backend SDK to read the Electron renderer state without exposing room credentials to browser code.
+
 After both demos are connected, run the reusable custom-execution check:
 
 ```powershell

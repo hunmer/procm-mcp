@@ -1,4 +1,5 @@
 import { createProcmClient, executeCustom, exposeCustomExecution } from "@procm-mcp/sdk";
+import { spawn } from "node:child_process";
 import {
   assert,
   assertEqual,
@@ -91,7 +92,17 @@ await runTest("custom execution is gated by connection and can query backend and
       context: { getData: () => ({ source: "backend", value: 42 }) },
     });
     stopFrontendExecution = exposeCustomExecution(frontendTarget, {
-      context: { getUiValue: (selector) => selector === "#mock-value" ? "frontend-ui-value" : null },
+      context: {
+        getUiValue: (selector) => selector === "#mock-value" ? "frontend-ui-value" : null,
+        getRendererData: () => ({
+          identity: "execution-room / frontend:test",
+          status: "open",
+          backend: "ready",
+          roundtrips: "2",
+          members: "3",
+          uiValue: "frontend-ui-value",
+        }),
+      },
     });
     await sleep(50);
 
@@ -104,6 +115,37 @@ await runTest("custom execution is gated by connection and can query backend and
       ["#mock-value"],
     );
     assertEqual(uiValue, "frontend-ui-value", "custom execution returns simulated frontend UI value");
+
+    const demoPort = randomPort();
+    const demoBackend = spawn("node", ["demo/node-server/index.js"], {
+      cwd: projectRoot,
+      stdio: "ignore",
+      env: {
+        ...process.env,
+        PORT: String(demoPort),
+        PROCM_ROOM_ID: "execution-room",
+        PROCM_WS_URL: url,
+      },
+    });
+    try {
+      let pageResponse;
+      for (let attempt = 0; attempt < 30; attempt++) {
+        try {
+          pageResponse = await fetch(`http://127.0.0.1:${demoPort}/`);
+          if (pageResponse.ok) break;
+        } catch {
+          await sleep(100);
+        }
+      }
+      assertEqual(pageResponse?.status, 200, "backend demo serves the static HTML page");
+      assert((await pageResponse.text()).includes("async function loadElectronData()"), "HTML contains the Electron request method");
+      const electronResponse = await fetch(`http://127.0.0.1:${demoPort}/api/electron-data`);
+      const electronResult = await electronResponse.json();
+      assertEqual(electronResponse.status, 200, "backend HTTP API queries the Electron execution target");
+      assertEqual(electronResult.electron.uiValue, "frontend-ui-value", "backend HTTP API returns Electron UI data");
+    } finally {
+      demoBackend.kill("SIGTERM");
+    }
   } finally {
     stopBackendExecution?.();
     stopFrontendExecution?.();

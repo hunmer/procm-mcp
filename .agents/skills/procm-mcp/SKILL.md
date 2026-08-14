@@ -174,6 +174,9 @@ often faster for one-off checks than building a `fetch`. Default port 7331;
 override with `--port` or `PROCM_HTTP_PORT`; token via `--token` or
 `PROCM_HTTP_TOKEN`.
 
+Full command reference — including `mcptool`, which calls any backend MCP tool
+with CLI parameters — lives in **[cli.md](cli.md)**. Quick map:
+
 ```
 procm-mcp ping                                    reachability check
 procm-mcp ps                                      list processes
@@ -183,6 +186,7 @@ procm-mcp grep <id> <pattern> [--stream s] [-n 50] [-i]
 procm-mcp start <script> [args...] [--cwd <dir>] [--name <n>] [--env KEY=VAL ...]
 procm-mcp restart <id>
 procm-mcp stop <id>                               stop + delete
+procm-mcp mcptool [name] [key=value ...] [--args <json>] [--raw]   list/call MCP tools
 ```
 
 > The CLI has **no** `input` subcommand — for stdin/signal, use the HTTP

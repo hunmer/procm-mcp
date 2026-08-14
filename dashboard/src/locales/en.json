@@ -208,6 +208,7 @@
     "timestampsOption": "Timestamps",
     "lineNumbersOption": "Line numbers",
     "autoScrollOption": "Auto-scroll",
+    "jsonOption": "Structured JSON",
     "fontSizeOption": "Font size",
     "fontSizeSmall": "Small",
     "fontSizeMedium": "Medium",

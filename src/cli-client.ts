@@ -14,6 +14,9 @@
 //   restart <id>                          Restart a process
 //   stop <id>                             Stop and delete a process
 //   ping                                  Check the backend is reachable
+//   mcptool                               List MCP tools
+//   mcptool <name>                        Show an MCP tool's schema
+//   mcptool <name> [key=value ...] [--args <json>] [--raw]   Call an MCP tool
 //
 // Port: --port <n>, else PROCM_HTTP_PORT, else 7331.
 // Token: --token <t> or PROCM_HTTP_TOKEN (sent as Bearer).
@@ -276,7 +279,186 @@ async function cmdPing(port: number, token?: string) {
   console.log(`backend reachable: pid ${data.pid}, server ${data.serverId}, ${base(port)}`);
 }
 
-const COMMANDS = ["ps", "info", "logs", "grep", "start", "restart", "stop", "ping"];
+// ---- MCP tools over /mcp (stateless Streamable HTTP) ----
+
+function tryJson(text: string): any {
+  if (!text) return undefined;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
+// POST one JSON-RPC message to /mcp and return the response message with a
+// matching id. The transport answers either application/json or an SSE body
+// (data: lines); both are handled. `notify` sends a notification (no id, no
+// response expected). JSON-RPC / HTTP errors exit via fail().
+async function mcpRpc(
+  port: number,
+  token: string | undefined,
+  id: number | string | null,
+  method: string,
+  params: unknown,
+): Promise<any | undefined> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json, text/event-stream",
+    "MCP-Protocol-Version": "2025-06-18",
+  };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const notify = id === null;
+  const body = JSON.stringify(
+    notify ? { jsonrpc: "2.0", method } : { jsonrpc: "2.0", id, method, params },
+  );
+  let res: Response;
+  try {
+    res = await fetch(base(port) + "/mcp", { method: "POST", headers, body });
+  } catch (e: any) {
+    if (e?.code === "ECONNREFUSED" || /fetch failed/i.test(e?.message || "")) {
+      fail(`cannot connect to backend at ${base(port)}. Is "procm-mcp --server" running? (use --port to pick another)`);
+    }
+    throw e;
+  }
+  const text = await res.text();
+  const messages: any[] = [];
+  const whole = tryJson(text);
+  if (whole !== undefined) messages.push(whole);
+  for (const line of text.split("\n")) {
+    if (line.startsWith("data:")) {
+      const m = tryJson(line.slice(5).trim());
+      if (m !== undefined) messages.push(m);
+    }
+  }
+  const msg = messages.find((m) => m && m.id === id) ?? messages[0];
+  if (!res.ok) {
+    fail(msg?.error?.message || `HTTP ${res.status} from /mcp`);
+  }
+  if (msg?.error) {
+    fail(`MCP error ${msg.error.code}: ${msg.error.message}`);
+  }
+  return msg;
+}
+
+// One-time initialize handshake so the server accepts tool requests.
+async function mcpHandshake(port: number, token?: string) {
+  await mcpRpc(port, token, "cli-init", "initialize", {
+    protocolVersion: "2025-06-18",
+    capabilities: {},
+    clientInfo: { name: "procm-mcp-cli", version: "1.0.0" },
+  });
+  await mcpRpc(port, token, null, "notifications/initialized", undefined);
+}
+
+// Coerce a key=value token's value: true/false and numbers keep their type,
+// anything else that parses as JSON (arrays/objects/null) is kept, the rest
+// stays a string.
+function coerceValue(raw: string): unknown {
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  if (raw.trim() !== "" && !Number.isNaN(Number(raw))) return Number(raw);
+  const json = tryJson(raw);
+  return json === undefined ? raw : json;
+}
+
+async function cmdMcpTool(port: number, args: string[], token?: string) {
+  const toolArgsAll = args.slice(1);
+  // --raw: print raw JSON instead of the formatted table / text output.
+  const raw = toolArgsAll.includes("--raw");
+  const toolArgs = toolArgsAll.filter((a) => a !== "--raw");
+  const name = args[0];
+  await mcpHandshake(port, token);
+
+  // No tool name: list every tool with a one-line description.
+  if (!name) {
+    const r = await mcpRpc(port, token, 1, "tools/list", {});
+    const tools: any[] = r?.result?.tools || [];
+    if (raw) {
+      console.log(JSON.stringify(tools, null, 2));
+      return;
+    }
+    if (tools.length === 0) {
+      console.log("(no MCP tools)");
+      return;
+    }
+    const nameW = Math.max(4, ...tools.map((t) => t.name.length));
+    console.log(`${"TOOL".padEnd(nameW)}  DESCRIPTION`);
+    for (const t of tools) {
+      const desc = String(t.description || "")
+        .split("\n")
+        .find((l: string) => l.trim()) || "(no description)";
+      console.log(`${t.name.padEnd(nameW)}  ${desc.trim()}`);
+    }
+    console.log(`\n(${tools.length} tool(s) · call with: procm-mcp mcptool <name> key=value ...`);
+    return;
+  }
+
+  // Tool name without arguments: show its description + input schema.
+  if (toolArgs.length === 0) {
+    const r = await mcpRpc(port, token, 2, "tools/list", {});
+    const tool = (r?.result?.tools || []).find((t: any) => t.name === name);
+    if (!tool) fail(`unknown tool "${name}" (run "procm-mcp mcptool" to list tools)`);
+    if (raw) {
+      console.log(JSON.stringify(tool, null, 2));
+      return;
+    }
+    console.log(String(tool.description || "(no description)").trim());
+    console.log("\nInput schema:");
+    console.log(JSON.stringify(tool.inputSchema ?? {}, null, 2));
+    return;
+  }
+
+  // Call the tool. Parameters come from --args '<json>' (must be a JSON
+  // object) and/or key=value tokens (value coerced, see coerceValue);
+  // key=value entries override --args on conflict.
+  const input: Record<string, unknown> = {};
+  for (let i = 0; i < toolArgs.length; i++) {
+    const a = toolArgs[i];
+    if (a === "--args") {
+      const raw = toolArgs[++i];
+      const parsed = tryJson(raw || "");
+      if (!raw || typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        fail(`invalid --args "${raw}" (expected a JSON object)`);
+      }
+      Object.assign(input, parsed);
+    } else if (a.startsWith("--args=")) {
+      const raw = a.slice("--args=".length);
+      const parsed = tryJson(raw);
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        fail(`invalid --args "${raw}" (expected a JSON object)`);
+      }
+      Object.assign(input, parsed);
+    } else if (a.includes("=")) {
+      const eq = a.indexOf("=");
+      input[a.slice(0, eq)] = coerceValue(a.slice(eq + 1));
+    } else {
+      fail(`unexpected argument "${a}" (expected key=value or --args '<json>')`);
+    }
+  }
+
+  const r = await mcpRpc(port, token, 3, "tools/call", { name, arguments: input });
+  const result = r?.result ?? {};
+  if (raw) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    const texts = (result.content || [])
+      .filter((c: any) => c.type === "text")
+      .map((c: any) => c.text);
+    if (texts.length) {
+      console.log(texts.join("\n"));
+    } else if (result.structuredContent !== undefined) {
+      console.log(JSON.stringify(result.structuredContent, null, 2));
+    } else {
+      console.log("(tool returned no content)");
+    }
+  }
+  // Tool-level errors (isError) print their text but exit non-zero.
+  if (result.isError) {
+    process.exitCode = 1;
+  }
+}
+
+const COMMANDS = ["ps", "info", "logs", "grep", "start", "restart", "stop", "ping", "mcptool"];
 
 export function isClientCommand(arg: string | undefined): boolean {
   return !!arg && COMMANDS.includes(arg);
@@ -296,6 +478,9 @@ export function clientHelp(): string {
     "  restart <id>                          Restart a process",
     "  stop <id>                             Stop and delete a process",
     "  ping                                  Check the backend is reachable",
+    "  mcptool                               List MCP tools",
+    "  mcptool <name>                        Show an MCP tool's description + schema",
+    "  mcptool <name> [key=value ...] [--args <json>] [--raw]   Call an MCP tool",
     "",
     "Flags: --port <n> (or PROCM_HTTP_PORT), --token <t> (or PROCM_HTTP_TOKEN)",
   ].join("\n");
@@ -325,6 +510,8 @@ export async function runClient(argv: string[]): Promise<void> {
       return cmdStop(p, args, t);
     case "ping":
       return cmdPing(p, t);
+    case "mcptool":
+      return cmdMcpTool(p, args, t);
     default:
       console.error(clientHelp());
       fail(`unknown command "${command}"`);

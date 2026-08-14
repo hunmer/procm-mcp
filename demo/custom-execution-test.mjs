@@ -22,14 +22,16 @@ try {
   assert.equal(backend.roomId, client.roomId);
   assert.equal(typeof backend.pid, "number");
 
-  const uiValue = await executeCustom(
-    client,
-    "frontend",
-    (context, selector) => context.getUiValue(selector),
-    ["#ui-value"],
-  );
-  assert.equal(uiValue, "electron-demo-value");
-  console.log(JSON.stringify({ ok: true, backend, uiValue }, null, 2));
+  const baseUrl = `http://127.0.0.1:${process.env.PORT || 4444}`;
+  const page = await fetch(baseUrl);
+  assert.equal(page.status, 200);
+  assert.match(await page.text(), /async function loadElectronData\(\)/);
+
+  const response = await fetch(`${baseUrl}/api/electron-data`);
+  const result = await response.json();
+  assert.equal(response.status, 200, result.error);
+  assert.equal(result.electron.uiValue, "electron-demo-value");
+  console.log(JSON.stringify({ ok: true, backend, electron: result.electron }, null, 2));
 } finally {
   client.close();
 }

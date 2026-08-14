@@ -91,6 +91,28 @@ interface LogPanelProps {
 const HISTORY_COUNT = 100;
 const GREP_COUNT = 500;
 
+// Whether structured JSON payloads are rendered as an interactive tree.
+// Persisted to localStorage (best-effort) matching the useTheme.ts pattern.
+const SHOW_JSON_KEY = "procm-log-show-json";
+
+function loadShowJson(): boolean {
+  if (typeof localStorage === "undefined") return true;
+  try {
+    const v = localStorage.getItem(SHOW_JSON_KEY);
+    return v === null ? true : v === "1";
+  } catch {
+    return true;
+  }
+}
+
+function persistShowJson(v: boolean): void {
+  try {
+    localStorage.setItem(SHOW_JSON_KEY, v ? "1" : "0");
+  } catch {
+    // localStorage may be unavailable (private mode); ignore.
+  }
+}
+
 // Structured-level filters shown as a compact segmented control. Legacy plain
 // lines remain visible under "all" while exact levels show SDK Logger entries.
 const LEVEL_FILTERS: {
@@ -125,6 +147,9 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
   const [showTime, setShowTime] = useState(true);
   // Whether a line-number badge is shown at the start of each row.
   const [showLineNumbers, setShowLineNumbers] = useState(false);
+  // Whether structured JSON payloads are rendered as an interactive tree.
+  // Loaded from / persisted to localStorage so the choice survives reloads.
+  const [showJson, setShowJson] = useState<boolean>(loadShowJson);
   // Whether the view auto-scrolls to keep the latest line in sight. Pausing
   // lets the user scroll up to read older output while new logs stream in;
   // re-enabling snaps back to the bottom immediately.
@@ -745,6 +770,16 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
                 />
                 {t("logs.autoScrollOption")}
               </label>
+              <label className="hover:bg-accent flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm">
+                <Checkbox
+                  checked={showJson}
+                  onCheckedChange={(v) => {
+                    setShowJson(v);
+                    persistShowJson(v);
+                  }}
+                />
+                {t("logs.jsonOption")}
+              </label>
               <Separator className="my-1" />
               {/* Font size: segmented pick of small / medium / large. */}
               <div className="px-1 pb-1">
@@ -838,6 +873,7 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
               entries={visibleEntries}
               showTime={showTime}
               showLineNumbers={showLineNumbers}
+              showJson={showJson}
               formatTime={formatTime}
               highlight={highlightRegex}
               className={`${fontTextClass} ${fontLineClass}`}

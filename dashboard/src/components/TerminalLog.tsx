@@ -2,7 +2,24 @@ import { useMemo } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { cn } from "@/registry/default/lib/utils";
 import { tokenizeAnsi, type AnsiSegment } from "./ansi";
+import { JsonViewer, type JsonValue } from "./JsonViewer";
 import type { LogEntry } from "@/lib/types";
+
+// Log `data` payloads arrive as unknown (server-side JSON.parse output).
+// Guard that the value is purely JSON-shaped before feeding the tree.
+function isJsonValue(v: unknown): v is JsonValue {
+  if (v === null) return true;
+  switch (typeof v) {
+    case "string":
+    case "number":
+    case "boolean":
+      return true;
+    case "object":
+      return Object.values(v).every(isJsonValue);
+    default:
+      return false;
+  }
+}
 
 export { stripAnsi } from "./ansi";
 
@@ -94,6 +111,7 @@ function TerminalLine({
   index,
   showTime,
   showLineNumbers,
+  showJson,
   formatTime,
   highlight,
 }: {
@@ -101,6 +119,7 @@ function TerminalLine({
   index: number;
   showTime: boolean;
   showLineNumbers: boolean;
+  showJson: boolean;
   formatTime: (ts: number) => string;
   highlight: RegExp | null;
 }) {
@@ -136,12 +155,12 @@ function TerminalLine({
       ) : (
         <AnsiText text={entry.message} highlight={highlight} />
       )}
-      {entry.data !== undefined && (
+      {showJson && isJsonValue(entry.data) && (
         <details className="ml-4 mt-0.5 text-zinc-400">
           <summary className="cursor-pointer select-none text-[11px] text-zinc-500">JSON</summary>
-          <pre className="my-1 overflow-x-auto border-l border-zinc-700 pl-2 text-[11px] leading-relaxed text-emerald-300">
-            {JSON.stringify(entry.data, null, 2)}
-          </pre>
+          <div className="my-1 max-w-full overflow-x-auto border-l border-zinc-700 pl-1">
+            <JsonViewer data={entry.data} rootName="data" defaultExpanded={1} mini />
+          </div>
         </details>
       )}
     </div>
@@ -152,6 +171,9 @@ export interface TerminalLogProps {
   entries: LogEntry[];
   showTime: boolean;
   showLineNumbers: boolean;
+  // Whether the structured `data` payload of an entry is rendered (as an
+  // interactive JSON tree). Toggled from the LogPanel view settings.
+  showJson: boolean;
   formatTime: (ts: number) => string;
   highlight: RegExp | null;
   className?: string;
@@ -165,6 +187,7 @@ export function TerminalLog({
   entries,
   showTime,
   showLineNumbers,
+  showJson,
   formatTime,
   highlight,
   className,
@@ -178,6 +201,7 @@ export function TerminalLog({
           index={i}
           showTime={showTime}
           showLineNumbers={showLineNumbers}
+          showJson={showJson}
           formatTime={formatTime}
           highlight={highlight}
         />

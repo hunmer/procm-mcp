@@ -26,6 +26,20 @@ client.onState((state) => {
             true,
           );
         },
+        getRendererData: async () => {
+          if (!window || window.isDestroyed()) throw new Error("Electron window is not ready");
+          return window.webContents.executeJavaScript(`(() => {
+            const value = (selector) => document.querySelector(selector)?.textContent ?? null;
+            return {
+              identity: value("#identity"),
+              status: value("#status"),
+              backend: value("#backend"),
+              roundtrips: value("#roundtrips"),
+              members: value("#members"),
+              uiValue: value("#ui-value"),
+            };
+          })()`, true);
+        },
       },
     });
   } else if (stopCustomExecution) {

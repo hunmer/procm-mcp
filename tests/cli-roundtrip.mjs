@@ -92,6 +92,54 @@ await runTest("grep finds the pattern", async () => {
   assert(r.stdout.includes("tick"), "grep shows tick");
 });
 
+await runTest("mcptool lists MCP tools", async () => {
+  const r = await cli("mcptool");
+  assertEqual(r.code, 0, "mcptool list exit 0");
+  assert(r.stdout.includes("start-process"), "lists start-process");
+  assert(r.stdout.includes("TOOL"), "table header");
+});
+
+await runTest("mcptool shows a tool schema", async () => {
+  const r = await cli("mcptool", "start-process");
+  assertEqual(r.code, 0, "mcptool schema exit 0");
+  assert(r.stdout.includes("Input schema:"), "prints schema section");
+  assert(r.stdout.includes("script"), "schema mentions script");
+});
+
+await runTest("mcptool calls a tool with key=value args", async () => {
+  const r = await cli("mcptool", "process", "action=list");
+  assertEqual(r.code, 0, "mcptool call exit 0");
+  assert(/No processes|Running processes/.test(r.stdout), "process list answered");
+});
+
+await runTest("mcptool --raw outputs JSON", async () => {
+  const r = await cli("mcptool", "process", "action=list", "--raw");
+  assertEqual(r.code, 0, "mcptool raw exit 0");
+  const parsed = JSON.parse(r.stdout);
+  assert(!!parsed.content, "raw result has content");
+});
+
+await runTest("mcptool calls a tool with --args JSON and cleans up", async () => {
+  const r = await cli(
+    "mcptool",
+    "start-process",
+    "--args",
+    JSON.stringify({
+      script: "node",
+      args: ["-e", "setInterval(()=>console.log('mt'),500)"],
+      cwd: projectRoot,
+      name: "mcptool-probe",
+    }),
+  );
+  assertEqual(r.code, 0, "start via mcptool exit 0");
+  assert(/Process started/.test(r.stdout), "start via mcptool");
+  const m = r.stdout.match(/ID: ([^\s)]+)/);
+  assert(!!m, "start prints an id");
+
+  const stop = await cli("stop", m[1]);
+  assertEqual(stop.code, 0, "mcptool-started process stops via CLI");
+});
+
 await runTest("restart then stop", async () => {
   const restart = await cli("restart", startedId);
   assertEqual(restart.code, 0, "restart exit 0");
