@@ -15,16 +15,18 @@ import { registerProcessInputTools } from "./tools/process-input.js";
 import { registerProcmCommandsTools } from "./tools/procm-commands.js";
 import { registerRoomTools } from "./tools/room.js";
 import { isClientCommand, runClient, clientHelp } from "./cli-client.js";
+import path from "path";
 
 const DEFAULT_SERVER_PORT = 7331;
 
 // Minimal CLI flag parsing. Supports:
 //   --server            Run as an HTTP-only backend (no MCP stdio transport)
 //   --port <number>     Dashboard port (with --server, client --port, or override PROCM_HTTP_PORT)
+//   --data-path <path>  Override the persistent data directory
 // Client subcommands (ps/info/logs/grep/start/restart/stop/ping) are detected
 // separately and connect to a running backend instead of starting one.
 function parseArgs(argv: string[]) {
-  const flags = { server: false, port: NaN as number };
+  const flags = { server: false, port: NaN as number, dataPath: undefined as string | undefined };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--server") {
@@ -34,10 +36,16 @@ function parseArgs(argv: string[]) {
       i++;
     } else if (a.startsWith("--port=")) {
       flags.port = Number(a.slice("--port=".length));
+    } else if (a === "--data-path") {
+      flags.dataPath = argv[i + 1] ?? "";
+      i++;
+    } else if (a.startsWith("--data-path=")) {
+      flags.dataPath = a.slice("--data-path=".length);
     } else if (a === "--help" || a === "-h") {
       process.stdout.write(
         [
-          "Usage: procm-mcp [--server] [--port <number>]",
+          "Usage: procm-mcp [--server] [--port <number>] [--data-path <path>]",
+          "       procm-mcp <client-command> [args] [--port <n>] [--token <t>]",
           "",
           "Modes:",
           "  (default)         MCP server over stdio. Optional HTTP dashboard if PROCM_HTTP_PORT is set.",
@@ -45,9 +53,11 @@ function parseArgs(argv: string[]) {
           "",
           "Options:",
           "  --port <number>   Dashboard port (default: 7331, or PROCM_HTTP_PORT).",
+          "  --data-path <path>  Data directory (default: PROCM_MCP_DIR or the system temp directory).",
           "  -h, --help        Show this help.",
         ].join("\n") + "\n",
       );
+      process.stdout.write("\n" + clientHelp() + "\n");
       process.exit(0);
     }
   }
@@ -56,6 +66,13 @@ function parseArgs(argv: string[]) {
 
 try {
   const cli = parseArgs(process.argv.slice(2));
+  if (cli.dataPath !== undefined) {
+    if (!cli.dataPath.trim()) {
+      console.error("procm-mcp: --data-path requires a non-empty path.");
+      exitProcess(1);
+    }
+    process.env.PROCM_MCP_DIR = path.resolve(cli.dataPath);
+  }
 
   // Client mode: if the first positional arg is a client command (ps/info/...),
   // connect to a running backend over HTTP and run it, then exit. This does NOT

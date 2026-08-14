@@ -68,13 +68,6 @@ function asset(
 // Dashboard bundle state is resolved once per server start. If unavailable,
 // GET / falls back to the "not built" page; assets 404.
 const dashboardState = getDashboardServeState();
-if (dashboardState.available) {
-  serverLog(`Serving built dashboard from ${dashboardState.distDir}`);
-} else {
-  serverLog(
-    "Dashboard bundle not found (dashboard/dist). Run `npm run build:dashboard`. Serving fallback page at /.",
-  );
-}
 
 function toPublicView(p: ProcessMetadata) {
   return {
@@ -1021,6 +1014,13 @@ function createRequestHandler(token: string | undefined) {
 // failure so the caller can surface it instead of letting it reach
 // `uncaughtException`.
 export function startHttpServer(port: number): Promise<http.Server> {
+  if (dashboardState.available) {
+    serverLog(`Serving built dashboard from ${dashboardState.distDir}`);
+  } else {
+    serverLog(
+      "Dashboard bundle not found (dashboard/dist). Run `npm run build:dashboard`. Serving fallback page at /.",
+    );
+  }
   const token = process.env.PROCM_HTTP_TOKEN;
   setConnectionConfig(port, token);
   const server = http.createServer(createRequestHandler(token));

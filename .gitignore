@@ -3,3 +3,4 @@ build
 settings.local.json
 dashboard/node_modules
 dashboard/dist
+.procm-mcp-data

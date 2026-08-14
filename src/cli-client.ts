@@ -40,7 +40,8 @@ function fail(msg: string, code = 1): never {
   process.exit(code);
 }
 
-// Parse global flags (--port, --token) out of argv, returning the rest.
+// Parse global flags out of argv, returning the rest. --data-path only affects
+// backend mode, but strip it here so it is never forwarded to a started script.
 function splitFlags(argv: string[]): { rest: string[]; port: number | undefined; token?: string } {
   let port: number | undefined;
   let token: string | undefined;
@@ -55,6 +56,10 @@ function splitFlags(argv: string[]): { rest: string[]; port: number | undefined;
       token = argv[++i];
     } else if (a.startsWith("--token=")) {
       token = a.slice("--token=".length);
+    } else if (a === "--data-path") {
+      i++;
+    } else if (a.startsWith("--data-path=")) {
+      // Backend-only flag; ignored in client mode.
     } else {
       rest.push(a);
     }

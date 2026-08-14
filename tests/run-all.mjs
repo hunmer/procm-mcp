@@ -15,6 +15,7 @@ const scripts = [
   "http-api.mjs",
   "mcp-http.mjs",
   "cli-roundtrip.mjs",
+  "data-path.mjs",
   "room-sdk.mjs",
 ];
 

@@ -83,9 +83,14 @@ node ./node_modules/procm-mcp/build/index.js --server
 
 # Or pick a port
 node ./node_modules/procm-mcp/build/index.js --server --port 8080
+
+# Keep this instance's process history and logs isolated
+node ./node_modules/procm-mcp/build/index.js --server --port 8080 --data-path .procm-mcp-data
 ```
 
 `--port <number>` also works in the default (stdio) mode to start the dashboard without setting `PROCM_HTTP_PORT`. It takes precedence over `PROCM_HTTP_PORT`.
+
+`--data-path <path>` selects the directory used for process history, rooms, and logs. Relative paths are resolved from the current working directory. It takes precedence over `PROCM_MCP_DIR`; without either setting, data is stored under the system temporary directory.
 
 ### Connect over HTTP (`type: "http"`)
 

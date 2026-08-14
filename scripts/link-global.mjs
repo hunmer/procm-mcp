@@ -40,7 +40,12 @@ function npmGlobalBin() {
     encoding: "utf8",
     shell: true,
   });
-  return r.stdout.trim();
+  const prefix = r.stdout.trim();
+  // On Unix the shims live in <prefix>/bin (e.g. ~/.nvm/versions/node/vX/bin);
+  // on Windows the prefix itself IS the bin dir. Comparing the bare prefix on
+  // Unix never matches a PATH entry, so the reachability check would always
+  // fail — even though `command -v procm-mcp` works.
+  return process.platform === "win32" || !prefix ? prefix : `${prefix}/bin`;
 }
 
 console.log("▸ Step 1/3: Build");
