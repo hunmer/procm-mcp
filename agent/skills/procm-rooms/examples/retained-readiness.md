@@ -7,7 +7,7 @@ client.onState((state) => {
   if (state === "open") {
     client.publish(
       "backend:ready",
-      { initializedAt: Date.now(), port: 4310 },
+      { initializedAt: Date.now(), port: 4444 },
       { retain: true },
     );
   }

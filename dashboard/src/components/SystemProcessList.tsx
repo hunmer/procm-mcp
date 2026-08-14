@@ -271,15 +271,19 @@ export function SystemProcessList({
     () => [
       {
         accessorKey: "name",
+        // Fixed width: long names wrap onto multiple lines instead of
+        // truncating or squeezing the other columns (applied to the header
+        // and cells via colWidthClass below).
+        meta: { className: "w-[240px] min-w-[240px] max-w-[240px]" },
         header: ({ column }) => (
           <SortableHeader column={column} label={t("system.colName")} />
         ),
         cell: ({ row }) => {
           const r = row.original;
           return (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-baseline gap-1.5">
               <span
-                className="font-medium min-w-0 flex-1 truncate"
+                className="font-medium min-w-0 flex-1 break-words"
                 title={r.cmd ?? r.name}
               >
                 {r.name}
@@ -644,10 +648,14 @@ export function SystemProcessList({
                 <TableRow key={headerGroup.id}>
                   {headerGroup.headers.map((header) => {
                     const pin = pinnedColAttrs(header.column, true);
+                    const width = colWidthClass(header.column);
                     return (
                       <TableHead
                         key={header.id}
-                        className={pin.className}
+                        className={
+                          [width, pin.className].filter(Boolean).join(" ") ||
+                          undefined
+                        }
                         style={pin.style}
                       >
                         {header.isPlaceholder
@@ -695,10 +703,14 @@ export function SystemProcessList({
                       >
                         {row.getVisibleCells().map((cell) => {
                           const pin = pinnedColAttrs(cell.column, false);
+                          const width = colWidthClass(cell.column);
                           return (
                             <TableCell
                               key={cell.id}
-                              className={pin.className}
+                              className={
+                                [width, pin.className].filter(Boolean).join(" ") ||
+                                undefined
+                              }
                               style={pin.style}
                             >
                               {flexRender(
@@ -746,7 +758,7 @@ export function SystemProcessList({
           the same SystemProcessInfo as the "view info" dialog so the two stay
           in sync. Closes (deselects) via the × button. */}
       {selected && (
-        <aside className="bg-card flex h-full w-80 shrink-0 flex-col border-l">
+        <aside className="bg-card flex h-full w-[420px] shrink-0 flex-col border-l">
           <div className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-2.5">
             <div className="min-w-0">
               <div className="truncate text-sm font-medium" title={selected.name}>
@@ -966,6 +978,15 @@ function SortableHeader({
       </span>
     </button>
   );
+}
+
+// Optional per-column width classes, declared on the columnDef's meta and
+// applied to both the header and every cell of that column (merged with the
+// sticky-pin classes at the render sites). Currently used to give the
+// wrapping name column a fixed width.
+function colWidthClass(column: Column<ProcessRow>): string | undefined {
+  return (column.columnDef.meta as { className?: string } | undefined)
+    ?.className;
 }
 
 // Generic sticky-column styling (the Processes table's pinnedColAttrs is typed
@@ -1331,7 +1352,7 @@ function SystemProcessInfo({
             {t("system.groupMembers")}
           </div>
           {row.members.map((m) => (
-            <div key={m.pid} className="flex items-baseline gap-2 text-xs">
+            <div key={m.pid} className="flex items-center gap-2 text-xs">
               <span className="text-muted-foreground shrink-0 font-mono tabular-nums">
                 {m.pid}
               </span>
@@ -1341,6 +1362,20 @@ function SystemProcessInfo({
               >
                 {m.cmd ?? "—"}
               </span>
+              {m.cmd && (
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  className="text-muted-foreground shrink-0"
+                  aria-label={t("system.copyCommand")}
+                  title={t("system.copyCommand")}
+                  onClick={() =>
+                    onCopy(m.cmd as string, t("system.colCommand"))
+                  }
+                >
+                  <CopyIcon />
+                </Button>
+              )}
             </div>
           ))}
         </div>

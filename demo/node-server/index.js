@@ -1,7 +1,7 @@
 import http from "node:http";
 import { createLogger, createProcmClient, exposeCustomExecution } from "@procm-mcp/sdk";
 
-const port = Number(process.env.PORT || 4310);
+const port = Number(process.env.PORT || 4444);
 const client = createProcmClient({ clientName: "backend" });
 const logger = createLogger({ client });
 let stopCustomExecution = null;
