@@ -37,12 +37,14 @@ export interface ProcessListResponse {
 // processes. `cmd` is the full command line (exe path + args) and `exe` the
 // executable path; either may be null on platforms/scopes that don't expose
 // them (kernel processes, or non-Windows where only `cmd` is known).
+// `ports` lists TCP ports the process is listening on (undefined when none).
 export interface SystemProcess {
   pid: number;
   ppid: number;
   name: string;
   cmd: string | null;
   exe: string | null;
+  ports?: number[];
 }
 
 export interface SystemProcessListResponse {

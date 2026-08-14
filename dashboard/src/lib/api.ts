@@ -5,6 +5,7 @@ import type {
   ProcessStream,
   ProcessView,
   StartProcessBody,
+  SystemProcess,
   SystemProcessListResponse,
 } from "./types";
 
@@ -278,6 +279,19 @@ export function killSystemProcess(pid: number): Promise<void> {
     "POST",
     `/api/system-processes/${pid}/kill`,
   ).then(() => undefined);
+}
+
+// Look up the process(es) listening on a TCP port (the toolbar "view port"
+// feature), via find-process on the backend. Returns the owning process rows
+// (possibly empty). Each row carries the queried port in its `ports` field.
+export async function findProcessByPort(
+  port: number,
+): Promise<SystemProcess[]> {
+  const r = await api<{ port: number; processes: SystemProcess[] }>(
+    "GET",
+    `/api/system-processes/port/${port}`,
+  );
+  return r.processes;
 }
 
 // Write to a running process's stdin or deliver an OS signal to it. Used by the

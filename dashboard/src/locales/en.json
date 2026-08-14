@@ -128,10 +128,6 @@
     "liveRefresh": "Live",
     "refreshNow": "Refresh now",
     "countOfTotal": "{{shown}} of {{total}}",
-    "paginationViewing": "Viewing {{start}}–{{end}} of {{total}}",
-    "paginationPage": " · page {{page}}/{{pages}}",
-    "previousPage": "Previous page",
-    "nextPage": "Next page",
     "empty": "No processes",
     "emptyFiltered": "No processes match the filters",
     "errorTitle": "Failed to load processes",
@@ -154,7 +150,15 @@
     "copiedToast": "Copied {{label}}",
     "copyFailedToast": "Copy failed",
     "noLocationToast": "No location available for {{name}}",
-    "revealFailedToast": "Failed to open location for {{name}}: {{error}}"
+    "revealFailedToast": "Failed to open location for {{name}}: {{error}}",
+    "portBadgeTitle": "Listening on port {{port}} — open http://localhost:{{port}}",
+    "portLookupTitle": "View port",
+    "portLookupDescription": "Find the process listening on a TCP port.",
+    "portPlaceholder": "Port number, e.g. 3000",
+    "portFind": "Find",
+    "invalidPortToast": "Enter a port between 1 and 65535",
+    "portNotFoundToast": "No process is listening on port {{port}}",
+    "portLookupFailedToast": "Port lookup failed: {{error}}"
   },
   "logs": {
     "panelTitle": "Logs: {{name}}",

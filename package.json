@@ -34,6 +34,8 @@
   "keywords": [],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.3",
+    "find-process": "^2.1.1",
+    "get-ports-natively": "^1.0.13",
     "lowdb": "^7.0.1",
     "mkdirp": "^3.0.1",
     "nanoid": "^5.1.5",

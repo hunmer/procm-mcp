@@ -128,10 +128,6 @@
     "liveRefresh": "实时刷新",
     "refreshNow": "立即刷新",
     "countOfTotal": "{{shown}} / {{total}}",
-    "paginationViewing": "查看 {{start}}–{{end}}，共 {{total}}",
-    "paginationPage": " · 第 {{page}}/{{pages}} 页",
-    "previousPage": "上一页",
-    "nextPage": "下一页",
     "empty": "暂无进程",
     "emptyFiltered": "没有符合过滤条件的进程",
     "errorTitle": "加载进程失败",
@@ -154,7 +150,15 @@
     "copiedToast": "已复制 {{label}}",
     "copyFailedToast": "复制失败",
     "noLocationToast": "{{name}} 没有可用的位置信息",
-    "revealFailedToast": "打开 {{name}} 的位置失败：{{error}}"
+    "revealFailedToast": "打开 {{name}} 的位置失败：{{error}}",
+    "portBadgeTitle": "正在监听端口 {{port}} —— 打开 http://localhost:{{port}}",
+    "portLookupTitle": "查看端口",
+    "portLookupDescription": "查找监听某个 TCP 端口的进程。",
+    "portPlaceholder": "端口号，例如 3000",
+    "portFind": "查找",
+    "invalidPortToast": "请输入 1 到 65535 之间的端口号",
+    "portNotFoundToast": "没有进程在监听端口 {{port}}",
+    "portLookupFailedToast": "端口查找失败：{{error}}"
   },
   "logs": {
     "panelTitle": "日志：{{name}}",

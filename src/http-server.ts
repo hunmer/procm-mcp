@@ -28,7 +28,7 @@ import { ProcessMetadata } from "./types.js";
 import { handleMcpRequest } from "./mcp-http.js";
 import { attachWebsocketServer } from "./websocket-server.js";
 import { scanProjectCommands } from "./project-scanner.js";
-import { listSystemProcesses, killProcessTree } from "./system-processes.js";
+import { listSystemProcesses, killProcessTree, findProcessByPort } from "./system-processes.js";
 
 const HOST = "127.0.0.1";
 
@@ -596,6 +596,23 @@ function createRequestHandler(token: string | undefined) {
           json(res, 200, { ok: true, pid });
         } catch (e) {
           json(res, 400, { error: toErrorMessage(e) });
+        }
+        return;
+      }
+
+      // GET /api/system-processes/port/:port -> find the process(es) listening
+      // on a TCP port (the toolbar "view port" lookup), via find-process.
+      // Returns an empty array when nothing is listening on that port.
+      const portMatch = pathname.match(
+        /^\/api\/system-processes\/port\/(\d+)$/,
+      );
+      if (method === "GET" && portMatch) {
+        const port = Number(portMatch[1]);
+        try {
+          const processes = await findProcessByPort(port);
+          json(res, 200, { port, processes });
+        } catch (e) {
+          json(res, 500, { error: toErrorMessage(e) });
         }
         return;
       }

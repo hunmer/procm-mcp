@@ -4,27 +4,25 @@ import { useTranslation } from "react-i18next";
 import {
   type ColumnDef,
   type Column,
-  type PaginationState,
   type SortingState,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
   CopyIcon,
   EyeIcon,
   FolderOpenIcon,
+  GlobeIcon,
   InboxIcon,
+  NetworkIcon,
   RefreshCwIcon,
   SearchIcon,
   SkullIcon,
+  XIcon,
 } from "lucide-react";
 import { Button } from "@/registry/default/ui/button";
 import { Badge } from "@/registry/default/ui/badge";
@@ -55,11 +53,6 @@ import {
   EmptyTitle,
 } from "@/registry/default/ui/empty";
 import {
-  Pagination,
-  PaginationContent,
-  PaginationItem,
-} from "@/registry/default/ui/pagination";
-import {
   ContextMenu,
   ContextMenuItem,
   ContextMenuPopup,
@@ -85,6 +78,7 @@ import {
   DialogTitle,
 } from "@/registry/default/ui/dialog";
 import {
+  findProcessByPort,
   killSystemProcess,
   listSystemProcesses,
   revealPath,
@@ -95,7 +89,6 @@ import type { SystemProcess } from "@/lib/types";
 // view-mode best-effort pattern; storage may be unavailable in private mode).
 const LIVE_KEY = "procm.sysLive";
 const INTERVAL_KEY = "procm.sysInterval";
-const SYS_PAGE_SIZE = 25;
 
 const INTERVAL_OPTIONS = [1000, 2000, 3000, 5000] as const;
 
@@ -132,14 +125,10 @@ export function SystemProcessList({
   const [pathFilter, setPathFilter] = useState("");
   const [cmdFilter, setCmdFilter] = useState("");
 
-  const [pagination, setPagination] = useState<PaginationState>({
-    pageIndex: 0,
-    pageSize: SYS_PAGE_SIZE,
-  });
-  // Default to newest-first by PID (higher PID ≈ more recently started).
-  const [sorting, setSorting] = useState<SortingState>([
-    { id: "pid", desc: true },
-  ]);
+  // No default column sort: the natural order is "listening ports first, then
+  // by name" (see compareSystemProcesses), applied below in sortedData. The
+  // sorting state here is only what the user explicitly selects via headers.
+  const [sorting, setSorting] = useState<SortingState>([]);
 
   // The process awaiting kill confirmation (null = dialog closed). The button
   // itself doesn't kill directly — it arms this, and the dialog's confirm
@@ -149,6 +138,14 @@ export function SystemProcessList({
   const [killingPid, setKillingPid] = useState<number | null>(null);
   // The process shown in the read-only "view info" dialog (null = closed).
   const [viewing, setViewing] = useState<SystemProcess | null>(null);
+  // The process selected for the inline right-hand info panel. Clicking a row
+  // sets this; the panel reuses the same SystemProcessInfo body as the dialog.
+  const [selected, setSelected] = useState<SystemProcess | null>(null);
+  // Toolbar "view port" lookup: a dialog with a port input that runs
+  // find-process on the backend and opens the info dialog for the owner.
+  const [portLookupOpen, setPortLookupOpen] = useState(false);
+  const [portInput, setPortInput] = useState("");
+  const [portLookingUp, setPortLookingUp] = useState(false);
 
   // Non-overlapping fetch guard: a slow PowerShell run shouldn't stack on top
   // of the next interval tick. Kept in a ref so the polling effect (registered
@@ -204,6 +201,16 @@ export function SystemProcessList({
     }
   }, [processes, pendingKill]);
 
+  // Keep the right-panel selection live across refreshes: swap in the matching
+  // pid from the fresh snapshot (so e.g. port badges update), and clear it if
+  // the process has gone away. Reads `cur` inside the updater so it doesn't
+  // need `selected` as a dependency (which would re-run every selection).
+  useEffect(() => {
+    setSelected(
+      (cur) => (cur ? processes.find((p) => p.pid === cur.pid) ?? null : null),
+    );
+  }, [processes]);
+
   // Apply the three filters to the latest snapshot. Each matches its own field;
   // an empty filter is a no-op. `exe` falls back to `cmd` on platforms where
   // the executable path isn't exposed separately (non-Windows).
@@ -226,6 +233,16 @@ export function SystemProcessList({
     });
   }, [processes, nameFilter, pathFilter, cmdFilter]);
 
+  // Stable row order: processes listening on a port ALWAYS come first (so
+  // servers stay visible at the top regardless of which column is sorted),
+  // then the user's selected column (if any), then by name as a tiebreaker.
+  // The table uses getCoreRowModel only (no getSortedRowModel) so this order
+  // is authoritative; the sorting state still drives the header indicators.
+  const sortedData = useMemo(
+    () => [...filteredData].sort((a, b) => compareSystemProcesses(a, b, sorting)),
+    [filteredData, sorting],
+  );
+
   const columns = useMemo<ColumnDef<SystemProcess>[]>(
     () => [
       {
@@ -236,9 +253,14 @@ export function SystemProcessList({
         cell: ({ row }) => {
           const p = row.original;
           return (
-            <span className="font-medium" title={p.cmd ?? p.name}>
-              {p.name}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="font-medium truncate" title={p.cmd ?? p.name}>
+                {p.name}
+              </span>
+              {p.ports?.map((port) => (
+                <PortBadge key={port} port={port} />
+              ))}
+            </div>
           );
         },
       },
@@ -342,21 +364,20 @@ export function SystemProcessList({
   );
 
   const table = useReactTable({
-    data: filteredData,
+    data: sortedData,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    onPaginationChange: setPagination,
+    // NOTE: no getSortedRowModel — sorting is applied in sortedData above so the
+    // "ports first" primary key is always honored (see compareSystemProcesses).
+    // No pagination model either — all rows render in one scrollable region.
     onSortingChange: setSorting,
-    autoResetPageIndex: false,
     // Pin name left + actions right so both survive horizontal scroll, matching
     // the Processes table convention (pinnedColAttrs reads these back).
     initialState: {
       columnPinning: { left: ["name"], right: ["actions"] },
     },
-    state: { pagination, sorting },
+    state: { sorting },
   });
 
   // Perform the kill: call the backend (tree-kill), toast the result, then
@@ -422,14 +443,54 @@ export function SystemProcessList({
     [onToast, t],
   );
 
+  // All distinct listening ports across the current snapshot, sorted. Powers
+  // the quick-pick chips in the "view port" lookup dialog.
+  const knownPorts = useMemo(() => {
+    const set = new Set<number>();
+    for (const p of processes) for (const port of p.ports ?? []) set.add(port);
+    return [...set].sort((a, b) => a - b);
+  }, [processes]);
+
+  // Look up the owner of a port via find-process (backend). On a hit, close the
+  // lookup dialog and open the read-only info dialog for the owning process;
+  // otherwise toast that nothing is listening there.
+  const handlePortLookup = useCallback(
+    async (e?: React.FormEvent) => {
+      e?.preventDefault();
+      const port = Number(portInput);
+      if (!Number.isFinite(port) || port < 1 || port > 65535) {
+        onToast(t("system.invalidPortToast"), true);
+        return;
+      }
+      setPortLookingUp(true);
+      try {
+        const found = await findProcessByPort(port);
+        if (found.length === 0) {
+          onToast(t("system.portNotFoundToast", { port }), true);
+          return;
+        }
+        setPortLookupOpen(false);
+        setPortInput("");
+        setViewing(found[0]);
+      } catch (err) {
+        onToast(
+          t("system.portLookupFailedToast", {
+            error: err instanceof Error ? err.message : String(err),
+          }),
+          true,
+        );
+      } finally {
+        setPortLookingUp(false);
+      }
+    },
+    [portInput, onToast, t],
+  );
+
   const rowCount = table.getRowCount();
-  const pageCount = table.getPageCount();
-  const { pageIndex, pageSize } = pagination;
-  const rangeStart = rowCount === 0 ? 0 : pageIndex * pageSize + 1;
-  const rangeEnd = Math.min((pageIndex + 1) * pageSize, rowCount);
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0">
+    <div className="flex h-full min-w-0 flex-1 flex-col">
       {/* Filter + refresh bar. Three independent substring filters, a manual
           refresh button, and the live-refresh toggle with its interval. */}
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-4 py-2.5">
@@ -487,6 +548,15 @@ export function SystemProcessList({
               </SelectPopup>
             </Select>
           </div>
+          <Button
+            size="icon-sm"
+            variant="outline"
+            aria-label={t("system.portLookupTitle")}
+            title={t("system.portLookupTitle")}
+            onClick={() => setPortLookupOpen(true)}
+          >
+            <NetworkIcon className="size-3.5" />
+          </Button>
           <Button
             size="icon-sm"
             variant="outline"
@@ -552,11 +622,15 @@ export function SystemProcessList({
                       <ContextMenuTrigger
                         render={
                           <TableRow
-                            className="group"
+                            className="group cursor-pointer"
+                            data-state={
+                              selected?.pid === p.pid ? "selected" : undefined
+                            }
                             title={t("system.rowHint", {
                               name: p.name,
                               pid: p.pid,
                             })}
+                            onClick={() => setSelected(p)}
                           />
                         }
                       >
@@ -607,49 +681,36 @@ export function SystemProcessList({
           </Table>
         </div>
       )}
+    </div>
 
-      {/* Pagination footer: range + prev/next. Mirrors the Processes table. */}
-      {rowCount > 0 && (
-        <div className="flex shrink-0 items-center justify-between gap-2 border-t px-4 py-2.5">
-          <span className="text-muted-foreground whitespace-nowrap text-xs">
-            {t("system.paginationViewing", {
-              start: rangeStart,
-              end: rangeEnd,
-              total: rowCount,
-            })}
-            {pageCount > 1 &&
-              t("system.paginationPage", {
-                page: pageIndex + 1,
-                pages: pageCount,
-              })}
-          </span>
-          <Pagination>
-            <PaginationContent>
-              <PaginationItem>
-                <Button
-                  size="icon-sm"
-                  variant="outline"
-                  aria-label={t("system.previousPage")}
-                  disabled={!table.getCanPreviousPage()}
-                  onClick={() => table.previousPage()}
-                >
-                  <ChevronLeftIcon />
-                </Button>
-              </PaginationItem>
-              <PaginationItem>
-                <Button
-                  size="icon-sm"
-                  variant="outline"
-                  aria-label={t("system.nextPage")}
-                  disabled={!table.getCanNextPage()}
-                  onClick={() => table.nextPage()}
-                >
-                  <ChevronRightIcon />
-                </Button>
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
-        </div>
+      {/* Right-hand info panel. Clicking a row selects it here; the body reuses
+          the same SystemProcessInfo as the "view info" dialog so the two stay
+          in sync. Closes (deselects) via the × button. */}
+      {selected && (
+        <aside className="bg-card flex h-full w-80 shrink-0 flex-col border-l">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-2.5">
+            <div className="min-w-0">
+              <div className="truncate text-sm font-medium" title={selected.name}>
+                {selected.name}
+              </div>
+              <div className="text-muted-foreground font-mono text-xs tabular-nums">
+                PID {selected.pid}
+              </div>
+            </div>
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label={t("common.close")}
+              title={t("common.close")}
+              onClick={() => setSelected(null)}
+            >
+              <XIcon />
+            </Button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-auto p-4">
+            <SystemProcessInfo p={selected} onCopy={handleCopy} />
+          </div>
+        </aside>
       )}
 
       {/* Kill confirmation. Killing a tree is irreversible and takes down
@@ -709,6 +770,64 @@ export function SystemProcessList({
               p={viewing}
               onCopy={handleCopy}
             />
+          )}
+          <DialogFooter>
+            <DialogClose render={<Button variant="ghost" />}>
+              {t("common.close")}
+            </DialogClose>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
+
+      {/* Toolbar "view port" lookup: enter a port, the backend runs
+          find-process, and the owning process opens in the info dialog above.
+          Quick-pick chips list ports already seen in the current snapshot. */}
+      <Dialog
+        open={portLookupOpen}
+        onOpenChange={(o) => {
+          setPortLookupOpen(o);
+          if (!o) setPortInput("");
+        }}
+      >
+        <DialogPopup>
+          <DialogHeader>
+            <DialogTitle>{t("system.portLookupTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("system.portLookupDescription")}
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="flex items-center gap-2"
+            onSubmit={(e) => void handlePortLookup(e)}
+          >
+            <Input
+              value={portInput}
+              onChange={(e) => setPortInput(e.target.value)}
+              inputMode="numeric"
+              placeholder={t("system.portPlaceholder")}
+              className="h-8"
+              autoFocus
+            />
+            <Button type="submit" size="sm" loading={portLookingUp}>
+              {t("system.portFind")}
+            </Button>
+          </form>
+          {knownPorts.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {knownPorts.slice(0, 24).map((port) => (
+                <button
+                  key={port}
+                  type="button"
+                  onClick={() => {
+                    setPortInput(String(port));
+                    void handlePortLookup();
+                  }}
+                  className="hover:bg-accent rounded-md border px-1.5 py-0.5 font-mono text-[11px] leading-none"
+                >
+                  {port}
+                </button>
+              ))}
+            </div>
           )}
           <DialogFooter>
             <DialogClose render={<Button variant="ghost" />}>
@@ -792,7 +911,9 @@ function pinnedColAttrs(
   const hover = head
     ? ""
     : "group-hover:bg-[color-mix(in_srgb,var(--background),var(--color-black)_2%)] " +
-      "dark:group-hover:bg-[color-mix(in_srgb,var(--background),var(--color-white)_2%)]";
+      "group-data-[state=selected]:bg-[color-mix(in_srgb,var(--background),var(--color-black)_4%)] " +
+      "dark:group-hover:bg-[color-mix(in_srgb,var(--background),var(--color-white)_2%)] " +
+      "dark:group-data-[state=selected]:bg-[color-mix(in_srgb,var(--background),var(--color-white)_4%)]";
   return {
     style: {
       position: "sticky",
@@ -844,6 +965,78 @@ function exePathOf(p: SystemProcess): string | null {
   // Match either a leading quoted path ("...") or the first whitespace token.
   const m = p.cmd.match(/^"([^"]+)"|^(\S+)/);
   return m ? m[1] || m[2] || null : null;
+}
+
+// The raw comparable value for a sortable column. Numbers compare numerically
+// (pid/ppid); text compares case-insensitively.
+function sortValue(p: SystemProcess, id: string): number | string {
+  switch (id) {
+    case "pid":
+      return p.pid;
+    case "ppid":
+      return p.ppid;
+    case "name":
+      return p.name.toLowerCase();
+    case "path":
+      return (p.exe ?? "").toLowerCase();
+    case "command":
+      return (p.cmd ?? "").toLowerCase();
+    default:
+      return "";
+  }
+}
+
+// Authoritative row comparator for the System table. Ordering, in priority:
+//   1. Processes listening on a port ALWAYS come first (servers stay pinned to
+//      the top regardless of the active column sort).
+//   2. The user's selected column(s), in sorting-state order (asc/desc).
+//   3. Name ascending (case-insensitive, natural numeric order) as a stable
+//      tiebreaker — also the whole order when no column is selected.
+function compareSystemProcesses(
+  a: SystemProcess,
+  b: SystemProcess,
+  sorting: SortingState,
+): number {
+  const aHasPorts = (a.ports?.length ?? 0) > 0;
+  const bHasPorts = (b.ports?.length ?? 0) > 0;
+  if (aHasPorts !== bHasPorts) return aHasPorts ? -1 : 1;
+
+  for (const s of sorting) {
+    const av = sortValue(a, s.id);
+    const bv = sortValue(b, s.id);
+    let cmp: number;
+    if (typeof av === "number" && typeof bv === "number") {
+      cmp = av - bv;
+    } else {
+      cmp = String(av).localeCompare(String(bv));
+    }
+    if (cmp !== 0) return s.desc ? -cmp : cmp;
+  }
+
+  return a.name.localeCompare(b.name, undefined, {
+    sensitivity: "base",
+    numeric: true,
+  });
+}
+
+// A listening-port badge shown next to a process name. Clicking opens
+// http://localhost:<port> in a new tab; stopPropagation keeps the row's
+// context-menu trigger from also firing.
+function PortBadge({ port }: { port: number }) {
+  const { t } = useTranslation();
+  return (
+    <a
+      href={`http://localhost:${port}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className="hover:bg-accent inline-flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 font-mono text-[10px] leading-none"
+      title={t("system.portBadgeTitle", { port })}
+    >
+      <GlobeIcon className="size-2.5" />
+      {port}
+    </a>
+  );
 }
 
 // The right-click menu shared by the system-process rows: View info (opens the
