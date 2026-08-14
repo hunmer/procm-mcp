@@ -1,9 +1,8 @@
-import { createClient, type RedisClientType } from "redis";
-import { serverLog } from "./server-log.js";
+import { LRUCache } from "lru-cache";
 
-export const TRACE_KEY_PREFIX = "procm:trace:v1:";
 export const TRACE_DEFAULT_TTL_SECONDS = 86_400;
 export const TRACE_MAX_BYTES = 262_144;
+export const TRACE_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 export const TRACE_MIN_TTL_SECONDS = 1;
 export const TRACE_MAX_TTL_SECONDS = 604_800;
 
@@ -24,14 +23,13 @@ export class TraceStoreError extends Error {
   }
 }
 
-let client: RedisClientType | null = null;
-let connectPromise: Promise<RedisClientType> | null = null;
-
-function configuredUrl(): string {
-  const url = process.env.PROCM_REDIS_URL?.trim();
-  if (!url) throw new TraceStoreError("TRACE_REDIS_NOT_CONFIGURED", "Trace storage is not configured");
-  return url;
-}
+const traces = new LRUCache<string, string>({
+  maxSize: TRACE_CACHE_MAX_BYTES,
+  sizeCalculation: (value) => Buffer.byteLength(value, "utf8"),
+  ttlAutopurge: true,
+  allowStale: false,
+  updateAgeOnGet: false,
+});
 
 function configuredDefaultTtl(): number {
   const raw = process.env.PROCM_TRACE_TTL_SECONDS;
@@ -41,38 +39,6 @@ function configuredDefaultTtl(): number {
     throw new TraceStoreError("TRACE_INVALID_PAYLOAD", `PROCM_TRACE_TTL_SECONDS must be an integer from ${TRACE_MIN_TTL_SECONDS} to ${TRACE_MAX_TTL_SECONDS}`);
   }
   return value;
-}
-
-function normalizeUnavailable(error: unknown): TraceStoreError {
-  if (error instanceof TraceStoreError) return error;
-  return new TraceStoreError("TRACE_REDIS_UNAVAILABLE", "Trace storage is unavailable");
-}
-
-function discardClient(): void {
-  const active = client;
-  client = null;
-  if (!active) return;
-  try { active.destroy(); } catch { /* already closed */ }
-}
-
-async function getClient(): Promise<RedisClientType> {
-  configuredUrl();
-  if (client?.isReady) return client;
-  if (connectPromise) return connectPromise;
-  const next = createClient({
-    url: configuredUrl(),
-    socket: { connectTimeout: 1_000, reconnectStrategy: false },
-  });
-  next.on("error", () => serverLog("Trace Redis connection error"));
-  client = next;
-  connectPromise = next.connect().then(() => next).catch(async (error) => {
-    if (client === next) client = null;
-    try { next.destroy(); } catch { /* already closed */ }
-    throw normalizeUnavailable(error);
-  }).finally(() => {
-    connectPromise = null;
-  });
-  return connectPromise;
 }
 
 export function validateTraceId(id: string): string {
@@ -103,37 +69,17 @@ export async function putTrace(envelope: StoredTraceEnvelope, ttlSeconds?: numbe
   if (Buffer.byteLength(serialized, "utf8") > TRACE_MAX_BYTES) {
     throw new TraceStoreError("TRACE_INVALID_PAYLOAD", `Trace payload exceeds ${TRACE_MAX_BYTES} bytes`);
   }
-  try {
-    const redis = await getClient();
-    const result = await redis.set(`${TRACE_KEY_PREFIX}${id}`, serialized, { NX: true, EX: ttl });
-    if (result !== "OK") throw new TraceStoreError("TRACE_STORE_CONFLICT", "Trace ID already exists");
-  } catch (error) {
-    if (!(error instanceof TraceStoreError)) discardClient();
-    throw normalizeUnavailable(error);
-  }
+  if (traces.has(id)) throw new TraceStoreError("TRACE_STORE_CONFLICT", "Trace ID already exists");
+  traces.set(id, serialized, { ttl: ttl * 1_000 });
 }
 
 export async function getTrace(id: string): Promise<StoredTraceEnvelope> {
   const normalized = validateTraceId(id);
-  try {
-    const redis = await getClient();
-    const serialized = await redis.get(`${TRACE_KEY_PREFIX}${normalized}`);
-    if (serialized === null) throw new TraceStoreError("TRACE_NOT_FOUND", "Trace was not found or has expired");
-    return JSON.parse(serialized) as StoredTraceEnvelope;
-  } catch (error) {
-    if (!(error instanceof TraceStoreError)) discardClient();
-    throw normalizeUnavailable(error);
-  }
+  const serialized = traces.get(normalized);
+  if (serialized === undefined) throw new TraceStoreError("TRACE_NOT_FOUND", "Trace was not found, expired, or evicted");
+  return JSON.parse(serialized) as StoredTraceEnvelope;
 }
 
 export async function closeTraceStore(): Promise<void> {
-  const active = client;
-  client = null;
-  connectPromise = null;
-  if (!active) return;
-  try {
-    if (active.isOpen) await active.close();
-  } catch {
-    try { active.destroy(); } catch { /* already closed */ }
-  }
+  traces.clear();
 }

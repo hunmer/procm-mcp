@@ -40,7 +40,7 @@ await runTest("legacy structured logs remain compatible", () => {
   createLogger({ console: { debug: (x) => rows.push(x), info: (x) => rows.push(x), warn: (x) => rows.push(x), error: (x) => rows.push(x) } })
     .info("no context", undefined, { traceId: /** @type {any} */ (123) });
   assertEqual(decodeStructuredLogLine(rows[0]).traceId, 123, "logger does not throw while encoding runtime context values");
-  assert(!rows[0].includes("Redis") && !rows[0].includes("callChain"), "logger adds no trace or Redis detail text");
+  assert(!rows[0].includes("storage") && !rows[0].includes("callChain"), "logger adds no trace storage detail text");
 });
 
 summarize();

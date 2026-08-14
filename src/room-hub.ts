@@ -150,7 +150,7 @@ export function attachRoomSocket(socket: WebSocket): void {
       } catch (error) {
         const normalized = error instanceof TraceStoreError
           ? error
-          : new TraceStoreError("TRACE_REDIS_UNAVAILABLE", "Trace storage is unavailable");
+          : new TraceStoreError("TRACE_STORE_ERROR", "Trace storage failed");
         sendError(socket, normalized.code, normalized.message, frame.requestId);
       }
       return;

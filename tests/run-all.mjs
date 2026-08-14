@@ -19,6 +19,7 @@ const scripts = [
   "room-sdk.mjs",
   "sdk-hook.mjs",
   "trace-logger.mjs",
+  "trace-memory.mjs",
 ];
 
 function run(file) {

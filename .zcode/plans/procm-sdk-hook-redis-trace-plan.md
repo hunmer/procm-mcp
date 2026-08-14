@@ -2,12 +2,17 @@
 
 ## 0. 文档信息
 
-- 状态：待实施
+- 状态：已实施（存储方案已变更）
 - 编写日期：2026-08-15
 - 目标仓库：`/Users/Zhuanz/Documents/procm-mcp`
 - 需求来源：SDK hook 函数/变量，采集调用链与函数位置；详细数据写入 Redis；logger 仅输出关联 ID；MCP tool 按 ID 读取详情
 - 基线版本：`procm-mcp@0.0.44`、`@procm-mcp/sdk@0.1.0`
 - 实施原则：最小改动、保持兼容、业务控制台零额外追踪噪音、错误必须可观察
+
+> 2026-08-15 变更：确认实际只使用同一 procm-mcp 实例提供的 HTTP Stream MCP，
+> 不需要跨进程共享 Trace。Redis 已替换为当前进程内的 `lru-cache`（64 MiB 总上限、
+> 单条 256 KiB、默认 TTL 24 小时）；Trace 允许在进程重启、过期或 LRU 淘汰后丢失。
+> 本文后续 Redis、跨进程 stdio 读取及 Docker 验收条目作为原始设计记录，不再适用。
 
 ## 1. 目标与非目标
 

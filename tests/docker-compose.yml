@@ -1,9 +1,4 @@
 services:
-  redis-test:
-    image: redis:8-alpine
-    container_name: procm-redis-test
-    ports:
-      - "16379:6379"
   nginx-test:
     image: nginx:alpine
     container_name: procm-nginx-test

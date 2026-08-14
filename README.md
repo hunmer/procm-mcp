@@ -161,15 +161,9 @@ await client.waitFor("frontend:ready", { timeout: 30_000 });
 logger.info("Backend ready", { pid: process.pid });
 ```
 
-### Function hooks and Redis traces
+### Function hooks and in-memory traces
 
-Set `PROCM_REDIS_URL` on the procm-mcp backend or stdio MCP process to enable trace storage. Redis is optional for all existing process and room features.
-
-```bash
-PROCM_REDIS_URL="redis://127.0.0.1:6379/0" procm-mcp --server
-```
-
-Traces expire after 24 hours by default. `PROCM_TRACE_TTL_SECONDS` changes the default and accepts `1..604800` seconds. A trace is limited to 256 KiB after JSON serialization.
+Trace storage is built into each procm-mcp process and requires no external service. Traces expire after 24 hours by default. `PROCM_TRACE_TTL_SECONDS` changes the default and accepts `1..604800` seconds. A trace is limited to 256 KiB after JSON serialization, and the LRU cache is bounded to 64 MiB total.
 
 ```ts
 import { createHook, createLogger, createProcmClient, saveTrace } from "@procm-mcp/sdk";
@@ -194,9 +188,11 @@ const diagnosticId = await saveTrace(client, { kind: "diagnostic", user });
 
 `createHook` preserves `this`, synchronous return types, Promise behavior, and original thrown/rejected errors. Its synchronous `before` handlers may call `setArgs()` or `skip()`; synchronous `after` handlers may call `setResult()`. Argument/result capture is off by default. `hookProperty()` supports only configurable own properties and returns an idempotent restore function. Runtime locations are V8 JavaScript locations; source-map conversion and interception of local variables, closures, or read-only ESM bindings are not supported.
 
-Hook trace storage is asynchronous and never writes trace details or Redis status to the application console. `saveTrace()` is the explicit confirmation API and resolves only after Redis accepts the record. Timeout, abort, disconnect, invalid TTL, unsafe JSON, and oversized payloads reject without leaking pending requests.
+Hook trace storage is asynchronous and never writes trace details or storage status to the application console. `saveTrace()` is the explicit confirmation API and resolves only after the current procm-mcp instance accepts the record. Timeout, abort, disconnect, invalid TTL, unsafe JSON, and oversized payloads reject without leaking pending requests.
 
-Use the `trace-get` MCP tool over stdio or `/mcp` with `{ "id": "<traceId>" }`. It returns `{ "ok": true, "trace": ... }`, or `{ "ok": false, "error": ... }` with one of these stable codes: `TRACE_NOT_FOUND`, `TRACE_REDIS_NOT_CONFIGURED`, `TRACE_REDIS_UNAVAILABLE`, `TRACE_INVALID_ID`, `TRACE_INVALID_PAYLOAD`, `TRACE_STORE_CONFLICT`, or `TRACE_REQUEST_TIMEOUT`.
+Use the `trace-get` MCP tool on the same HTTP Stream MCP instance with `{ "id": "<traceId>" }`. It returns `{ "ok": true, "trace": ... }`, or `{ "ok": false, "error": ... }` with one of these stable codes: `TRACE_NOT_FOUND`, `TRACE_INVALID_ID`, `TRACE_INVALID_PAYLOAD`, `TRACE_STORE_CONFLICT`, `TRACE_STORE_ERROR`, or `TRACE_REQUEST_TIMEOUT`.
+
+Trace data is intentionally ephemeral. Restarting procm-mcp clears it, LRU eviction may remove older entries before their TTL, and separate procm-mcp processes do not share traces.
 
 Trace verification:
 
@@ -204,9 +200,7 @@ Trace verification:
 npm run build:sdk
 npm run build
 npm test
-docker compose -f "tests/docker-compose.yml" up -d redis-test
-PROCM_REDIS_URL="redis://127.0.0.1:16379/15" npm run test:trace:redis
-docker compose -f "tests/docker-compose.yml" stop redis-test
+npm run test:trace
 ```
 
 Managed processes receive `PROCM_ROOM_ID`, `PROCM_PROCESS_ID`, `PROCM_WS_URL`, and optional authentication automatically. Explicit SDK options override environment values. See `demo/` for the Node.js and Electron workflow.
@@ -264,7 +258,7 @@ For network-facing setups, optional `PROCM_HTTP_TOKEN` requires an `Authorizatio
   - `cwd` (optional): Project directory containing `procm-commands.json` (default: current working directory)
 - `room` List, inspect, or update room metadata and active members
 - `room-logs` Merge structured logs for a room with optional member-prefix and level filters
-- `trace-get` Read a complete Redis-backed trace by exact ID
+- `trace-get` Read a complete in-memory trace by exact ID from the current procm-mcp instance
 
 ## License
 

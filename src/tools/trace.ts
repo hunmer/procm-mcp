@@ -18,7 +18,7 @@ export function registerTraceTools(server: McpServer): void {
       } catch (error) {
         const normalized = error instanceof TraceStoreError
           ? error
-          : new TraceStoreError("TRACE_REDIS_UNAVAILABLE", "Trace storage is unavailable");
+          : new TraceStoreError("TRACE_STORE_ERROR", "Trace storage failed");
         return response({ ok: false, error: { code: normalized.code, message: normalized.message } });
       }
     },
