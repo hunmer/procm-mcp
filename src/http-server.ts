@@ -27,6 +27,9 @@ import { toErrorMessage } from "./error.js";
 import { ProcessMetadata } from "./types.js";
 import { handleMcpRequest } from "./mcp-http.js";
 import { attachWebsocketServer } from "./websocket-server.js";
+import { setConnectionConfig } from "./connection-config.js";
+import { getRoom, listRooms, patchRoom } from "./room-hub.js";
+import { queryRoomLogs } from "./room-logs.js";
 import { scanProjectCommands } from "./project-scanner.js";
 import { listSystemProcesses, killProcessTree, findProcessByPort } from "./system-processes.js";
 
@@ -86,6 +89,7 @@ function toPublicView(p: ProcessMetadata) {
     error: p.error,
     desc: p.desc,
     port: p.port,
+    roomId: p.roomId,
   };
 }
 
@@ -104,6 +108,7 @@ function toPublicRecord(p: ProcessRecord) {
     error: p.error,
     desc: p.desc,
     port: p.port ?? null,
+    roomId: p.roomId ?? null,
     startedAt: p.startedAt,
     lastStartedAt: p.lastStartedAt ?? null,
     stoppedAt: p.stoppedAt,
@@ -508,6 +513,45 @@ function createRequestHandler(token: string | undefined) {
         return;
       }
 
+      if (method === "GET" && pathname === "/api/rooms") {
+        json(res, 200, { rooms: await listRooms() });
+        return;
+      }
+
+      const roomMatch = pathname.match(/^\/api\/rooms\/([^/]+)(?:\/(logs))?$/);
+      if (roomMatch) {
+        const roomId = decodeURIComponent(roomMatch[1]);
+        const roomAction = roomMatch[2];
+        if (method === "GET" && roomAction === "logs") {
+          const levelParam = url.searchParams.get("level");
+          const level = ["debug", "info", "warn", "error"].includes(levelParam ?? "")
+            ? levelParam as "debug" | "info" | "warn" | "error"
+            : undefined;
+          const entries = await queryRoomLogs(roomId, {
+            memberPrefix: url.searchParams.get("memberPrefix") || undefined,
+            level,
+            count: Number(url.searchParams.get("count")) || undefined,
+          });
+          if (!entries) json(res, 404, { error: `Room ${roomId} not found` });
+          else json(res, 200, { roomId, entries });
+          return;
+        }
+        if (method === "GET" && !roomAction) {
+          const room = await getRoom(roomId);
+          if (!room) json(res, 404, { error: `Room ${roomId} not found` });
+          else json(res, 200, room);
+          return;
+        }
+        if ((method === "PATCH" || method === "POST") && !roomAction) {
+          const body = JSON.parse((await readBody(req)) || "{}");
+          json(res, 200, await patchRoom(roomId, {
+            title: body.title === undefined ? undefined : String(body.title),
+            note: body.note === undefined ? undefined : String(body.note),
+          }));
+          return;
+        }
+      }
+
       // POST /api/favorites/scan -> scan a folder's top-level project manifests
       // (package.json / pyproject.toml / Cargo.toml) and return candidate
       // launch commands the dashboard can selectively import as favorites.
@@ -660,6 +704,7 @@ function createRequestHandler(token: string | undefined) {
               ? body.envs
               : {};
           const desc = body.desc ? String(body.desc) : undefined;
+          const roomId = body.roomId ? String(body.roomId).trim() : null;
           // Optional port the process serves on. Coerced to an integer and
           // range-checked; anything invalid is rejected so the dashboard's
           // one-click open link never points at a bogus URL.
@@ -683,6 +728,7 @@ function createRequestHandler(token: string | undefined) {
             envs,
             desc,
             port,
+            roomId,
           );
           pushProcess(started);
           json(res, 201, { id: processId, name: started.name });
@@ -976,6 +1022,7 @@ function createRequestHandler(token: string | undefined) {
 // `uncaughtException`.
 export function startHttpServer(port: number): Promise<http.Server> {
   const token = process.env.PROCM_HTTP_TOKEN;
+  setConnectionConfig(port, token);
   const server = http.createServer(createRequestHandler(token));
 
   return new Promise<http.Server>((resolve, reject) => {

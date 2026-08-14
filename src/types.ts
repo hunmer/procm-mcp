@@ -20,6 +20,7 @@ export type ProcessMetadata = {
   // Optional port the process serves on (e.g. a dev server). Pure metadata —
   // it does not affect spawning; the dashboard renders a one-click open link.
   port: number | null;
+  roomId: string | null;
   process: ChildProcess;
   stdoutClient: ProcessStdoutClient;
   stderrClient: ProcessStdoutClient;

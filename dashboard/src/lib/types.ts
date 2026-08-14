@@ -17,6 +17,7 @@ export interface ProcessView {
   // Optional port the process serves on; the card shows a one-click open link
   // to http://localhost:<port> when set. null/undefined when absent.
   port?: number | null;
+  roomId?: string | null;
   // Lifecycle timestamps (epoch ms). addedAt stays undefined for live-only
   // records the server didn't persist, so the UI tolerates their absence.
   startedAt?: number;
@@ -62,6 +63,10 @@ export interface LogEntry {
   timestamp: number; // epoch ms
   stream: ProcessStream;
   message: string;
+  level?: "debug" | "info" | "warn" | "error";
+  memberId?: string;
+  clientName?: string;
+  data?: unknown;
 }
 
 export interface StartProcessBody {
@@ -72,6 +77,7 @@ export interface StartProcessBody {
   envs?: Record<string, string>;
   desc?: string;
   port?: number;
+  roomId?: string;
 }
 
 // ---- WebSocket messages (mirrors src/websocket-server.ts envelope) ----
@@ -96,6 +102,10 @@ export interface WsLogMessage {
   stream: ProcessStream;
   timestamp: number;
   message: string;
+  level?: "debug" | "info" | "warn" | "error";
+  memberId?: string;
+  clientName?: string;
+  data?: unknown;
 }
 
 export type WsServerMessage = WsProcessesMessage | WsLogMessage;

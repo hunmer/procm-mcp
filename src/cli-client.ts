@@ -267,7 +267,7 @@ async function cmdRestart(port: number, args: string[], token?: string) {
 async function cmdStop(port: number, args: string[], token?: string) {
   const id = args[0];
   if (!id) fail("usage: procm-mcp stop <id>");
-  await request(port, "POST", `/api/processes/${encodeURIComponent(id)}/stop`, {}, token);
+  await request(port, "DELETE", `/api/processes/${encodeURIComponent(id)}`, undefined, token);
   console.log(`Process ${id} stopped and deleted.`);
 }
 

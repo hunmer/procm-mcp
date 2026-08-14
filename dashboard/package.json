@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@procm-mcp/sdk": "file:../packages/procm-sdk",
     "@base-ui/react": "^1.0.0-alpha.10",
     "@tanstack/react-table": "^8.21.3",
     "class-variance-authority": "^0.7.1",

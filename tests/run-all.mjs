@@ -3,6 +3,9 @@
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { join } from "node:path";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -12,14 +15,20 @@ const scripts = [
   "http-api.mjs",
   "mcp-http.mjs",
   "cli-roundtrip.mjs",
+  "room-sdk.mjs",
 ];
 
 function run(file) {
   return new Promise((resolveResult) => {
+    const dataDir = mkdtempSync(join(tmpdir(), "procm-mcp-test-"));
     const child = spawn("node", [resolve(__dirname, file)], {
       stdio: "inherit",
+      env: { ...process.env, PROCM_MCP_DIR: dataDir },
     });
-    child.on("exit", (code) => resolveResult({ file, code }));
+    child.on("exit", (code) => {
+      rmSync(dataDir, { recursive: true, force: true });
+      resolveResult({ file, code });
+    });
   });
 }
 

@@ -8,6 +8,8 @@ import { toErrorMessage } from "./error.js";
 import { serverLog, logServerId } from "./server-log.js";
 import { dashboardEvents } from "./events.js";
 import { ProcessMetadata, ProcessStatus } from "./types.js";
+import { getConnectionEnv } from "./connection-config.js";
+import { ensureRoom, removeProcessFromRooms } from "./room-repository.js";
 import path from "path";
 import { ProcmMcpDir } from "./procm-mcp-dir.js";
 import { mkdirp } from "mkdirp";
@@ -75,6 +77,14 @@ export async function reconcileStaleProcesses(): Promise<void> {
     serverLog(`Reconciling ${stale.length} stale running process record(s) from a previous run...`);
     const stoppedAt = Date.now();
     for (const r of stale) {
+      // A procm backend can itself be managed by another procm instance. Both
+      // use the same durable store, so the inner backend may see the outer
+      // manager's record for its own PID during startup. Never reconcile (and
+      // therefore kill) the current process.
+      if (r.pid === process.pid) {
+        serverLog(`Reconcile: skipping current backend process record ${r.name} (id=${r.id}, pid=${r.pid}).`);
+        continue;
+      }
       const alive = isPidAlive(r.pid);
       if (alive && r.pid) {
         try {
@@ -123,6 +133,7 @@ function toRecord(meta: ProcessMetadata, stoppedAt: number | null = null): Proce
     error: meta.error,
     desc: meta.desc,
     port: meta.port,
+    roomId: meta.roomId,
     startedAt: startedAtByMeta.get(meta.id) ?? Date.now(),
     // lastStartedAt falls back to startedAt so a record that predates this
     // field (or a process that never restarted) still has a sensible value.
@@ -219,6 +230,7 @@ export async function startProcess(
   envs: Record<string, string>,
   desc?: string | null,
   port?: number | null,
+  roomId?: string | null,
 ): Promise<ProcessMetadata> {
   serverLog(
     `Starting process: ${name || script} with args: ${
@@ -229,11 +241,17 @@ export async function startProcess(
   try {
     const command = createCommand(script, args);
 
+    const roomEnv: Record<string, string> = {
+      ...getConnectionEnv(),
+      PROCM_PROCESS_ID: processId,
+    };
+    if (roomId) roomEnv.PROCM_ROOM_ID = roomId;
     const childProcess = spawn(script, args || [], {
       cwd,
       env: {
         ...process.env,
         ...envs,
+        ...roomEnv,
       },
     });
 
@@ -333,6 +351,7 @@ export async function startProcess(
       exitCode,
       desc: desc ? desc.trim() || null : null,
       port: port ?? null,
+      roomId: roomId?.trim() || null,
       process: childProcess,
       stdoutClient,
       stderrClient,
@@ -340,6 +359,7 @@ export async function startProcess(
     // The child can exit between the spawn event and metadata registration.
     // Apply the latest lifecycle state before returning it to the caller.
     applyProcessState();
+    if (processMetadata.roomId) await ensureRoom(processMetadata.roomId, processId);
     return processMetadata;
   } catch (error) {
     serverLog(`Error starting process: ${name || script} - ${error}`);
@@ -454,6 +474,7 @@ export async function deleteProcess(id: string): Promise<boolean> {
     serverLog(`Error deleting process record: ${toErrorMessage(err)}`);
   }
   if (removedLive || removedStored) {
+    await removeProcessFromRooms(id);
     dashboardEvents.emitProcessChange();
     return true;
   }
@@ -513,6 +534,8 @@ export async function deleteProcesses(
   const deletedSet = new Set<string>([...liveIds, ...removedStoredIds]);
   const deleted = ids.filter((id) => deletedSet.has(id));
   const notFound = ids.filter((id) => !deletedSet.has(id));
+
+  await Promise.all(deleted.map((id) => removeProcessFromRooms(id)));
 
   if (deleted.length > 0) dashboardEvents.emitProcessChange();
   return { deleted, notFound };
@@ -671,6 +694,7 @@ export async function restartProcess(id: string): Promise<ProcessMetadata | null
       processMetadata.envs,
       processMetadata.desc,
       processMetadata.port,
+      processMetadata.roomId,
     );
     processes[processIndex] = newProcess;
     // This branch reassigns in place and bypasses pushProcess, so reset the
@@ -698,6 +722,7 @@ export async function restartProcess(id: string): Promise<ProcessMetadata | null
     record.envs ?? {},
     record.desc,
     record.port ?? null,
+    record.roomId ?? null,
   );
   // Preserve the original start time so the revived process keeps its place
   // in the history-sorted list instead of jumping to the top.

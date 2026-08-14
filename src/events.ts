@@ -14,6 +14,10 @@ export interface LogAppendPayload {
   stream: LogStream;
   timestamp: number;
   message: string;
+  level?: "debug" | "info" | "warn" | "error";
+  memberId?: string;
+  clientName?: string;
+  data?: unknown;
 }
 
 class DashboardEventBus extends EventEmitter {

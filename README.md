@@ -7,6 +7,7 @@ A Model Context Protocol (MCP) server for process management.
 - Secure and automatable process creation
 - Cleanup created processes automatically on termination (e.g. exiting claude code)
 - Common process management features supported, restarting, deleting, checking status or retreving stdout/stderr of processes
+- Room-based WebSocket messaging, retained readiness signals, structured logs, and batch process operations
 
 Using these features, LLMs start processes like development servers, docker-compose, or test watchers and check their outputs to fix bugs automatically.
 
@@ -36,7 +37,7 @@ The dashboard is a React + coss frontend (in `dashboard/`). It is served pre-bui
 ```bash
 npm run build:dashboard   # builds dashboard/ -> dashboard/dist
 # or build everything (dashboard + backend):
-npm run build:all
+npm run build
 ```
 
 If the bundle is missing, `GET /` returns a small "dashboard not built" page with the command to run instead of failing; the REST API still works.
@@ -65,9 +66,12 @@ HTTP API (same origin):
 - `GET  /api/processes` → list of processes `{ serverId, pid, processes: [...] }`
 - `GET  /api/processes/:id` → single process detail
 - `GET  /api/processes/:id/logs?stream=stdout|stderr&count=200` → recent log lines
-- `POST /api/processes` → start a process (body: `{ script, name?, args?, cwd, envs? }`)
-- `POST /api/processes/:id/stop` → stop and delete
+- `POST /api/processes` → start a process (body: `{ script, name?, args?, cwd, envs?, roomId? }`)
+- `POST /api/processes/:id/stop` → stop and retain its history
 - `POST /api/processes/:id/restart` → restart
+- `GET /api/rooms` → list room metadata and active members
+- `GET|PATCH /api/rooms/:roomId` → inspect or update room title/note
+- `GET /api/rooms/:roomId/logs?memberPrefix=&level=&count=` → merged structured room logs
 
 ### Backend mode (`--server`)
 
@@ -107,7 +111,7 @@ Then point your MCP client at it:
 ```
 
 Notes:
-- **4 tools** are available over `/mcp` — `start-process`, `process`, `process-logs`, `procm-command`. That is one fewer than stdio, which also exposes `process-input` (write to a process's stdin / send a signal).
+- Process, batch, log, command, and room tools are available over `/mcp`. Stdio additionally exposes `process-input` (write to a process's stdin / send a signal).
 - Process state is shared: a process started via `/mcp` is visible in the dashboard and REST API, and vice versa.
 - If `PROCM_HTTP_TOKEN` is set, add it to the client config (`"headers": { "Authorization": "Bearer <token>" }`) where supported.
 - `/mcp` runs in **stateless** mode (no session ID) — each request is independent.
@@ -133,6 +137,26 @@ The `procm-command` tool (action `list`) returns the file's contents and the ava
 ```bash
 npm i -D procm-mcp
 ```
+
+Room clients install the separately published TypeScript SDK:
+
+```bash
+npm i @procm-mcp/sdk
+```
+
+```ts
+import { createLogger, createProcmClient } from "@procm-mcp/sdk";
+
+const client = createProcmClient({ clientName: "backend" });
+const logger = createLogger({ client });
+
+client.subscribe("debug:", (message) => console.log(message.payload), { prefix: true });
+client.publish("backend:ready", { initialized: true }, { retain: true });
+await client.waitFor("frontend:ready", { timeout: 30_000 });
+logger.info("Backend ready", { pid: process.pid });
+```
+
+Managed processes receive `PROCM_ROOM_ID`, `PROCM_PROCESS_ID`, `PROCM_WS_URL`, and optional authentication automatically. Explicit SDK options override environment values. See `demo/` for the Node.js and Electron workflow.
 
 `.mcp.json`
 
@@ -163,6 +187,9 @@ For network-facing setups, optional `PROCM_HTTP_TOKEN` requires an `Authorizatio
   - `name` (optional): A friendly name for the process
   - `envs` (optional): Environment variables to set for the process
   - `desc` (optional): A human-readable description
+  - `port` (optional): Served port metadata
+  - `roomId` (optional): Room to join; preserved across restart
+- `batch-process` Start or restart up to 100 processes with bounded concurrency and per-item results
 - `process` Manage a process by ID, or list all processes
   - `action` (required): `get` | `delete` | `restart` | `list`
   - `id` (required for get/delete/restart): The process ID
@@ -182,6 +209,8 @@ For network-facing setups, optional `PROCM_HTTP_TOKEN` requires an `Authorizatio
   - `action` (required): `list` | `start`
   - `name` (required for start): The command name as defined in the file
   - `cwd` (optional): Project directory containing `procm-commands.json` (default: current working directory)
+- `room` List, inspect, or update room metadata and active members
+- `room-logs` Merge structured logs for a room with optional member-prefix and level filters
 
 ## License
 

@@ -13,6 +13,7 @@ import { registerProcessTools } from "./tools/process.js";
 import { registerProcessLogTools } from "./tools/process-logs.js";
 import { registerProcessInputTools } from "./tools/process-input.js";
 import { registerProcmCommandsTools } from "./tools/procm-commands.js";
+import { registerRoomTools } from "./tools/room.js";
 import { isClientCommand, runClient, clientHelp } from "./cli-client.js";
 
 const DEFAULT_SERVER_PORT = 7331;
@@ -104,6 +105,7 @@ try {
     registerProcessLogTools(server);
     registerProcessInputTools(server);
     registerProcmCommandsTools(server);
+    registerRoomTools(server);
 
     // Reconcile stale "running" records from a prior crashed backend before
     // the dashboard (if any) starts serving. Same rationale as --server mode.

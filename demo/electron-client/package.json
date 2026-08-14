@@ -1,0 +1,14 @@
+{
+  "name": "procm-room-demo-electron",
+  "private": true,
+  "type": "module",
+  "main": "main.js",
+  "scripts": { "start": "electron ." },
+  "dependencies": {
+    "@procm-mcp/sdk": "file:../../packages/procm-sdk",
+    "electron": "^37.2.6"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["electron"]
+  }
+}

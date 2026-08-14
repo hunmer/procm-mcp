@@ -21,6 +21,8 @@ export type ProcessRecord = {
   // open link survives restarts. Undefined on records written before this field
   // existed; null when explicitly absent.
   port?: number | null;
+  // Optional room association. Undefined on records created before room support.
+  roomId?: string | null;
   // Epoch ms when the process was first started.
   startedAt: number;
   // Epoch ms of the most recent start; reset on every restart (distinct from

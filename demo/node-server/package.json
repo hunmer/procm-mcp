@@ -1,0 +1,7 @@
+{
+  "name": "procm-room-demo-server",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node index.js" },
+  "dependencies": { "@procm-mcp/sdk": "file:../../packages/procm-sdk" }
+}

@@ -91,25 +91,25 @@ interface LogPanelProps {
 const HISTORY_COUNT = 100;
 const GREP_COUNT = 500;
 
-// Quick-filter keyword chips shown in the header. Clicking applies the term to
-// the search box (regex grep over full log history). Variants mirror the
-// severity color conventions.
-const QUICK_FILTERS: {
+// Structured-level filters shown as a compact segmented control. Legacy plain
+// lines remain visible under "all" while exact levels show SDK Logger entries.
+const LEVEL_FILTERS: {
   label: string;
-  term: string;
+  level: "all" | "debug" | "info" | "warn" | "error";
   variant: React.ComponentProps<typeof Badge>["variant"];
 }[] = [
-  { label: "debug", term: "debug", variant: "secondary" },
-  { label: "info", term: "info", variant: "info" },
-  { label: "warn", term: "warn", variant: "warning" },
-  { label: "error", term: "error", variant: "error" },
-  { label: "fatal", term: "fatal", variant: "destructive" },
+  { label: "all", level: "all", variant: "outline" },
+  { label: "debug", level: "debug", variant: "secondary" },
+  { label: "info", level: "info", variant: "info" },
+  { label: "warn", level: "warn", variant: "warning" },
+  { label: "error", level: "error", variant: "error" },
 ];
 
 export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps) {
   const { t } = useTranslation();
   // Merged (stdout+stderr) chronological log lines.
   const [entries, setEntries] = useState<LogEntry[]>([]);
+  const [levelFilter, setLevelFilter] = useState<(typeof LEVEL_FILTERS)[number]["level"]>("all");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -270,11 +270,11 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
   // rendering (timestamp + optional stderr tag, line numbers excluded since
   // they're select-none) so the copied text matches what's on screen.
   async function handleCopyText() {
-    if (entries.length === 0) {
+    if (visibleEntries.length === 0) {
       onToast(t("logs.toastNothingToCopy"));
       return;
     }
-    const text = entries
+    const text = visibleEntries
       .map((e) => {
         const time = `[${formatTime(e.timestamp)}]`;
         const tag = e.stream === "stderr" ? ` [${e.stream}]` : "";
@@ -285,7 +285,7 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
       .join("\n");
     try {
       await navigator.clipboard.writeText(text);
-      onToast(t("logs.toastCopiedLines", { count: entries.length }));
+      onToast(t("logs.toastCopiedLines", { count: visibleEntries.length }));
     } catch {
       onToast(t("logs.toastCopyFailed"), true);
     }
@@ -433,7 +433,7 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
     if (searchingRef.current) return; // suspend live tail while viewing grep results
     setEntries((cur) =>
       mergeEntries(cur, [
-        { timestamp: m.timestamp, stream: m.stream, message: m.message },
+        { timestamp: m.timestamp, stream: m.stream, message: m.message, level: m.level, memberId: m.memberId, clientName: m.clientName, data: m.data },
       ]),
     );
   });
@@ -529,6 +529,10 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
     const firstHour = new Date(entries[0].timestamp).getHours();
     return entries.some((e) => new Date(e.timestamp).getHours() !== firstHour);
   }, [entries]);
+  const visibleEntries = useMemo(
+    () => levelFilter === "all" ? entries : entries.filter((entry) => entry.level === levelFilter),
+    [entries, levelFilter],
+  );
 
   // Regex used to highlight the active search term in displayed lines. Same
   // compile rules as the backend grep: try the term as a regex, fall back to
@@ -679,15 +683,15 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
 
         {/* Quick-filter keywords: click to drop the term into the search box
             (grep is regex, these are plain words so they match literally). */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          {QUICK_FILTERS.map((f) => {
-            const active = search.trim() === f.term;
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Log level">
+          {LEVEL_FILTERS.map((f) => {
+            const active = levelFilter === f.level;
             return (
               <button
-                key={f.term}
+                key={f.level}
                 type="button"
-                onClick={() => setSearch(active ? "" : f.term)}
-                title={t("logs.filterByTerm", { term: f.term })}
+                onClick={() => setLevelFilter(f.level)}
+                title={t("logs.filterByTerm", { term: f.label })}
                 aria-pressed={active}
               >
                 <Badge
@@ -813,7 +817,7 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
             <pre className={`m-0 whitespace-pre-wrap break-words ${fontTextClass} ${fontLineClass}`}>
               <span className="text-red-400">{t("logs.errorPrefix", { message: error })}</span>
             </pre>
-          ) : entries.length === 0 ? (
+          ) : visibleEntries.length === 0 ? (
             <Empty className="min-h-[200px] text-zinc-400">
               <EmptyHeader>
                 <EmptyMedia variant="icon" className="bg-zinc-800 text-zinc-400">
@@ -831,7 +835,7 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
             </Empty>
           ) : (
             <TerminalLog
-              entries={entries}
+              entries={visibleEntries}
               showTime={showTime}
               showLineNumbers={showLineNumbers}
               formatTime={formatTime}
@@ -986,7 +990,7 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
                 : t("logs.countMatches", { count: entries.length })
               : loading
                 ? t("logs.countLoading")
-                : t("logs.countLines", { count: entries.length })}
+                : t("logs.countLines", { count: visibleEntries.length })}
           </span>
           <Menu>
             <MenuTrigger
@@ -1046,4 +1050,3 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
     </aside>
   );
 }
-

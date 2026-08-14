@@ -15,8 +15,12 @@
     "dashboard/dist"
   ],
   "main": "index.js",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "build": "npm run build:dashboard && tsc",
+    "build": "npm run build:sdk && npm run build:dashboard && tsc",
+    "build:sdk": "npm --prefix packages/procm-sdk run build",
     "watch": "tsc -w",
     "build:dashboard": "npm --prefix dashboard run build",
     "dev:dashboard": "npm --prefix dashboard run dev",
@@ -33,6 +37,7 @@
   },
   "keywords": [],
   "dependencies": {
+    "@procm-mcp/sdk": "^0.1.0",
     "@modelcontextprotocol/sdk": "^1.12.3",
     "find-process": "^2.1.1",
     "get-ports-natively": "^1.0.13",

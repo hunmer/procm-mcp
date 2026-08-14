@@ -1,6 +1,6 @@
 // MCP over HTTP (Streamable HTTP transport at /mcp):
 //   - initialize handshake works
-//   - tools/list returns the same 4 tools as stdio
+//   - tools/list exposes process, batch, and room tools
 //   - tool calls work over HTTP (process list)
 //   - state is shared with the REST API (process started via MCP is visible via REST)
 import {
@@ -51,14 +51,13 @@ await runTest("/mcp CORS preflight allows Inspector headers", async () => {
   assertEqual(res.headers.get("access-control-allow-origin"), "http://localhost:6274", "origin");
 });
 
-await runTest("tools/list returns 4 tools over HTTP", async () => {
+await runTest("tools/list returns process and room tools over HTTP", async () => {
   await mcpHttpHandshake(port);
   const r = await mcpHttp(port, 2, "tools/list", {});
   const names = r.result.tools.map((t) => t.name);
-  assertEqual(names.length, 4, "4 tools");
-  assert(names.includes("process-logs"), "has process-logs");
-  assert(names.includes("start-process"), "has start-process");
-  assert(names.includes("process"), "has process");
+  for (const name of ["process-logs", "start-process", "process", "batch-process", "room", "room-logs"]) {
+    assert(names.includes(name), `has ${name}`);
+  }
 });
 
 await runTest("tool call works: process list", async () => {

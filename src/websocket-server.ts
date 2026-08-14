@@ -9,6 +9,7 @@ import {
 import { listProcessRecords } from "./process-manager.js";
 import type { ProcessRecord } from "./processes-repository.js";
 import { serverLog } from "./server-log.js";
+import { attachRoomSocket } from "./room-hub.js";
 
 // Public process view — mirrors http-server's `toPublicRecord` (envs
 // intentionally omitted, lifecycle timestamps included). Duplicated here to
@@ -58,6 +59,7 @@ export function attachWebsocketServer(
   };
 
   const wss = new WebSocketServer({ noServer: true });
+  const roomWss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
 
   // Hijack the HTTP 'upgrade' event so the WebSocket shares the same origin
   // and auth path as the REST API, rather than using ws's built-in server
@@ -67,7 +69,7 @@ export function attachWebsocketServer(
     // left to other handlers / dropped. This also lets a dev proxy route
     // /ws -> backend while the SPA root stays on the Vite dev server.
     const url = new URL(req.url || "/", "http://localhost");
-    if (url.pathname !== "/ws") {
+    if (url.pathname !== "/ws" && url.pathname !== "/room") {
       socket.destroy();
       return;
     }
@@ -79,9 +81,13 @@ export function attachWebsocketServer(
       return;
     }
 
-    wss.handleUpgrade(req, socket, head, (ws) => {
-      wss.emit("connection", ws, req);
-    });
+    const target = url.pathname === "/room" ? roomWss : wss;
+    target.handleUpgrade(req, socket, head, (ws) => target.emit("connection", ws, req));
+  });
+
+  roomWss.on("connection", (ws) => {
+    serverLog("WebSocket room client connected");
+    attachRoomSocket(ws);
   });
 
   wss.on("connection", (ws) => {

@@ -15,6 +15,49 @@ import {
   pushProcess,
 } from "../process-manager.js";
 
+type StartInput = {
+  script: string;
+  name?: string;
+  args?: string[];
+  cwd: string;
+  envs?: Record<string, string>;
+  desc?: string;
+  port?: number;
+  roomId?: string;
+};
+
+async function startManagedProcess(input: StartInput) {
+  const error = validateScript(input.script);
+  if (error) throw new Error(error);
+  const processId = generateProcessId();
+  const started = await startProcess(
+    processId,
+    input.script,
+    input.name,
+    input.args ?? [],
+    input.cwd,
+    input.envs ?? {},
+    input.desc,
+    input.port ?? null,
+    input.roomId ?? null,
+  );
+  pushProcess(started);
+  return started;
+}
+
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < items.length) {
+      const index = cursor++;
+      results[index] = await fn(items[index], index);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+  return results;
+}
+
 export function registerProcessTools(server: McpServer) {
   server.tool(
     "start-process",
@@ -27,34 +70,24 @@ Warning: Do not invoke background processes that will not exit automatically, an
       cwd: z.string(),
       envs: z.record(z.string()).optional(),
       desc: z.string().optional(),
+      port: z.number().int().min(1).max(65535).optional(),
+      roomId: z.string().min(1).optional(),
     },
-    async ({ script, name, args = [], cwd = process.cwd(), envs = {}, desc }) => {
+    async ({ script, name, args = [], cwd = process.cwd(), envs = {}, desc, port, roomId }) => {
       logToolStart("start-process", {
         script,
         name,
         args,
         cwd,
         desc,
+        port,
+        roomId,
       });
 
       try {
-        const validateScriptError = validateScript(script);
-        if (validateScriptError) {
-          return textResult(validateScriptError);
-        }
-
-        const processId = generateProcessId();
+        const startedProcess = await startManagedProcess({ script, name, args, cwd, envs, desc, port, roomId });
+        const processId = startedProcess.id;
         const command = createCommand(script, args);
-        const startedProcess = await startProcess(
-          processId,
-          script,
-          name,
-          args,
-          cwd,
-          envs,
-          desc,
-        );
-        pushProcess(startedProcess);
 
         logToolEnd("start-process", {
           id: processId,
@@ -63,6 +96,8 @@ Warning: Do not invoke background processes that will not exit automatically, an
           args: args || [],
           cwd,
           desc,
+          port,
+          roomId,
         });
 
         return textResult(`Process started: ${name || command} (ID: ${processId})`);
@@ -70,6 +105,52 @@ Warning: Do not invoke background processes that will not exit automatically, an
         logToolError("start-process", error);
         return textResult(`Error starting process: ${toErrorMessage(error)}`);
       }
+    },
+  );
+
+  server.tool(
+    "batch-process",
+    `Start or restart multiple processes with bounded concurrency. Returns one result per input in the original order; failures do not roll back successful items.`,
+    {
+      action: z.enum(["start", "restart"]),
+      processes: z.array(z.object({
+        script: z.string(),
+        name: z.string().optional(),
+        args: z.array(z.string()).optional(),
+        cwd: z.string(),
+        envs: z.record(z.string()).optional(),
+        desc: z.string().optional(),
+        port: z.number().int().min(1).max(65535).optional(),
+        roomId: z.string().min(1).optional(),
+      })).max(100).optional(),
+      ids: z.array(z.string().min(1)).max(100).optional(),
+      concurrency: z.number().int().min(1).max(10).optional(),
+    },
+    async ({ action, processes: startInputs, ids, concurrency = 4 }) => {
+      logToolStart("batch-process", { action, count: action === "start" ? startInputs?.length : ids?.length, concurrency });
+      const inputs = action === "start" ? startInputs : ids;
+      if (!inputs?.length) return textResult(`batch-process action "${action}" requires a non-empty ${action === "start" ? "processes" : "ids"} array.`);
+      const results = action === "start"
+        ? await mapLimit(startInputs!, concurrency, async (input, index) => {
+            try {
+              const started = await startManagedProcess(input);
+              return { index, ok: true as const, id: started.id, name: started.name, roomId: started.roomId };
+            } catch (error) {
+              return { index, ok: false as const, error: toErrorMessage(error) };
+            }
+          })
+        : await mapLimit(ids!, concurrency, async (id, index) => {
+            try {
+              const restarted = await restartProcess(id);
+              return restarted
+                ? { index, ok: true as const, id, name: restarted.name, roomId: restarted.roomId }
+                : { index, ok: false as const, id, error: `Process ${id} not found` };
+            } catch (error) {
+              return { index, ok: false as const, id, error: toErrorMessage(error) };
+            }
+          });
+      logToolEnd("batch-process", { action, succeeded: results.filter((item) => item.ok).length, failed: results.filter((item) => !item.ok).length });
+      return textResult(JSON.stringify({ action, results }, null, 2));
     },
   );
 

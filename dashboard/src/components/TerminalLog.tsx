@@ -108,7 +108,7 @@ function TerminalLine({
   const hasAnsi = entry.message.includes("\u001b");
   const plainErr = isErr && !hasAnsi;
   return (
-    <span>
+    <div className="min-w-0 whitespace-pre-wrap break-words">
       {showLineNumbers && (
         // Non-copyable (user-select: none) so selecting log text doesn't drag
         // the numbers along.
@@ -122,13 +122,29 @@ function TerminalLine({
         </span>
       )}
       {isErr && <span className="text-amber-400/90">[stderr] </span>}
+      {entry.level && (
+        <span className={cn(
+          "mr-1 uppercase",
+          entry.level === "error" && "text-red-400",
+          entry.level === "warn" && "text-amber-400",
+          entry.level === "info" && "text-sky-400",
+          entry.level === "debug" && "text-zinc-500",
+        )}>[{entry.level}]</span>
+      )}
       {plainErr ? (
         <span className="text-red-300">{entry.message}</span>
       ) : (
         <AnsiText text={entry.message} highlight={highlight} />
       )}
-      {"\n"}
-    </span>
+      {entry.data !== undefined && (
+        <details className="ml-4 mt-0.5 text-zinc-400">
+          <summary className="cursor-pointer select-none text-[11px] text-zinc-500">JSON</summary>
+          <pre className="my-1 overflow-x-auto border-l border-zinc-700 pl-2 text-[11px] leading-relaxed text-emerald-300">
+            {JSON.stringify(entry.data, null, 2)}
+          </pre>
+        </details>
+      )}
+    </div>
   );
 }
 
@@ -154,7 +170,7 @@ export function TerminalLog({
   className,
 }: TerminalLogProps) {
   return (
-    <pre className={cn("m-0 whitespace-pre-wrap break-words", className)}>
+    <div className={cn("m-0 font-mono", className)}>
       {entries.map((entry, i) => (
         <TerminalLine
           key={i}
@@ -166,6 +182,6 @@ export function TerminalLog({
           highlight={highlight}
         />
       ))}
-    </pre>
+    </div>
   );
 }

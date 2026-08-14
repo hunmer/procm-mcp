@@ -6,6 +6,7 @@ import { mkdirp } from "mkdirp";
 import { log } from "./logger.js";
 import { toErrorMessage } from "./error.js";
 import { dashboardEvents } from "./events.js";
+import { decodeStructuredLogLine, stripStructuredLogFrame } from "@procm-mcp/sdk";
 
 export type ProcessStdoutChunk = {
   timestamp: Date;
@@ -60,7 +61,17 @@ export async function createProcessStdoutClient({
 
     // Broadcast immediately; disk persistence is best-effort and bounded.
     if (message) {
-      dashboardEvents.emitLog({ processId: id, stream: type, timestamp, message });
+      const structured = decodeStructuredLogLine(message);
+      dashboardEvents.emitLog({
+        processId: id,
+        stream: type,
+        timestamp: structured?.timestamp ?? timestamp,
+        message: structured?.message ?? stripStructuredLogFrame(message),
+        level: structured?.level,
+        memberId: structured?.memberId,
+        clientName: structured?.clientName,
+        data: structured?.data,
+      });
     }
 
     updateQueue.push(async () => {
@@ -72,7 +83,7 @@ export async function createProcessStdoutClient({
             // every message jammed together on a single line.
             fs.appendFile(
               textFilePath,
-              message.endsWith("\n") ? message : `${message}\n`,
+              `[${new Date(timestamp).toISOString()}] ${message.endsWith("\n") ? message : `${message}\n`}`,
               { encoding: "utf8" },
               (err) => {
                 if (err) {

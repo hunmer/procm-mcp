@@ -8,6 +8,7 @@ import type {
   SystemProcess,
   SystemProcessListResponse,
 } from "./types";
+import { decodeStructuredLogLine, stripStructuredLogFrame } from "@procm-mcp/sdk";
 
 // Thin wrapper around the same-origin REST API. Throws on non-2xx with the
 // server's `error` message when present.
@@ -160,13 +161,27 @@ export function parseLogText(text: string, stream: ProcessStream): LogEntry[] {
     const m = raw.match(/^\[(.+?)\]\s?(.*)$/);
     if (m) {
       const t = Date.parse(m[1]);
+      const structured = decodeStructuredLogLine(m[2]);
       entries.push({
-        timestamp: Number.isNaN(t) ? Date.now() : t,
+        timestamp: structured?.timestamp ?? (Number.isNaN(t) ? Date.now() : t),
         stream,
-        message: m[2],
+        message: structured?.message ?? stripStructuredLogFrame(m[2]),
+        level: structured?.level,
+        memberId: structured?.memberId,
+        clientName: structured?.clientName,
+        data: structured?.data,
       });
     } else {
-      entries.push({ timestamp: Date.now(), stream, message: raw });
+      const structured = decodeStructuredLogLine(raw);
+      entries.push({
+        timestamp: structured?.timestamp ?? Date.now(),
+        stream,
+        message: structured?.message ?? stripStructuredLogFrame(raw),
+        level: structured?.level,
+        memberId: structured?.memberId,
+        clientName: structured?.clientName,
+        data: structured?.data,
+      });
     }
   }
   return entries;

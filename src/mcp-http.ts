@@ -14,6 +14,7 @@ import { toErrorMessage } from "./error.js";
 import { registerProcessTools } from "./tools/process.js";
 import { registerProcessLogTools } from "./tools/process-logs.js";
 import { registerProcmCommandsTools } from "./tools/procm-commands.js";
+import { registerRoomTools } from "./tools/room.js";
 
 // Register every tool onto a fresh McpServer. Called once per request in
 // stateless mode.
@@ -21,6 +22,7 @@ function registerAllTools(server: McpServer) {
   registerProcessTools(server);
   registerProcessLogTools(server);
   registerProcmCommandsTools(server);
+  registerRoomTools(server);
 }
 
 // Build a one-shot McpServer + stateless transport wired together.
