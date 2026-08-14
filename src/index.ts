@@ -14,6 +14,8 @@ import { registerProcessLogTools } from "./tools/process-logs.js";
 import { registerProcessInputTools } from "./tools/process-input.js";
 import { registerProcmCommandsTools } from "./tools/procm-commands.js";
 import { registerRoomTools } from "./tools/room.js";
+import { registerTraceTools } from "./tools/trace.js";
+import { closeTraceStore } from "./trace-store.js";
 import { isClientCommand, runClient, clientHelp } from "./cli-client.js";
 import path from "path";
 
@@ -123,6 +125,7 @@ try {
     registerProcessInputTools(server);
     registerProcmCommandsTools(server);
     registerRoomTools(server);
+    registerTraceTools(server);
 
     // Reconcile stale "running" records from a prior crashed backend before
     // the dashboard (if any) starts serving. Same rationale as --server mode.
@@ -167,23 +170,27 @@ function installSignalHandlers(opts: { onStdinClose?: boolean } = {}) {
   process.on("beforeExit", async () => {
     serverLog("Server is exiting, cleaning up processes...");
     await cleanup();
+    await closeTraceStore();
   });
 
   process.on("SIGINT", async () => {
     serverLog("Server received SIGINT, cleaning up processes...");
     await cleanup();
+    await closeTraceStore();
     exitProcess(0);
   });
 
   process.on("SIGTERM", async () => {
     serverLog("Server received SIGTERM, cleaning up processes...");
     await cleanup();
+    await closeTraceStore();
     exitProcess(0);
   });
 
   process.on("uncaughtException", async (error) => {
     serverLog(`Uncaught exception: ${toErrorMessage(error)}`);
     await cleanup();
+    await closeTraceStore();
     exitProcess(1);
   });
 
@@ -191,6 +198,7 @@ function installSignalHandlers(opts: { onStdinClose?: boolean } = {}) {
     process.stdin.on("close", async () => {
       serverLog("Server stdin closed, cleaning up processes...");
       await cleanup();
+      await closeTraceStore();
       exitProcess(0);
     });
   }

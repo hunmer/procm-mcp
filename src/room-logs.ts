@@ -13,6 +13,7 @@ export interface RoomLogEntry {
   memberId?: string;
   clientName?: string;
   data?: JsonValue;
+  traceId?: string;
 }
 
 export interface RoomLogQuery {
@@ -56,6 +57,7 @@ function parseLine(raw: string, roomId: string, processId: string, stream: "stdo
     memberId: structured?.memberId,
     clientName: structured?.clientName,
     data: structured?.data,
+    traceId: structured?.traceId,
   };
 }
 

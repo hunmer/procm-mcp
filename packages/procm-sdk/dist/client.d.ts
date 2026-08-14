@@ -35,6 +35,7 @@ export declare class ProcmClient {
     private readonly subscriptions;
     private readonly memberHandlers;
     private readonly stateHandlers;
+    private readonly pendingTraceRequests;
     private socket;
     private disposed;
     private reconnectAttempt;
@@ -43,6 +44,7 @@ export declare class ProcmClient {
     private state;
     constructor(options?: ProcmClientOptions);
     get connectionState(): ConnectionState;
+    get pendingTraceRequestCount(): number;
     connect(): void;
     subscribe(topic: string, handler: MessageHandler, options?: SubscribeOptions): () => void;
     publish(topic: string, payload: JsonValue, options?: PublishOptions): string;
@@ -50,11 +52,14 @@ export declare class ProcmClient {
     onMember(handler: MemberHandler): () => void;
     onState(handler: StateHandler): () => void;
     close(): void;
+    requestTraceStore(requestId: string, traceId: string, payload: JsonValue, ttlSeconds: number | undefined): Promise<string>;
+    cancelTraceStore(requestId: string, error: Error): void;
     private handleMessage;
     private handleClose;
     private send;
     private sendSubscription;
     private setState;
+    private rejectPendingTraceRequests;
 }
 export declare function createProcmClient(options?: ProcmClientOptions): ProcmClient;
 export {};

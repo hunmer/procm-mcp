@@ -55,7 +55,7 @@ await runTest("tools/list returns process and room tools over HTTP", async () =>
   await mcpHttpHandshake(port);
   const r = await mcpHttp(port, 2, "tools/list", {});
   const names = r.result.tools.map((t) => t.name);
-  for (const name of ["process-logs", "start-process", "process", "batch-process", "room", "room-logs"]) {
+  for (const name of ["process-logs", "start-process", "process", "batch-process", "room", "room-logs", "trace-get"]) {
     assert(names.includes(name), `has ${name}`);
   }
 });

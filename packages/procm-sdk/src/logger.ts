@@ -16,6 +16,10 @@ export interface LoggerOptions {
   console?: Pick<Console, "debug" | "info" | "warn" | "error">;
 }
 
+export interface LogContext {
+  traceId?: string;
+}
+
 export class Logger {
   private readonly output: Pick<Console, "debug" | "info" | "warn" | "error">;
 
@@ -23,16 +27,16 @@ export class Logger {
     this.output = options.console ?? console;
   }
 
-  debug(message: string, data?: JsonValue): void { this.write("debug", message, data); }
-  info(message: string, data?: JsonValue): void { this.write("info", message, data); }
-  warn(message: string, data?: JsonValue): void { this.write("warn", message, data); }
-  error(message: string, data?: JsonValue): void { this.write("error", message, data); }
+  debug(message: string, data?: JsonValue, context?: LogContext): void { this.write("debug", message, data, context); }
+  info(message: string, data?: JsonValue, context?: LogContext): void { this.write("info", message, data, context); }
+  warn(message: string, data?: JsonValue, context?: LogContext): void { this.write("warn", message, data, context); }
+  error(message: string, data?: JsonValue, context?: LogContext): void { this.write("error", message, data, context); }
 
-  log(level: LogLevel, message: string, data?: JsonValue): void {
-    this.write(level, message, data);
+  log(level: LogLevel, message: string, data?: JsonValue, context?: LogContext): void {
+    this.write(level, message, data, context);
   }
 
-  private write(level: LogLevel, message: string, data?: JsonValue): void {
+  private write(level: LogLevel, message: string, data?: JsonValue, context?: LogContext): void {
     const client = this.options.client;
     const entry: StructuredLog = {
       version: PROCM_PROTOCOL_VERSION,
@@ -43,6 +47,7 @@ export class Logger {
       processId: this.options.processId ?? client?.processId,
       message,
       data,
+      traceId: context?.traceId,
     };
     const readable = `${entry.timestamp ? new Date(entry.timestamp).toISOString() : ""} ${level.toUpperCase()} ${entry.clientName}: ${message}${data === undefined ? "" : ` ${JSON.stringify(data)}`}`;
     this.output[level](`${readable} ${encodeStructuredLog(entry)}`);

@@ -33,6 +33,7 @@ export interface StructuredLog {
     processId?: string;
     message: string;
     data?: JsonValue;
+    traceId?: string;
 }
 export type ClientFrame = {
     version: typeof PROCM_PROTOCOL_VERSION;
@@ -62,6 +63,13 @@ export type ClientFrame = {
     retain?: boolean;
 } | {
     version: typeof PROCM_PROTOCOL_VERSION;
+    type: "trace:put";
+    requestId: string;
+    traceId: string;
+    ttlSeconds?: number;
+    payload: JsonValue;
+} | {
+    version: typeof PROCM_PROTOCOL_VERSION;
     type: "ping";
     timestamp: number;
 };
@@ -82,6 +90,12 @@ export type ServerFrame = {
     type: "error";
     code: string;
     message: string;
+    requestId?: string;
+} | {
+    version: typeof PROCM_PROTOCOL_VERSION;
+    type: "trace:stored";
+    requestId: string;
+    traceId: string;
 } | {
     version: typeof PROCM_PROTOCOL_VERSION;
     type: "pong";

@@ -7,15 +7,18 @@ export interface LoggerOptions {
     processId?: string;
     console?: Pick<Console, "debug" | "info" | "warn" | "error">;
 }
+export interface LogContext {
+    traceId?: string;
+}
 export declare class Logger {
     private readonly options;
     private readonly output;
     constructor(options?: LoggerOptions);
-    debug(message: string, data?: JsonValue): void;
-    info(message: string, data?: JsonValue): void;
-    warn(message: string, data?: JsonValue): void;
-    error(message: string, data?: JsonValue): void;
-    log(level: LogLevel, message: string, data?: JsonValue): void;
+    debug(message: string, data?: JsonValue, context?: LogContext): void;
+    info(message: string, data?: JsonValue, context?: LogContext): void;
+    warn(message: string, data?: JsonValue, context?: LogContext): void;
+    error(message: string, data?: JsonValue, context?: LogContext): void;
+    log(level: LogLevel, message: string, data?: JsonValue, context?: LogContext): void;
     private write;
 }
 export declare function createLogger(options?: LoggerOptions): Logger;

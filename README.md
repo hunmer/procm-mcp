@@ -161,6 +161,54 @@ await client.waitFor("frontend:ready", { timeout: 30_000 });
 logger.info("Backend ready", { pid: process.pid });
 ```
 
+### Function hooks and Redis traces
+
+Set `PROCM_REDIS_URL` on the procm-mcp backend or stdio MCP process to enable trace storage. Redis is optional for all existing process and room features.
+
+```bash
+PROCM_REDIS_URL="redis://127.0.0.1:6379/0" procm-mcp --server
+```
+
+Traces expire after 24 hours by default. `PROCM_TRACE_TTL_SECONDS` changes the default and accepts `1..604800` seconds. A trace is limited to 256 KiB after JSON serialization.
+
+```ts
+import { createHook, createLogger, createProcmClient, saveTrace } from "@procm-mcp/sdk";
+
+const client = createProcmClient({ clientName: "backend" });
+const logger = createLogger({ client });
+
+const fetchUser = createHook(async (id: string) => ({ id }), {
+  client,
+  name: "fetchUser",
+  captureArgs: true,
+  captureResult: true,
+});
+
+fetchUser.before(({ traceId, args }) => {
+  logger.info("fetchUser called", { userId: args[0] as string }, { traceId });
+});
+
+const user = await fetchUser("42");
+const diagnosticId = await saveTrace(client, { kind: "diagnostic", user });
+```
+
+`createHook` preserves `this`, synchronous return types, Promise behavior, and original thrown/rejected errors. Its synchronous `before` handlers may call `setArgs()` or `skip()`; synchronous `after` handlers may call `setResult()`. Argument/result capture is off by default. `hookProperty()` supports only configurable own properties and returns an idempotent restore function. Runtime locations are V8 JavaScript locations; source-map conversion and interception of local variables, closures, or read-only ESM bindings are not supported.
+
+Hook trace storage is asynchronous and never writes trace details or Redis status to the application console. `saveTrace()` is the explicit confirmation API and resolves only after Redis accepts the record. Timeout, abort, disconnect, invalid TTL, unsafe JSON, and oversized payloads reject without leaking pending requests.
+
+Use the `trace-get` MCP tool over stdio or `/mcp` with `{ "id": "<traceId>" }`. It returns `{ "ok": true, "trace": ... }`, or `{ "ok": false, "error": ... }` with one of these stable codes: `TRACE_NOT_FOUND`, `TRACE_REDIS_NOT_CONFIGURED`, `TRACE_REDIS_UNAVAILABLE`, `TRACE_INVALID_ID`, `TRACE_INVALID_PAYLOAD`, `TRACE_STORE_CONFLICT`, or `TRACE_REQUEST_TIMEOUT`.
+
+Trace verification:
+
+```bash
+npm run build:sdk
+npm run build
+npm test
+docker compose -f "tests/docker-compose.yml" up -d redis-test
+PROCM_REDIS_URL="redis://127.0.0.1:16379/15" npm run test:trace:redis
+docker compose -f "tests/docker-compose.yml" stop redis-test
+```
+
 Managed processes receive `PROCM_ROOM_ID`, `PROCM_PROCESS_ID`, `PROCM_WS_URL`, and optional authentication automatically. Explicit SDK options override environment values. See `demo/` for the Node.js and Electron workflow.
 
 `.mcp.json`
@@ -216,6 +264,7 @@ For network-facing setups, optional `PROCM_HTTP_TOKEN` requires an `Authorizatio
   - `cwd` (optional): Project directory containing `procm-commands.json` (default: current working directory)
 - `room` List, inspect, or update room metadata and active members
 - `room-logs` Merge structured logs for a room with optional member-prefix and level filters
+- `trace-get` Read a complete Redis-backed trace by exact ID
 
 ## License
 

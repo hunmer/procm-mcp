@@ -14,6 +14,11 @@ type MessageHandler = (message: RoomMessage) => void;
 type MemberHandler = (event: "joined" | "left" | "replaced", member: RoomMember) => void;
 type StateHandler = (state: ConnectionState) => void;
 
+interface PendingTraceRequest {
+  resolve: (traceId: string) => void;
+  reject: (error: Error) => void;
+}
+
 export interface ProcmClientOptions {
   url?: string;
   roomId?: string;
@@ -66,6 +71,7 @@ export class ProcmClient {
   private readonly subscriptions = new Map<string, Subscription>();
   private readonly memberHandlers = new Set<MemberHandler>();
   private readonly stateHandlers = new Set<StateHandler>();
+  private readonly pendingTraceRequests = new Map<string, PendingTraceRequest>();
   private socket: WebSocket | null = null;
   private disposed = false;
   private reconnectAttempt = 0;
@@ -85,6 +91,10 @@ export class ProcmClient {
 
   get connectionState(): ConnectionState {
     return this.state;
+  }
+
+  get pendingTraceRequestCount(): number {
+    return this.pendingTraceRequests.size;
   }
 
   connect(): void {
@@ -184,7 +194,40 @@ export class ProcmClient {
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     this.socket?.close(1000, "client disposed");
     this.socket = null;
+    this.rejectPendingTraceRequests(new Error("procm client closed"));
     this.setState("closed");
+  }
+
+  requestTraceStore(
+    requestId: string,
+    traceId: string,
+    payload: JsonValue,
+    ttlSeconds: number | undefined,
+  ): Promise<string> {
+    if (this.state !== "open") return Promise.reject(new Error("procm client is not connected"));
+    return new Promise((resolve, reject) => {
+      this.pendingTraceRequests.set(requestId, { resolve, reject });
+      try {
+        this.send({
+          version: PROCM_PROTOCOL_VERSION,
+          type: "trace:put",
+          requestId,
+          traceId,
+          ttlSeconds,
+          payload,
+        });
+      } catch (error) {
+        this.pendingTraceRequests.delete(requestId);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
+  }
+
+  cancelTraceStore(requestId: string, error: Error): void {
+    const pending = this.pendingTraceRequests.get(requestId);
+    if (!pending) return;
+    this.pendingTraceRequests.delete(requestId);
+    pending.reject(error);
   }
 
   private handleMessage(raw: unknown): void {
@@ -201,6 +244,20 @@ export class ProcmClient {
         }
       } else if (frame.type === "member") {
         for (const handler of this.memberHandlers) handler(frame.event, frame.member);
+      } else if (frame.type === "trace:stored") {
+        const pending = this.pendingTraceRequests.get(frame.requestId);
+        if (pending) {
+          this.pendingTraceRequests.delete(frame.requestId);
+          pending.resolve(frame.traceId);
+        }
+      } else if (frame.type === "error" && frame.requestId) {
+        const pending = this.pendingTraceRequests.get(frame.requestId);
+        if (pending) {
+          this.pendingTraceRequests.delete(frame.requestId);
+          const error = new Error(frame.message) as Error & { code?: string };
+          error.code = frame.code;
+          pending.reject(error);
+        }
       }
     } catch {
       // Malformed frames are ignored; the server remains authoritative.
@@ -211,6 +268,7 @@ export class ProcmClient {
     if (socket !== this.socket) return;
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     this.socket = null;
+    this.rejectPendingTraceRequests(new Error("procm WebSocket closed"));
     this.setState("closed");
     if (!this.disposed && this.options.reconnect !== false) {
       const base = Math.min(500 * 2 ** this.reconnectAttempt++, 10_000);
@@ -241,6 +299,11 @@ export class ProcmClient {
     if (this.state === state) return;
     this.state = state;
     for (const handler of this.stateHandlers) handler(state);
+  }
+
+  private rejectPendingTraceRequests(error: Error): void {
+    for (const pending of this.pendingTraceRequests.values()) pending.reject(error);
+    this.pendingTraceRequests.clear();
   }
 }
 

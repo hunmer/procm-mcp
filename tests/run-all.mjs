@@ -17,6 +17,8 @@ const scripts = [
   "cli-roundtrip.mjs",
   "data-path.mjs",
   "room-sdk.mjs",
+  "sdk-hook.mjs",
+  "trace-logger.mjs",
 ];
 
 function run(file) {

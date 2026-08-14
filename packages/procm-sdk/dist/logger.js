@@ -6,14 +6,14 @@ export class Logger {
         this.options = options;
         this.output = options.console ?? console;
     }
-    debug(message, data) { this.write("debug", message, data); }
-    info(message, data) { this.write("info", message, data); }
-    warn(message, data) { this.write("warn", message, data); }
-    error(message, data) { this.write("error", message, data); }
-    log(level, message, data) {
-        this.write(level, message, data);
+    debug(message, data, context) { this.write("debug", message, data, context); }
+    info(message, data, context) { this.write("info", message, data, context); }
+    warn(message, data, context) { this.write("warn", message, data, context); }
+    error(message, data, context) { this.write("error", message, data, context); }
+    log(level, message, data, context) {
+        this.write(level, message, data, context);
     }
-    write(level, message, data) {
+    write(level, message, data, context) {
         const client = this.options.client;
         const entry = {
             version: PROCM_PROTOCOL_VERSION,
@@ -24,6 +24,7 @@ export class Logger {
             processId: this.options.processId ?? client?.processId,
             message,
             data,
+            traceId: context?.traceId,
         };
         const readable = `${entry.timestamp ? new Date(entry.timestamp).toISOString() : ""} ${level.toUpperCase()} ${entry.clientName}: ${message}${data === undefined ? "" : ` ${JSON.stringify(data)}`}`;
         this.output[level](`${readable} ${encodeStructuredLog(entry)}`);

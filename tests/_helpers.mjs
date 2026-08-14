@@ -31,11 +31,12 @@ export function assertEqual(actual, expected, msg) {
 }
 
 // ---- backend lifecycle ----
-export async function startBackend({ port } = {}) {
+export async function startBackend({ port, env = {} } = {}) {
   const args = [buildIndex, "--server", "--port", String(port)];
   const child = spawn("node", args, {
     cwd: projectRoot,
     stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env, ...env },
   });
   // Wait until /api/processes responds.
   const deadline = Date.now() + 8000;
@@ -87,11 +88,12 @@ export async function http(port, method, path, body, token) {
 // next. This matters because the MCP SDK may dispatch concurrently-received
 // requests in parallel, which races dependent calls. Never close stdin (that
 // triggers cleanup+exit); we kill the server when done.
-export async function mcpCalls(requests) {
+export async function mcpCalls(requests, { env = {} } = {}) {
   const args = [buildIndex];
   const child = spawn("node", args, {
     cwd: projectRoot,
     stdio: ["pipe", "pipe", "ignore"],
+    env: { ...process.env, ...env },
   });
 
   // Initialize handshake first.

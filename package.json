@@ -35,7 +35,8 @@
     "test:logs": "npm run build && node ./tests/logs-grep.mjs",
     "test:http": "npm run build && node ./tests/http-api.mjs",
     "test:mcp": "npm run build && node ./tests/mcp-http.mjs",
-    "test:cli": "npm run build && node ./tests/cli-roundtrip.mjs"
+    "test:cli": "npm run build && node ./tests/cli-roundtrip.mjs",
+    "test:trace:redis": "npm run build && node ./tests/trace-redis.mjs"
   },
   "keywords": [],
   "dependencies": {
@@ -47,6 +48,7 @@
     "mkdirp": "^3.0.1",
     "nanoid": "^5.1.5",
     "ps-list": "^9.0.0",
+    "redis": "6.2.1",
     "tree-kill": "^1.2.2",
     "ws": "^8.21.1",
     "zod": "^3.25.64"

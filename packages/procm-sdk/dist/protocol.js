@@ -31,6 +31,13 @@ export function parseClientFrame(value) {
                 "payload" in value
                 ? value
                 : null;
+        case "trace:put":
+            return typeof value.requestId === "string" &&
+                typeof value.traceId === "string" &&
+                (value.ttlSeconds === undefined || typeof value.ttlSeconds === "number") &&
+                "payload" in value
+                ? value
+                : null;
         case "ping":
             return typeof value.timestamp === "number" ? value : null;
         default:
@@ -41,7 +48,7 @@ export function parseServerFrame(value) {
     if (!isRecord(value) || value.version !== PROCM_PROTOCOL_VERSION || typeof value.type !== "string") {
         return null;
     }
-    return ["welcome", "message", "member", "error", "pong"].includes(value.type)
+    return ["welcome", "message", "member", "error", "trace:stored", "pong"].includes(value.type)
         ? value
         : null;
 }

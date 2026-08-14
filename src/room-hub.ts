@@ -11,6 +11,7 @@ import {
 import { nanoid } from "nanoid";
 import { ensureRoom, listRoomRecords, getRoomRecord, updateRoom, type RoomRecord } from "./room-repository.js";
 import { serverLog } from "./server-log.js";
+import { putTrace, TraceStoreError } from "./trace-store.js";
 
 interface Subscription { topic: string; prefix: boolean }
 interface Session {
@@ -33,8 +34,8 @@ function send(socket: WebSocket, frame: ServerFrame): void {
   }
 }
 
-function sendError(socket: WebSocket, code: string, message: string): void {
-  send(socket, { version: PROCM_PROTOCOL_VERSION, type: "error", code, message });
+function sendError(socket: WebSocket, code: string, message: string, requestId?: string): void {
+  send(socket, { version: PROCM_PROTOCOL_VERSION, type: "error", code, message, requestId });
 }
 
 function broadcastMember(session: Session, event: "joined" | "left" | "replaced"): void {
@@ -127,6 +128,31 @@ export function attachRoomSocket(socket: WebSocket): void {
     }
     if (frame.type === "unsubscribe") {
       session.subscriptions.delete(frame.subscriptionId);
+      return;
+    }
+    if (frame.type === "trace:put") {
+      try {
+        await putTrace({
+          version: 1,
+          traceId: frame.traceId,
+          createdAt: Date.now(),
+          roomId: session.roomId,
+          memberId: session.member.memberId,
+          processId: session.member.processId,
+          data: frame.payload,
+        }, frame.ttlSeconds);
+        send(socket, {
+          version: PROCM_PROTOCOL_VERSION,
+          type: "trace:stored",
+          requestId: frame.requestId,
+          traceId: frame.traceId,
+        });
+      } catch (error) {
+        const normalized = error instanceof TraceStoreError
+          ? error
+          : new TraceStoreError("TRACE_REDIS_UNAVAILABLE", "Trace storage is unavailable");
+        sendError(socket, normalized.code, normalized.message, frame.requestId);
+      }
       return;
     }
     if (frame.type === "publish") {

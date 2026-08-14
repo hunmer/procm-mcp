@@ -42,6 +42,7 @@ export interface StructuredLog {
   processId?: string;
   message: string;
   data?: JsonValue;
+  traceId?: string;
 }
 
 export type ClientFrame =
@@ -75,6 +76,14 @@ export type ClientFrame =
       payload: JsonValue;
       retain?: boolean;
     }
+  | {
+      version: typeof PROCM_PROTOCOL_VERSION;
+      type: "trace:put";
+      requestId: string;
+      traceId: string;
+      ttlSeconds?: number;
+      payload: JsonValue;
+    }
   | { version: typeof PROCM_PROTOCOL_VERSION; type: "ping"; timestamp: number };
 
 export type ServerFrame =
@@ -98,6 +107,13 @@ export type ServerFrame =
       type: "error";
       code: string;
       message: string;
+      requestId?: string;
+    }
+  | {
+      version: typeof PROCM_PROTOCOL_VERSION;
+      type: "trace:stored";
+      requestId: string;
+      traceId: string;
     }
   | { version: typeof PROCM_PROTOCOL_VERSION; type: "pong"; timestamp: number };
 
@@ -130,6 +146,13 @@ export function parseClientFrame(value: unknown): ClientFrame | null {
         "payload" in value
         ? (value as unknown as ClientFrame)
         : null;
+    case "trace:put":
+      return typeof value.requestId === "string" &&
+        typeof value.traceId === "string" &&
+        (value.ttlSeconds === undefined || typeof value.ttlSeconds === "number") &&
+        "payload" in value
+        ? (value as unknown as ClientFrame)
+        : null;
     case "ping":
       return typeof value.timestamp === "number" ? (value as ClientFrame) : null;
     default:
@@ -141,7 +164,7 @@ export function parseServerFrame(value: unknown): ServerFrame | null {
   if (!isRecord(value) || value.version !== PROCM_PROTOCOL_VERSION || typeof value.type !== "string") {
     return null;
   }
-  return ["welcome", "message", "member", "error", "pong"].includes(value.type)
+  return ["welcome", "message", "member", "error", "trace:stored", "pong"].includes(value.type)
     ? (value as unknown as ServerFrame)
     : null;
 }
