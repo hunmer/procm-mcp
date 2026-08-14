@@ -554,7 +554,7 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
   return (
     <aside
       ref={asideRef}
-      className="bg-card flex h-full min-w-0 flex-col overflow-hidden rounded-xl border"
+      className="flex h-full min-w-0 flex-col overflow-hidden"
     >
       <header className="flex shrink-0 flex-col gap-3 border-b p-4">
         <div className="flex items-start justify-between gap-3">

@@ -45,7 +45,10 @@ export async function scanProjectCommands(
     readJsonIfExists(path.join(resolved, "procm-commands.json")),
   ]);
 
-  if (pkg) candidates.push(...fromPackageJson(pkg, resolved));
+  if (pkg) {
+    const packageManager = await detectPackageManager(pkg, resolved);
+    candidates.push(...fromPackageJson(pkg, resolved, packageManager));
+  }
   if (py) candidates.push(...fromPyproject(py, resolved));
   if (cargo) candidates.push(...fromCargo(resolved));
   if (procm) candidates.push(...fromProcmCommands(procm, resolved));
@@ -66,17 +69,18 @@ export async function scanProjectCommands(
 function fromPackageJson(
   pkg: Record<string, unknown>,
   cwd: string,
+  packageManager: PackageManager,
 ): ScanCandidate[] {
   const scripts = pkg.scripts;
   if (!scripts || typeof scripts !== "object") return [];
   const out: ScanCandidate[] = [];
   for (const [name, raw] of Object.entries(scripts as Record<string, unknown>)) {
     if (typeof raw !== "string") continue;
-    // Skip trivially empty entries; everything else becomes `npm run <name>`.
+    // Skip trivially empty entries; everything else becomes `<manager> run <name>`.
     // We surface the original script string as the description so the user can
     // tell what `dev` actually runs before importing it.
     out.push({
-      script: "npm",
+      script: packageManager,
       args: ["run", name],
       cwd,
       name,
@@ -86,6 +90,42 @@ function fromPackageJson(
   // Sort alphabetically by script name for a stable, scannable list.
   out.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
   return out;
+}
+
+type PackageManager = "npm" | "pnpm" | "yarn" | "bun";
+
+const packageManagerFiles: Array<[string, PackageManager]> = [
+  ["pnpm-workspace.yaml", "pnpm"],
+  ["pnpm-lock.yaml", "pnpm"],
+  ["yarn.lock", "yarn"],
+  ["bun.lock", "bun"],
+  ["bun.lockb", "bun"],
+  ["package-lock.json", "npm"],
+  ["npm-shrinkwrap.json", "npm"],
+];
+
+async function detectPackageManager(
+  pkg: Record<string, unknown>,
+  cwd: string,
+): Promise<PackageManager> {
+  const declared = pkg.packageManager;
+  if (typeof declared === "string") {
+    const manager = declared.match(/^(npm|pnpm|yarn|bun)(?:@|$)/)?.[1];
+    if (manager) return manager as PackageManager;
+  }
+
+  let current = cwd;
+  while (true) {
+    for (const [file, manager] of packageManagerFiles) {
+      const exists = await stat(path.join(current, file))
+        .then((info) => info.isFile())
+        .catch(() => false);
+      if (exists) return manager;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) return "npm";
+    current = parent;
+  }
 }
 
 // ---- pyproject.toml -----------------------------------------------------

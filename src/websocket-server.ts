@@ -25,6 +25,7 @@ function toPublicView(p: ProcessRecord) {
     exitCode: p.exitCode,
     error: p.error,
     desc: p.desc,
+    port: p.port ?? null,
     startedAt: p.startedAt,
     lastStartedAt: p.lastStartedAt ?? null,
     stoppedAt: p.stoppedAt,

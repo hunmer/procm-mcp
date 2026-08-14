@@ -19,6 +19,9 @@ export interface Favorite {
   args: string[];
   cwd: string;
   envs?: Record<string, string>;
+  // Optional port the process serves on, carried into the start call so a
+  // relaunched favorite keeps its one-click open link.
+  port?: number;
   // Optional grouping key. Empty string means "Uncategorized".
   category?: string;
   // Epoch ms — newest first in the UI.
@@ -35,6 +38,7 @@ export function favoriteFromProcess(p: ProcessView): Favorite {
     script: p.script,
     args: p.args,
     cwd: p.cwd,
+    port: typeof p.port === "number" ? p.port : undefined,
     category: "",
     createdAt: Date.now(),
   };
@@ -50,6 +54,7 @@ export function favoriteToStartBody(f: Favorite): StartProcessBody {
     cwd: f.cwd.trim(),
     envs: f.envs,
     desc: f.desc?.trim() || undefined,
+    port: f.port,
   };
 }
 
@@ -121,6 +126,7 @@ function normalize(raw: Record<string, unknown>): Favorite | null {
     args,
     cwd,
     envs,
+    port: typeof raw.port === "number" ? raw.port : undefined,
     category: typeof raw.category === "string" ? raw.category : "",
     createdAt: typeof raw.createdAt === "number" ? raw.createdAt : Date.now(),
   };

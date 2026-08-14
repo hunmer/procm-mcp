@@ -9,6 +9,7 @@ import {
   TabsTab,
 } from "@/registry/default/ui/tabs";
 import {
+  ActivityIcon,
   LanguagesIcon,
   ListIcon,
   MoonIcon,
@@ -24,6 +25,7 @@ import {
 } from "./NewProcessDialog";
 import { ImportFavoritesDialog } from "./ImportFavoritesDialog";
 import { ProcessList } from "./ProcessList";
+import { SystemProcessList } from "./SystemProcessList";
 import { FavoritesView } from "./FavoritesView";
 import { LogPanel } from "./LogPanel";
 import { Toast } from "./Toast";
@@ -82,10 +84,11 @@ export function App() {
   // Per-process unread log counters (incremented on live log push, cleared
   // when that process's log panel is open).
   const [unread, setUnread] = useState<Record<string, number>>({});
-  // Which list tab is shown: the live process table or the favorites grid.
-  const [activeTab, setActiveTab] = useState<"processes" | "favorites">(
-    "processes",
-  );
+  // Which list tab is shown: the live process table, the favorites grid, or
+  // the OS-level system-process monitor.
+  const [activeTab, setActiveTab] = useState<
+    "processes" | "favorites" | "system"
+  >("processes");
   const { theme, toggle } = useTheme();
   const { language, changeLanguage } = useLanguage();
   const { t } = useTranslation();
@@ -250,15 +253,17 @@ export function App() {
     if (p) setUnread((cur) => (cur[p.id] ? { ...cur, [p.id]: 0 } : cur));
   }, []);
 
-  // Keep openLogIdRef in sync when the panel collapses/expands or selection
-  // changes via other paths.
+  // Keep openLogIdRef in sync when the panel collapses/expands, selection
+  // changes, or the user switches tabs. The log panel only renders on the
+  // 进程 tab, so on other tabs it is effectively closed and live logs for the
+  // selected process must count as unread instead of being swallowed.
   useEffect(() => {
-    openLogIdRef.current =
-      selected && !logCollapsed ? selected.id : null;
-    if (selected && !logCollapsed) {
-      setUnread((cur) => (cur[selected.id] ? { ...cur, [selected.id]: 0 } : cur));
+    const open = activeTab === "processes" && !!selected && !logCollapsed;
+    openLogIdRef.current = open && selected ? selected.id : null;
+    if (open && selected) {
+      setUnread((cur) => (cur[selected.id] ? { ...cur, [selected.id] : 0 } : cur));
     }
-  }, [selected, logCollapsed]);
+  }, [selected, logCollapsed, activeTab]);
 
   // Reflect the current selection + collapse state into the URL so links and
   // refreshes restore the same view. replaceState keeps the history stack clean.
@@ -475,8 +480,8 @@ export function App() {
         </div>
       </header>
 
-      {/* Inline left/right split: selecting a process's logs opens the right
-          column, which squeezes the left process list (no overlay). */}
+      {/* The log panel lives inside the 进程 (Processes) tab as a right column
+          next to the process list, so it only takes up space on that tab. */}
       <div className="flex min-h-0 flex-1">
         <main className="flex min-w-0 flex-1 flex-col gap-4 p-5">
           <div className="bg-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
@@ -487,7 +492,13 @@ export function App() {
               <Tabs
                 value={activeTab}
                 onValueChange={(v) =>
-                  setActiveTab(v === "favorites" ? "favorites" : "processes")
+                  setActiveTab(
+                    v === "favorites"
+                      ? "favorites"
+                      : v === "system"
+                        ? "system"
+                        : "processes",
+                  )
                 }
               >
                 <TabsList className="relative">
@@ -499,6 +510,10 @@ export function App() {
                         ({processes.length})
                       </span>
                     )}
+                  </TabsTab>
+                  <TabsTab value="system">
+                    <ActivityIcon className="size-3.5" />
+                    {t("header.tabSystem")}
                   </TabsTab>
                   <TabsTab value="favorites">
                     <StarIcon className="size-3.5" />
@@ -533,20 +548,38 @@ export function App() {
               </div>
             </div>
             {activeTab === "processes" ? (
-              <ProcessList
-                processes={processes}
-                selectedId={selected?.id ?? null}
-                now={now}
-                unread={unread}
-                favoritedSignatures={favoritedSignatures}
-                onToggleFavorite={handleToggleFavorite}
-                onSelectLogs={openLogFor}
-                onView={(p) => {
-                  setViewing(p);
-                  setDetailsOpen(true);
-                }}
-                onToast={showToast}
-              />
+              <div className="flex min-h-0 flex-1">
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <ProcessList
+                    processes={processes}
+                    selectedId={selected?.id ?? null}
+                    now={now}
+                    unread={unread}
+                    favoritedSignatures={favoritedSignatures}
+                    onToggleFavorite={handleToggleFavorite}
+                    onSelectLogs={openLogFor}
+                    onView={(p) => {
+                      setViewing(p);
+                      setDetailsOpen(true);
+                    }}
+                    onToast={showToast}
+                  />
+                </div>
+                {selected && !logCollapsed && (
+                  <div className="w-full max-w-[min(640px,46vw)] shrink-0 border-l">
+                    <LogPanel
+                      process={selected}
+                      onClose={() => setLogCollapsed(true)}
+                      onLiveLog={(cb) => {
+                        liveLogForwardRef.current = cb;
+                      }}
+                      onToast={showToast}
+                    />
+                  </div>
+                )}
+              </div>
+            ) : activeTab === "system" ? (
+              <SystemProcessList onToast={showToast} />
             ) : (
               <FavoritesView
                 favorites={favorites}
@@ -560,24 +593,12 @@ export function App() {
             )}
           </div>
         </main>
-
-        {selected && !logCollapsed && (
-          <div className="w-full max-w-[min(640px,46vw)] shrink-0 p-5 pl-0">
-            <LogPanel
-              process={selected}
-              onClose={() => setLogCollapsed(true)}
-              onLiveLog={(cb) => {
-                liveLogForwardRef.current = cb;
-              }}
-              onToast={showToast}
-            />
-          </div>
-        )}
       </div>
 
       {/* When the log panel is collapsed but a process is selected, show a
-          slim rail to reopen it, instead of losing the selection entirely. */}
-      {selected && logCollapsed && (
+          slim rail to reopen it, instead of losing the selection entirely.
+          Only on the 进程 tab — that's where the panel lives. */}
+      {activeTab === "processes" && selected && logCollapsed && (
         <button
           type="button"
           onClick={() => setLogCollapsed(false)}

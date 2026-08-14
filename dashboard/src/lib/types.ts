@@ -14,6 +14,9 @@ export interface ProcessView {
   error: string | null;
   // Optional human-readable description, shown in the process list.
   desc?: string | null;
+  // Optional port the process serves on; the card shows a one-click open link
+  // to http://localhost:<port> when set. null/undefined when absent.
+  port?: number | null;
   // Lifecycle timestamps (epoch ms). addedAt stays undefined for live-only
   // records the server didn't persist, so the UI tolerates their absence.
   startedAt?: number;
@@ -27,6 +30,23 @@ export interface ProcessListResponse {
   serverId: string;
   pid: number;
   processes: ProcessView[];
+}
+
+// A single OS-level process row from /api/system-processes. Unlike ProcessView
+// (which tracks procm-mcp's own spawned processes), these are all host-OS
+// processes. `cmd` is the full command line (exe path + args) and `exe` the
+// executable path; either may be null on platforms/scopes that don't expose
+// them (kernel processes, or non-Windows where only `cmd` is known).
+export interface SystemProcess {
+  pid: number;
+  ppid: number;
+  name: string;
+  cmd: string | null;
+  exe: string | null;
+}
+
+export interface SystemProcessListResponse {
+  processes: SystemProcess[];
 }
 
 export interface LogsResponse {
@@ -49,6 +69,7 @@ export interface StartProcessBody {
   cwd: string;
   envs?: Record<string, string>;
   desc?: string;
+  port?: number;
 }
 
 // ---- WebSocket messages (mirrors src/websocket-server.ts envelope) ----

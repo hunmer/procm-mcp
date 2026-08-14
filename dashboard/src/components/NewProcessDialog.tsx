@@ -53,6 +53,7 @@ export function NewProcessDialog({ onStarted, onError }: NewProcessDialogProps) 
   const [cwd, setCwd] = useState("");
   const [desc, setDesc] = useState("");
   const [envs, setEnvs] = useState("");
+  const [port, setPort] = useState("");
 
   const presets = useProcessPresets();
 
@@ -63,12 +64,22 @@ export function NewProcessDialog({ onStarted, onError }: NewProcessDialogProps) 
     setCwd("");
     setDesc("");
     setEnvs("");
+    setPort("");
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!script.trim() || !cwd.trim()) {
       onError(t("dialogs.newProcess.validationError"));
+      return;
+    }
+    const portTrimmed = port.trim();
+    const portNum = portTrimmed === "" ? undefined : Number(portTrimmed);
+    if (
+      portNum !== undefined &&
+      (!Number.isInteger(portNum) || portNum < 1 || portNum > 65535)
+    ) {
+      onError(t("dialogs.newProcess.portValidationError"));
       return;
     }
     setSubmitting(true);
@@ -80,6 +91,7 @@ export function NewProcessDialog({ onStarted, onError }: NewProcessDialogProps) 
         cwd: cwd.trim(),
         envs: parseEnvs(envs),
         desc: desc.trim() || undefined,
+        port: portNum,
       });
       reset();
       setOpen(false);
@@ -111,7 +123,8 @@ export function NewProcessDialog({ onStarted, onError }: NewProcessDialogProps) 
           cwd={cwd}
           desc={desc}
           envs={envs}
-          setters={{ setName, setScript, setArgs, setCwd, setDesc, setEnvs }}
+          port={port}
+          setters={{ setName, setScript, setArgs, setCwd, setDesc, setEnvs, setPort }}
           presets={presets}
           submitting={submitting}
           onSubmit={handleSubmit}
@@ -136,6 +149,7 @@ export function ProcessDetailsDialog({
     cwd: "",
     desc: "",
     envs: "",
+    port: "",
   });
 
   // Sync the form from the process whenever the dialog is opened to a new one.
@@ -148,6 +162,7 @@ export function ProcessDetailsDialog({
         cwd: viewProcess.cwd,
         desc: viewProcess.desc ?? "",
         envs: "", // envs are not exposed in the public view by design
+        port: viewProcess.port ? String(viewProcess.port) : "",
       });
     }
   }, [open, viewProcess]);
@@ -170,6 +185,7 @@ export function ProcessDetailsDialog({
           cwd={fields.cwd}
           desc={fields.desc}
           envs={fields.envs}
+          port={fields.port}
           setters={{
             setName: () => {},
             setScript: () => {},
@@ -177,6 +193,7 @@ export function ProcessDetailsDialog({
             setCwd: () => {},
             setDesc: () => {},
             setEnvs: () => {},
+            setPort: () => {},
           }}
           presets={[]}
           readOnly
@@ -222,6 +239,7 @@ export function FavoriteDialog({
     cwd: "",
     desc: "",
     envs: "",
+    port: "",
     category: "",
   });
 
@@ -236,6 +254,7 @@ export function FavoriteDialog({
         cwd: seedFavorite.cwd,
         desc: seedFavorite.desc ?? "",
         envs: stringifyEnvs(seedFavorite.envs),
+        port: seedFavorite.port ? String(seedFavorite.port) : "",
         category: seedFavorite.category ?? "",
       });
     } else if (seedProcess) {
@@ -248,6 +267,7 @@ export function FavoriteDialog({
         cwd: seedProcess.cwd,
         desc: seedProcess.desc ?? "",
         envs: "",
+        port: seedProcess.port ? String(seedProcess.port) : "",
         category: "",
       });
     }
@@ -260,6 +280,8 @@ export function FavoriteDialog({
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!fields.script.trim() || !fields.cwd.trim()) return;
+    const portTrimmed = fields.port.trim();
+    const portNum = portTrimmed === "" ? undefined : Number(portTrimmed);
     const fav: Favorite = {
       id: seedFavorite?.id ?? makeFavoriteId(),
       name: fields.name.trim() || undefined,
@@ -268,6 +290,15 @@ export function FavoriteDialog({
       args: fields.args.trim() ? fields.args.trim().split(/\s+/) : [],
       cwd: fields.cwd.trim(),
       envs: parseEnvs(fields.envs),
+      // Only persist a valid port; drop anything the user half-typed so a
+      // relaunched favorite never carries a bogus number into the start call.
+      port:
+        portNum !== undefined &&
+        Number.isInteger(portNum) &&
+        portNum >= 1 &&
+        portNum <= 65535
+          ? portNum
+          : undefined,
       category: fields.category.trim(),
       createdAt: seedFavorite?.createdAt ?? Date.now(),
     };
@@ -296,6 +327,7 @@ export function FavoriteDialog({
           cwd={fields.cwd}
           desc={fields.desc}
           envs={fields.envs}
+          port={fields.port}
           category={fields.category}
           setters={{
             setName: (v) => set("name", v),
@@ -304,10 +336,12 @@ export function FavoriteDialog({
             setCwd: (v) => set("cwd", v),
             setDesc: (v) => set("desc", v),
             setEnvs: (v) => set("envs", v),
+            setPort: (v) => set("port", v),
             setCategory: (v) => set("category", v),
           }}
           presets={[]}
           submitting={false}
+          submitLabel={t(isEdit ? "common.edit" : "common.save")}
           onSubmit={handleSubmit}
         />
       </DialogPopup>
@@ -325,6 +359,7 @@ interface ProcessFormProps {
   cwd: string;
   desc: string;
   envs: string;
+  port: string;
   category?: string;
   setters: {
     setName: (v: string) => void;
@@ -333,11 +368,16 @@ interface ProcessFormProps {
     setCwd: (v: string) => void;
     setDesc: (v: string) => void;
     setEnvs: (v: string) => void;
+    setPort: (v: string) => void;
     setCategory?: (v: string) => void;
   };
   presets: ReturnType<typeof useProcessPresets>;
   readOnly?: boolean;
   submitting: boolean;
+  // Override for the submit button label. Defaults to the new-process
+  // "Start process" string; the favorite editor passes Edit/Save instead so
+  // the shared form's button matches the dialog it lives in.
+  submitLabel?: string;
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
 }
 
@@ -348,11 +388,13 @@ function ProcessForm({
   cwd,
   desc,
   envs,
+  port,
   category,
   setters,
   presets,
   readOnly,
   submitting,
+  submitLabel,
   onSubmit,
 }: ProcessFormProps) {
   const { t } = useTranslation();
@@ -428,6 +470,26 @@ function ProcessForm({
               readOnly={readOnly}
             />
           </Field>
+          <Field>
+            <FieldLabel htmlFor="f-port">
+              {t("dialogs.form.portLabel")}
+            </FieldLabel>
+            <Input
+              id="f-port"
+              type="number"
+              min={1}
+              max={65535}
+              placeholder={t("dialogs.form.portPlaceholder")}
+              value={port}
+              onChange={(e) => setters.setPort(e.target.value)}
+              readOnly={readOnly}
+            />
+            {!readOnly && (
+              <FieldDescription>
+                {t("dialogs.form.portHelp")}
+              </FieldDescription>
+            )}
+          </Field>
         </div>
         <Field className="mt-4">
           <FieldLabel htmlFor="f-desc">{t("dialogs.form.descLabel")}</FieldLabel>
@@ -484,7 +546,7 @@ function ProcessForm({
         </DialogClose>
         {!readOnly && (
           <Button type="submit" loading={submitting}>
-            {t("dialogs.newProcess.submit")}
+            {submitLabel ?? t("dialogs.newProcess.submit")}
           </Button>
         )}
       </DialogFooter>

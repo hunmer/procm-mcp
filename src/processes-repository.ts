@@ -17,6 +17,10 @@ export type ProcessRecord = {
   error: string | null;
   // Optional human-readable description (persisted so it survives restarts).
   desc: string | null;
+  // Optional port the process serves on. Persisted so the dashboard's one-click
+  // open link survives restarts. Undefined on records written before this field
+  // existed; null when explicitly absent.
+  port?: number | null;
   // Epoch ms when the process was first started.
   startedAt: number;
   // Epoch ms of the most recent start; reset on every restart (distinct from

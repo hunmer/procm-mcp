@@ -10,6 +10,9 @@ import {
   summarize,
   projectRoot,
 } from "./_helpers.mjs";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const port = randomPort();
 let backend;
@@ -45,6 +48,36 @@ await runTest("POST start without script/cwd → 400", async () => {
   const { status, data } = await http(port, "POST", "/api/processes", { script: "" });
   assertEqual(status, 400, "400 for empty script");
   assert(!!data.error, "has error message");
+});
+
+await runTest("package scripts use the enclosing pnpm workspace", async () => {
+  const workspace = await mkdtemp(join(tmpdir(), "procm-pnpm-workspace-"));
+  const packageDir = join(workspace, "packages", "client");
+  try {
+    await mkdir(packageDir, { recursive: true });
+    await writeFile(join(workspace, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n");
+    await writeFile(
+      join(packageDir, "package.json"),
+      JSON.stringify({
+        scripts: {
+          "electron:dev":
+            "chcp 65001 && cross-env NODE_ENV=development vite --mode electron",
+        },
+      }),
+    );
+
+    const { status, data } = await http(
+      port,
+      "POST",
+      "/api/favorites/scan",
+      { path: packageDir },
+    );
+    assertEqual(status, 200, "scan status");
+    assertEqual(data.candidates?.[0]?.script, "pnpm", "package manager");
+    assertEqual(data.candidates?.[0]?.args?.join(" "), "run electron:dev", "script args");
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
 });
 
 stopBackend(backend);

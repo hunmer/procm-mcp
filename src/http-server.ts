@@ -28,6 +28,7 @@ import { ProcessMetadata } from "./types.js";
 import { handleMcpRequest } from "./mcp-http.js";
 import { attachWebsocketServer } from "./websocket-server.js";
 import { scanProjectCommands } from "./project-scanner.js";
+import { listSystemProcesses, killProcessTree } from "./system-processes.js";
 
 const HOST = "127.0.0.1";
 
@@ -84,6 +85,7 @@ function toPublicView(p: ProcessMetadata) {
     exitCode: p.exitCode,
     error: p.error,
     desc: p.desc,
+    port: p.port,
   };
 }
 
@@ -101,6 +103,7 @@ function toPublicRecord(p: ProcessRecord) {
     exitCode: p.exitCode,
     error: p.error,
     desc: p.desc,
+    port: p.port ?? null,
     startedAt: p.startedAt,
     lastStartedAt: p.lastStartedAt ?? null,
     stoppedAt: p.stoppedAt,
@@ -128,27 +131,60 @@ function readBody(req: http.IncomingMessage): Promise<string> {
 // isn't tied to the spawned process's lifetime. Rejects with a clear message
 // on a missing/non-dir path or a launch failure.
 function openInFileManager(dir: string): Promise<void> {
+  return launchFileManager(dir, false);
+}
+
+// Reveal an arbitrary path in the OS file manager. Unlike openInFileManager
+// (folders only), this also handles files and selects them in the manager:
+//   - Windows: `explorer /select,"<file>"` for files, `explorer "<folder>"`
+//   - macOS:   `open -R "<file>"` (Reveal) for files, `open "<folder>"`
+//   - Linux:   no cross-DE "select file" flag, so a file reveals its parent
+//               dir via xdg-open; a folder opens directly.
+// Resolves once the manager is launched; we don't wait for it to exit.
+function revealPath(path: string): Promise<void> {
+  return launchFileManager(path, true);
+}
+
+// Shared launcher for open-folder and reveal-path. `select` requests that a
+// file be selected in the manager when supported; non-existent paths error.
+function launchFileManager(path: string, select: boolean): Promise<void> {
   return new Promise((resolve, reject) => {
-    stat(dir)
+    stat(path)
       .then((info) => {
-        if (!info.isDirectory()) {
-          throw new Error(`Not a folder: ${dir}`);
-        }
+        const isDir = info.isDirectory();
         const platform = process.platform;
-        // Windows: explorer; macOS: open; Linux/other: xdg-open.
-        const [cmd, args] =
-          platform === "win32"
-            ? ["explorer", [dir]]
-            : platform === "darwin"
-              ? ["open", [dir]]
-              : ["xdg-open", [dir]];
-        const child = spawn(cmd, args, {
-          detached: true,
-          stdio: "ignore",
-        });
+        let cmd: string;
+        let args: string[];
+        if (select && !isDir) {
+          // Reveal + select a file.
+          if (platform === "win32") {
+            cmd = "explorer";
+            args = ["/select,", path];
+          } else if (platform === "darwin") {
+            cmd = "open";
+            args = ["-R", path];
+          } else {
+            // Linux: fall back to opening the containing directory.
+            cmd = "xdg-open";
+            args = [parentDir(path)];
+          }
+        } else {
+          // Open a folder (or a file with no selection).
+          if (!isDir) {
+            throw new Error(`Not a folder: ${path}`);
+          }
+          cmd =
+            platform === "win32"
+              ? "explorer"
+              : platform === "darwin"
+                ? "open"
+                : "xdg-open";
+          args = [path];
+        }
+        const child = spawn(cmd, args, { detached: true, stdio: "ignore" });
         child.on("error", (e) => {
           reject(
-            new Error(`Could not open folder (${cmd}): ${toErrorMessage(e)}`),
+            new Error(`Could not open in file manager (${cmd}): ${toErrorMessage(e)}`),
           );
         });
         child.unref();
@@ -157,6 +193,13 @@ function openInFileManager(dir: string): Promise<void> {
       })
       .catch((e) => reject(e));
   });
+}
+
+// Best-effort parent directory of a path (for the Linux reveal fallback).
+function parentDir(p: string): string {
+  const sep = p.includes("/") ? "/" : "\\";
+  const idx = p.lastIndexOf(sep);
+  return idx > 0 ? p.slice(0, idx) : p;
 }
 
 // Merge two plain-text log blobs (each line `[ISO] message`) into a single
@@ -506,6 +549,57 @@ function createRequestHandler(token: string | undefined) {
         return;
       }
 
+      // POST /api/reveal -> reveal a path in the OS file manager. Like
+      // /api/open-folder but also handles files, selecting them in the manager
+      // (used by the System tab's "Open process location" to show the exe).
+      if (method === "POST" && pathname === "/api/reveal") {
+        const body = JSON.parse((await readBody(req)) || "{}");
+        const target = String(body.path || "").trim();
+        if (!target) {
+          json(res, 400, { error: "path is required" });
+          return;
+        }
+        try {
+          await revealPath(target);
+          json(res, 200, { ok: true });
+        } catch (e) {
+          json(res, 400, { error: toErrorMessage(e) });
+        }
+        return;
+      }
+
+      // GET /api/system-processes -> enumerate all running OS processes for the
+      // System tab. Unlike /api/processes (which tracks procm-mcp's own spawned
+      // processes), this lists everything the host OS is running. Returns
+      // pid/ppid/name plus full command line + exe path when the platform
+      // exposes them (Windows does; ps-list on Unix gives the command line).
+      if (method === "GET" && pathname === "/api/system-processes") {
+        try {
+          const processes = await listSystemProcesses();
+          json(res, 200, { processes });
+        } catch (e) {
+          json(res, 500, { error: toErrorMessage(e) });
+        }
+        return;
+      }
+
+      // POST /api/system-processes/:pid/kill -> terminate a process and its
+      // whole descendant tree (tree-kill -> taskkill /T /F on Windows).
+      // Protected pids (idle/system/self) are refused by the helper.
+      const sysKillMatch = pathname.match(
+        /^\/api\/system-processes\/(\d+)\/kill$/,
+      );
+      if (method === "POST" && sysKillMatch) {
+        const pid = Number(sysKillMatch[1]);
+        try {
+          await killProcessTree(pid);
+          json(res, 200, { ok: true, pid });
+        } catch (e) {
+          json(res, 400, { error: toErrorMessage(e) });
+        }
+        return;
+      }
+
       // /api/processes[/:id[/action]]
       const apiMatch = pathname.match(
         /^\/api\/processes(?:\/([^/]+))?(?:\/(stop|restart|logs|log-files|log-download|command|input))?$/,
@@ -549,6 +643,19 @@ function createRequestHandler(token: string | undefined) {
               ? body.envs
               : {};
           const desc = body.desc ? String(body.desc) : undefined;
+          // Optional port the process serves on. Coerced to an integer and
+          // range-checked; anything invalid is rejected so the dashboard's
+          // one-click open link never points at a bogus URL.
+          const rawPort = Number(body.port);
+          const port =
+            body.port !== undefined && body.port !== null &&
+            Number.isInteger(rawPort) && rawPort >= 1 && rawPort <= 65535
+              ? rawPort
+              : null;
+          if (body.port !== undefined && body.port !== null && port === null) {
+            json(res, 400, { error: "port must be an integer between 1 and 65535" });
+            return;
+          }
           const processId = generateProcessId();
           const started = await startProcess(
             processId,
@@ -558,6 +665,7 @@ function createRequestHandler(token: string | undefined) {
             cwd,
             envs,
             desc,
+            port,
           );
           pushProcess(started);
           json(res, 201, { id: processId, name: started.name });

@@ -5,6 +5,7 @@ import type {
   ProcessStream,
   ProcessView,
   StartProcessBody,
+  SystemProcessListResponse,
 } from "./types";
 
 // Thin wrapper around the same-origin REST API. Throws on non-2xx with the
@@ -215,6 +216,15 @@ export function openFolder(path: string): Promise<void> {
   );
 }
 
+// Reveal a path in the OS file manager, selecting it if it's a file (e.g. a
+// process's exe). Unlike openFolder, this handles files too — used by the
+// System tab's "Open process location" action.
+export function revealPath(path: string): Promise<void> {
+  return api<{ ok: boolean }>("POST", "/api/reveal", { path }).then(
+    () => undefined,
+  );
+}
+
 export function stopProcess(id: string): Promise<void> {
   return api<void>(
     "POST",
@@ -250,6 +260,24 @@ export function restartProcess(id: string): Promise<void> {
     "POST",
     `/api/processes/${encodeURIComponent(id)}/restart`,
   );
+}
+
+// Enumerate all running OS processes (the System tab's data source). Distinct
+// from listProcesses(): that tracks procm-mcp's own spawned processes; this
+// lists everything the host OS is running. Returns pid/ppid/name plus the full
+// command line + exe path when the platform exposes them.
+export function listSystemProcesses(): Promise<SystemProcessListResponse> {
+  return api<SystemProcessListResponse>("GET", "/api/system-processes");
+}
+
+// Kill a system process and its whole descendant tree (tree-kill on the
+// backend → taskkill /T /F on Windows). Protected pids (idle/system/self) are
+// refused server-side and surface here as a thrown Error.
+export function killSystemProcess(pid: number): Promise<void> {
+  return api<{ ok: true; pid: number }>(
+    "POST",
+    `/api/system-processes/${pid}/kill`,
+  ).then(() => undefined);
 }
 
 // Write to a running process's stdin or deliver an OS signal to it. Used by the
