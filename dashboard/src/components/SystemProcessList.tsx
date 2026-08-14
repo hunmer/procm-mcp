@@ -161,7 +161,7 @@ export function SystemProcessList({
     setRefreshing(true);
     try {
       const res = await listSystemProcesses();
-      setProcesses(res.processes);
+      setProcesses(res.processes.map(normalizeSystemProcess));
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -254,7 +254,10 @@ export function SystemProcessList({
           const p = row.original;
           return (
             <div className="flex items-center gap-1.5">
-              <span className="font-medium truncate" title={p.cmd ?? p.name}>
+              <span
+                className="font-medium min-w-0 flex-1 truncate"
+                title={p.cmd ?? p.name}
+              >
                 {p.name}
               </span>
               {p.ports?.map((port) => (
@@ -707,7 +710,7 @@ export function SystemProcessList({
               <XIcon />
             </Button>
           </div>
-          <div className="min-h-0 flex-1 overflow-auto p-4">
+          <div className="min-h-0 flex-1 overflow-auto p-1">
             <SystemProcessInfo p={selected} onCopy={handleCopy} />
           </div>
         </aside>
@@ -797,7 +800,7 @@ export function SystemProcessList({
             </DialogDescription>
           </DialogHeader>
           <form
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 p-3"
             onSubmit={(e) => void handlePortLookup(e)}
           >
             <Input
@@ -813,7 +816,7 @@ export function SystemProcessList({
             </Button>
           </form>
           {knownPorts.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1.5 p-3">
               {knownPorts.slice(0, 24).map((port) => (
                 <button
                   key={port}
@@ -967,6 +970,24 @@ function exePathOf(p: SystemProcess): string | null {
   return m ? m[1] || m[2] || null : null;
 }
 
+// Keep the UI compatible with snapshots produced by older backends and with
+// JSON values that may arrive as strings. A normalized `ports` array is the
+// single source used by both the badge renderer and the port-first comparator.
+function normalizeSystemProcess(process: SystemProcess): SystemProcess {
+  const raw = process as SystemProcess & { port?: unknown };
+  const values = Array.isArray(raw.ports)
+    ? raw.ports
+    : raw.port == null
+      ? []
+      : [raw.port];
+  const ports = [...new Set(
+    values
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value >= 1 && value <= 65535),
+  )].sort((a, b) => a - b);
+  return { ...process, ports: ports.length > 0 ? ports : undefined };
+}
+
 // The raw comparable value for a sortable column. Numbers compare numerically
 // (pid/ppid); text compares case-insensitively.
 function sortValue(p: SystemProcess, id: string): number | string {
@@ -1030,7 +1051,7 @@ function PortBadge({ port }: { port: number }) {
       target="_blank"
       rel="noopener noreferrer"
       onClick={(e) => e.stopPropagation()}
-      className="hover:bg-accent inline-flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 font-mono text-[10px] leading-none"
+      className="hover:bg-accent inline-flex shrink-0 items-center gap-0.5 rounded-md border px-1.5 py-0.5 font-mono text-[10px] leading-none"
       title={t("system.portBadgeTitle", { port })}
     >
       <GlobeIcon className="size-2.5" />
@@ -1097,7 +1118,7 @@ function SystemProcessInfo({
   const exe = exePathOf(p);
   const protectedPid = p.pid <= 4;
   return (
-    <div className="flex flex-col gap-1 py-1">
+    <div className="flex flex-col gap-1 py-1 p-3">
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2.5 text-sm">
         <InfoRow label={t("system.colName")}>
           <span className="font-medium">{p.name}</span>
