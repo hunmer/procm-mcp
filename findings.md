@@ -2,6 +2,10 @@
 
 ## Requirements
 
+- Add an agent skill under `agent/skills` that explains what the new room architecture enables.
+- Keep detailed usage in a linked `examples/` Markdown folder so the main skill remains concise.
+- The skill is named `procm-rooms`; its examples cover SDK messaging, retained readiness, structured logging, room/batch operations, and Electron boundaries.
+
 - Publish a reusable TypeScript npm SDK that maintains a persistent WebSocket connection to procm.
 - SDK clients can publish messages and subscribe to messages forwarded by procm within a room.
 - A standalone TypeScript script can join a room and collect client debugging results without an agent invoking MCP log tools.

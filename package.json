@@ -28,6 +28,8 @@
     "start:server": "node ./build/index.js --server",
     "start:server:port": "node ./build/index.js --server --port",
     "link": "node ./scripts/link-global.mjs",
+    "link:sdk": "node ./scripts/link-sdk.mjs",
+    "publish:sdk": "node ./scripts/publish-sdk.mjs",
     "test": "npm run build && node ./tests/run-all.mjs",
     "test:lifecycle": "npm run build && node ./tests/lifecycle.mjs",
     "test:logs": "npm run build && node ./tests/logs-grep.mjs",

@@ -13,7 +13,9 @@
   },
   "files": ["dist"],
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "link:local": "node ../../scripts/link-sdk.mjs",
+    "publish:public": "node ../../scripts/publish-sdk.mjs"
   },
   "engines": {
     "node": ">=22"

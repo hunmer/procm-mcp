@@ -6,7 +6,7 @@ Add a reusable TypeScript SDK and room-based WebSocket communication to procm-mc
 
 ## Current Phase
 
-Complete. All nine implementation phases and exit criteria have been verified.
+Complete. All ten implementation and documentation phases have been verified.
 
 ## Success Criteria
 
@@ -23,6 +23,15 @@ Complete. All nine implementation phases and exit criteria have been verified.
 - Existing lifecycle, HTTP, MCP, CLI, log, and WebSocket behavior remains compatible.
 
 ## Implementation Phases
+
+### Phase 10: Procm Rooms Skill Documentation
+
+- [x] Initialize `agent/skills/procm-rooms` with official skill tooling.
+- [x] Describe the architecture capability map and operating constraints.
+- [x] Add linked Markdown examples for SDK messaging, waitFor, logging, room operations, batch operations, and Electron.
+- [x] Generate matching `agents/openai.yaml` metadata.
+- [x] Validate frontmatter, naming, and all local Markdown links.
+- **Status:** complete
 
 ### Phase 1: Protocol Contract And Package Layout
 

@@ -2,6 +2,15 @@
 
 ## Session: 2026-08-14
 
+### Procm Rooms Skill Documentation
+
+- **Status:** complete
+- Selected `agent/skills/procm-rooms` and a linked `examples/` structure.
+- Read the full skill-creator, openai.yaml, and planning-with-files instructions.
+- Initialized the skill with the official `init_skill.py` workflow.
+- Added the capability map, operating rules, source links, five focused examples, and an examples index.
+- Regenerated UI metadata and passed `quick_validate.py`; all local Markdown links resolve.
+
 ### Implementation
 
 - **Status:** complete
@@ -32,6 +41,8 @@
 ## Test Results
 
 `npm test`: 6 suites passed, 97 assertions passed, 0 failed. `git diff --check`, SDK/root dry-run packaging, Electron/Node syntax checks, and live HTTP room endpoint checks passed.
+
+`agent/skills/procm-rooms`: official skill validation and local Markdown link validation passed.
 
 ## Error Log
 
