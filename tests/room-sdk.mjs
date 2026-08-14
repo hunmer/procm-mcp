@@ -1,4 +1,4 @@
-import { createProcmClient } from "@procm-mcp/sdk";
+import { createProcmClient, executeCustom, exposeCustomExecution } from "@procm-mcp/sdk";
 import {
   assert,
   assertEqual,
@@ -55,6 +55,61 @@ await runTest("room SDK forwarding, prefix subscriptions, and retained waitFor",
   } finally {
     publisher.close();
     subscriber.close();
+    stopBackend(backend);
+  }
+});
+
+await runTest("custom execution is gated by connection and can query backend and simulated UI data", async () => {
+  const disconnected = createProcmClient({
+    url: "ws://127.0.0.1:1/room",
+    roomId: "custom-execution-gate",
+    reconnect: false,
+  });
+  try {
+    let rejected = false;
+    try {
+      exposeCustomExecution(disconnected);
+    } catch (error) {
+      rejected = String(error).includes("only be exposed after");
+    }
+    assert(rejected, "custom execution cannot be exposed before the SDK connection opens");
+  } finally {
+    disconnected.close();
+  }
+
+  const port = randomPort();
+  const backend = await startBackend({ port });
+  const url = `ws://127.0.0.1:${port}/room`;
+  const requester = createProcmClient({ url, roomId: "execution-room", clientName: "test", reconnect: false });
+  const backendTarget = createProcmClient({ url, roomId: "execution-room", clientName: "backend", reconnect: false });
+  const frontendTarget = createProcmClient({ url, roomId: "execution-room", clientName: "frontend", reconnect: false });
+  let stopBackendExecution;
+  let stopFrontendExecution;
+  try {
+    await Promise.all([waitOpen(requester), waitOpen(backendTarget), waitOpen(frontendTarget)]);
+    stopBackendExecution = exposeCustomExecution(backendTarget, {
+      context: { getData: () => ({ source: "backend", value: 42 }) },
+    });
+    stopFrontendExecution = exposeCustomExecution(frontendTarget, {
+      context: { getUiValue: (selector) => selector === "#mock-value" ? "frontend-ui-value" : null },
+    });
+    await sleep(50);
+
+    const backendData = await executeCustom(requester, "backend", (context) => context.getData());
+    assertEqual(backendData.value, 42, "custom execution returns backend data");
+    const uiValue = await executeCustom(
+      requester,
+      "frontend",
+      (context, selector) => context.getUiValue(selector),
+      ["#mock-value"],
+    );
+    assertEqual(uiValue, "frontend-ui-value", "custom execution returns simulated frontend UI value");
+  } finally {
+    stopBackendExecution?.();
+    stopFrontendExecution?.();
+    requester.close();
+    backendTarget.close();
+    frontendTarget.close();
     stopBackend(backend);
   }
 });

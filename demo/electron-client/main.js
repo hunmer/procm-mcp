@@ -1,18 +1,38 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createLogger, createProcmClient, PROCM_LOG_TOPIC } from "@procm-mcp/sdk";
+import { createLogger, createProcmClient, exposeCustomExecution, PROCM_LOG_TOPIC } from "@procm-mcp/sdk";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const client = createProcmClient({ clientName: "electron" });
 const logger = createLogger({ client });
 let window = null;
+let stopCustomExecution = null;
 
 function emit(channel, value) {
   if (window && !window.isDestroyed()) window.webContents.send(channel, value);
 }
 
-client.onState((state) => emit("procm:state", state));
+client.onState((state) => {
+  emit("procm:state", state);
+  if (state === "open") {
+    stopCustomExecution ??= exposeCustomExecution(client, {
+      target: "frontend",
+      context: {
+        getUiValue: async (selector) => {
+          if (!window || window.isDestroyed()) throw new Error("Electron window is not ready");
+          return window.webContents.executeJavaScript(
+            `document.querySelector(${JSON.stringify(selector)})?.textContent ?? null`,
+            true,
+          );
+        },
+      },
+    });
+  } else if (stopCustomExecution) {
+    stopCustomExecution();
+    stopCustomExecution = null;
+  }
+});
 client.onMember((event, member) => emit("procm:member", { event, member }));
 client.subscribe("backend:pong", (message) => emit("procm:message", message));
 client.subscribe(PROCM_LOG_TOPIC, (message) => emit("procm:log", message.payload));

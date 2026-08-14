@@ -85,10 +85,11 @@ import {
 } from "@/lib/api";
 import type { SystemProcess } from "@/lib/types";
 
-// localStorage keys for the two persisted preferences (mirrors the useTheme /
+// localStorage keys for the persisted preferences (mirrors the useTheme /
 // view-mode best-effort pattern; storage may be unavailable in private mode).
 const LIVE_KEY = "procm.sysLive";
 const INTERVAL_KEY = "procm.sysInterval";
+const PORTS_ONLY_KEY = "procm.sysPortsOnly";
 
 const INTERVAL_OPTIONS = [1000, 2000, 3000, 5000] as const;
 
@@ -125,22 +126,31 @@ export function SystemProcessList({
   const [pathFilter, setPathFilter] = useState("");
   const [cmdFilter, setCmdFilter] = useState("");
 
+  // "HTTP ports only" view: restrict the table to processes listening on at
+  // least one TCP port (the typical dev-server case — the port badges link to
+  // http://localhost:<port>). Like the text filters it's client-side over the
+  // last snapshot, and persisted so the preference survives reloads.
+  const [portsOnly, setPortsOnly] = useState<boolean>(() =>
+    readBool(PORTS_ONLY_KEY, false),
+  );
+
   // No default column sort: the natural order is "listening ports first, then
   // by name" (see compareSystemProcesses), applied below in sortedData. The
   // sorting state here is only what the user explicitly selects via headers.
   const [sorting, setSorting] = useState<SortingState>([]);
 
-  // The process awaiting kill confirmation (null = dialog closed). The button
+  // The row awaiting kill confirmation (null = dialog closed). The button
   // itself doesn't kill directly — it arms this, and the dialog's confirm
   // performs the destructive call so a misclick can be backed out of.
-  const [pendingKill, setPendingKill] = useState<SystemProcess | null>(null);
-  // PID whose tree is currently being killed, to show a per-row pending state.
+  const [pendingKill, setPendingKill] = useState<ProcessRow | null>(null);
+  // PID whose tree is currently being killed, to show a per-row pending state
+  // (the representative pid of the row being killed).
   const [killingPid, setKillingPid] = useState<number | null>(null);
-  // The process shown in the read-only "view info" dialog (null = closed).
-  const [viewing, setViewing] = useState<SystemProcess | null>(null);
-  // The process selected for the inline right-hand info panel. Clicking a row
+  // The row shown in the read-only "view info" dialog (null = closed).
+  const [viewing, setViewing] = useState<ProcessRow | null>(null);
+  // The row selected for the inline right-hand info panel. Clicking a row
   // sets this; the panel reuses the same SystemProcessInfo body as the dialog.
-  const [selected, setSelected] = useState<SystemProcess | null>(null);
+  const [selected, setSelected] = useState<ProcessRow | null>(null);
   // Toolbar "view port" lookup: a dialog with a port input that runs
   // find-process on the backend and opens the info dialog for the owner.
   const [portLookupOpen, setPortLookupOpen] = useState(false);
@@ -185,53 +195,67 @@ export function SystemProcessList({
     return () => clearInterval(timer);
   }, [liveRefresh, intervalMs, refresh]);
 
-  // Persist the two preferences (best-effort).
+  // Persist the preferences (best-effort).
   useEffect(() => {
     writeBool(LIVE_KEY, liveRefresh);
   }, [liveRefresh]);
   useEffect(() => {
     writeNum(INTERVAL_KEY, intervalMs);
   }, [intervalMs]);
-
-  // Drop a pending-kill target if it disappears from the snapshot (e.g. it was
-  // killed elsewhere) so the dialog doesn't act on a stale pid.
   useEffect(() => {
-    if (pendingKill && !processes.some((p) => p.pid === pendingKill.pid)) {
+    writeBool(PORTS_ONLY_KEY, portsOnly);
+  }, [portsOnly]);
+
+  // Collapse the snapshot into display rows: processes sharing the same name
+  // AND the same parent (e.g. a browser's helper swarm) merge into one row
+  // with a ×N badge. See groupProcesses below.
+  const rows = useMemo(() => groupProcesses(processes), [processes]);
+
+  // Drop a pending-kill target if its row disappears from the snapshot (e.g.
+  // it was killed elsewhere) so the dialog doesn't act on a stale pid.
+  useEffect(() => {
+    if (pendingKill && !rows.some((r) => r.key === pendingKill.key)) {
       setPendingKill(null);
     }
-  }, [processes, pendingKill]);
+  }, [rows, pendingKill]);
 
   // Keep the right-panel selection live across refreshes: swap in the matching
-  // pid from the fresh snapshot (so e.g. port badges update), and clear it if
-  // the process has gone away. Reads `cur` inside the updater so it doesn't
-  // need `selected` as a dependency (which would re-run every selection).
+  // row from the fresh snapshot (so e.g. port badges and the member list
+  // update), and clear it if the process has gone away. Reads `cur` inside the
+  // updater so it doesn't need `selected` as a dependency.
   useEffect(() => {
     setSelected(
-      (cur) => (cur ? processes.find((p) => p.pid === cur.pid) ?? null : null),
+      (cur) => (cur ? rows.find((r) => r.key === cur.key) ?? null : null),
     );
-  }, [processes]);
+  }, [rows]);
 
-  // Apply the three filters to the latest snapshot. Each matches its own field;
-  // an empty filter is a no-op. `exe` falls back to `cmd` on platforms where
-  // the executable path isn't exposed separately (non-Windows).
+  // Apply the filters to the grouped rows. Each text filter matches its own
+  // field (an empty filter is a no-op); path/command match when ANY member
+  // matches, so a merged row is never hidden because a sibling's command line
+  // differs. The ports-only toggle drops rows with no listening port.
   const filteredData = useMemo(() => {
     const name = nameFilter.trim().toLowerCase();
     const path = pathFilter.trim().toLowerCase();
     const cmd = cmdFilter.trim().toLowerCase();
-    if (!name && !path && !cmd) return processes;
-    return processes.filter((p) => {
-      if (name && !p.name.toLowerCase().includes(name)) return false;
+    if (!name && !path && !cmd && !portsOnly) return rows;
+    return rows.filter((r) => {
+      if (portsOnly && !r.ports?.length) return false;
+      if (name && !r.name.toLowerCase().includes(name)) return false;
       if (path) {
-        const hay = (p.exe ?? p.cmd ?? "").toLowerCase();
-        if (!hay.includes(path)) return false;
+        const hit = r.members.some((m) =>
+          (m.exe ?? m.cmd ?? "").toLowerCase().includes(path),
+        );
+        if (!hit) return false;
       }
       if (cmd) {
-        const hay = (p.cmd ?? "").toLowerCase();
-        if (!hay.includes(cmd)) return false;
+        const hit = r.members.some((m) =>
+          (m.cmd ?? "").toLowerCase().includes(cmd),
+        );
+        if (!hit) return false;
       }
       return true;
     });
-  }, [processes, nameFilter, pathFilter, cmdFilter]);
+  }, [rows, nameFilter, pathFilter, cmdFilter, portsOnly]);
 
   // Stable row order: processes listening on a port ALWAYS come first (so
   // servers stay visible at the top regardless of which column is sorted),
@@ -239,11 +263,11 @@ export function SystemProcessList({
   // The table uses getCoreRowModel only (no getSortedRowModel) so this order
   // is authoritative; the sorting state still drives the header indicators.
   const sortedData = useMemo(
-    () => [...filteredData].sort((a, b) => compareSystemProcesses(a, b, sorting)),
+    () => [...filteredData].sort((a, b) => compareProcessRows(a, b, sorting)),
     [filteredData, sorting],
   );
 
-  const columns = useMemo<ColumnDef<SystemProcess>[]>(
+  const columns = useMemo<ColumnDef<ProcessRow>[]>(
     () => [
       {
         accessorKey: "name",
@@ -251,16 +275,19 @@ export function SystemProcessList({
           <SortableHeader column={column} label={t("system.colName")} />
         ),
         cell: ({ row }) => {
-          const p = row.original;
+          const r = row.original;
           return (
             <div className="flex items-center gap-1.5">
               <span
                 className="font-medium min-w-0 flex-1 truncate"
-                title={p.cmd ?? p.name}
+                title={r.cmd ?? r.name}
               >
-                {p.name}
+                {r.name}
               </span>
-              {p.ports?.map((port) => (
+              {r.members.length > 1 && (
+                <CountBadge count={r.members.length} />
+              )}
+              {r.ports?.map((port) => (
                 <PortBadge key={port} port={port} />
               ))}
             </div>
@@ -335,25 +362,25 @@ export function SystemProcessList({
         enableSorting: false,
         header: () => <span className="sr-only">{t("system.colActions")}</span>,
         cell: ({ row }) => {
-          const p = row.original;
+          const r = row.original;
           // The backend refuses protected pids (idle/system/self); disable the
           // obvious kernel slots client-side so they read as non-actionable.
-          const protectedPid = p.pid <= 4;
-          const isKilling = killingPid === p.pid;
+          const protectedPid = r.members.some((m) => m.pid <= 4);
+          const isKilling = killingPid === r.pid;
           return (
             <div className="flex justify-end">
               <Button
                 size="icon-sm"
                 variant="ghost"
                 disabled={protectedPid || isKilling}
-                aria-label={t("system.killAria", { name: p.name, pid: p.pid })}
+                aria-label={t("system.killAria", { name: r.name, pid: r.pid })}
                 title={
                   protectedPid ? t("system.protectedTitle") : t("system.killTitle")
                 }
                 className="text-muted-foreground hover:text-destructive"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setPendingKill(p);
+                  setPendingKill(r);
                 }}
               >
                 {isKilling ? <Spinner className="size-3.5" /> : <SkullIcon />}
@@ -383,21 +410,31 @@ export function SystemProcessList({
     state: { sorting },
   });
 
-  // Perform the kill: call the backend (tree-kill), toast the result, then
-  // refresh immediately so the row (and its children) disappear without waiting
-  // for the next poll.
+  // Perform the kill: call the backend (tree-kill) per member — merged rows
+  // kill every grouped process, single rows are the one-member case — toast
+  // the result, then refresh immediately so the rows disappear without
+  // waiting for the next poll.
   const confirmKill = useCallback(
-    async (p: SystemProcess) => {
+    async (row: ProcessRow) => {
       setPendingKill(null);
-      setKillingPid(p.pid);
+      setKillingPid(row.pid);
       try {
-        await killSystemProcess(p.pid);
-        onToast(t("system.killedToast", { name: p.name, pid: p.pid }));
+        for (const m of row.members) {
+          await killSystemProcess(m.pid);
+        }
+        onToast(
+          row.members.length > 1
+            ? t("system.killedGroupToast", {
+                name: row.name,
+                count: row.members.length,
+              })
+            : t("system.killedToast", { name: row.name, pid: row.pid }),
+        );
         await refresh();
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         onToast(
-          t("system.killFailedToast", { name: p.name, error: msg }),
+          t("system.killFailedToast", { name: row.name, error: msg }),
           true,
         );
       } finally {
@@ -409,12 +446,13 @@ export function SystemProcessList({
 
   // Reveal the process's executable in the OS file manager (selected). Falls
   // back to parsing the executable out of the command line when no separate
-  // exe path is exposed (non-Windows). No-op toast when neither is available.
+  // exe path is exposed (non-Windows); merged rows take the first member that
+  // yields a path. No-op toast when neither is available.
   const handleReveal = useCallback(
-    async (p: SystemProcess) => {
-      const target = exePathOf(p);
+    async (row: ProcessRow) => {
+      const target = exePathOfRow(row);
       if (!target) {
-        onToast(t("system.noLocationToast", { name: p.name }), true);
+        onToast(t("system.noLocationToast", { name: row.name }), true);
         return;
       }
       try {
@@ -422,7 +460,7 @@ export function SystemProcessList({
       } catch (e) {
         onToast(
           t("system.revealFailedToast", {
-            name: p.name,
+            name: row.name,
             error: e instanceof Error ? e.message : String(e),
           }),
           true,
@@ -474,7 +512,7 @@ export function SystemProcessList({
         }
         setPortLookupOpen(false);
         setPortInput("");
-        setViewing(found[0]);
+        setViewing(rowOfProcess(found[0]));
       } catch (err) {
         onToast(
           t("system.portLookupFailedToast", {
@@ -516,8 +554,19 @@ export function SystemProcessList({
           icon={<SearchIcon className="text-foreground/50 pointer-events-none absolute top-1/2 left-2.5 z-10 size-3.5 -translate-y-1/2" />}
         />
 
+        {/* Ports-only view: keeps just the processes listening on a TCP port
+            (dev servers etc.). Composes with the text filters above. */}
+        <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-xs">
+          <Switch
+            checked={portsOnly}
+            onCheckedChange={(v) => setPortsOnly(v)}
+            aria-label={t("system.portsOnly")}
+          />
+          {t("system.portsOnly")}
+        </label>
+
         <span className="text-muted-foreground whitespace-nowrap text-xs">
-          {t("system.countOfTotal", { shown: rowCount, total: processes.length })}
+          {t("system.countOfTotal", { shown: rowCount, total: rows.length })}
         </span>
 
         <div className="ml-auto flex items-center gap-3">
@@ -616,7 +665,7 @@ export function SystemProcessList({
             <TableBody>
               {table.getRowModel().rows.length ? (
                 table.getRowModel().rows.map((row) => {
-                  const p = row.original;
+                  const r = row.original;
                   return (
                     <ContextMenu key={row.id}>
                       {/* Right-click opens the context menu (View info / Open
@@ -627,13 +676,20 @@ export function SystemProcessList({
                           <TableRow
                             className="group cursor-pointer"
                             data-state={
-                              selected?.pid === p.pid ? "selected" : undefined
+                              selected?.key === r.key ? "selected" : undefined
                             }
-                            title={t("system.rowHint", {
-                              name: p.name,
-                              pid: p.pid,
-                            })}
-                            onClick={() => setSelected(p)}
+                            title={
+                              r.members.length > 1
+                                ? t("system.rowGroupHint", {
+                                    name: r.name,
+                                    count: r.members.length,
+                                  })
+                                : t("system.rowHint", {
+                                    name: r.name,
+                                    pid: r.pid,
+                                  })
+                            }
+                            onClick={() => setSelected(r)}
                           />
                         }
                       >
@@ -654,7 +710,7 @@ export function SystemProcessList({
                         })}
                       </ContextMenuTrigger>
                       <SystemProcessContextMenu
-                        p={p}
+                        row={r}
                         onView={setViewing}
                         onReveal={handleReveal}
                         onKill={setPendingKill}
@@ -697,7 +753,9 @@ export function SystemProcessList({
                 {selected.name}
               </div>
               <div className="text-muted-foreground font-mono text-xs tabular-nums">
-                PID {selected.pid}
+                {selected.members.length > 1
+                  ? t("system.groupCount", { count: selected.members.length })
+                  : `PID ${selected.pid}`}
               </div>
             </div>
             <Button
@@ -711,7 +769,7 @@ export function SystemProcessList({
             </Button>
           </div>
           <div className="min-h-0 flex-1 overflow-auto p-1">
-            <SystemProcessInfo p={selected} onCopy={handleCopy} />
+            <SystemProcessInfo row={selected} onCopy={handleCopy} />
           </div>
         </aside>
       )}
@@ -729,10 +787,15 @@ export function SystemProcessList({
             </AlertDialogTitle>
             <AlertDialogDescription>
               {pendingKill &&
-                t("system.killConfirmDescription", {
-                  name: pendingKill.name,
-                  pid: pendingKill.pid,
-                })}
+                (pendingKill.members.length > 1
+                  ? t("system.killConfirmGroupDescription", {
+                      name: pendingKill.name,
+                      count: pendingKill.members.length,
+                    })
+                  : t("system.killConfirmDescription", {
+                      name: pendingKill.name,
+                      pid: pendingKill.pid,
+                    }))}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -761,16 +824,21 @@ export function SystemProcessList({
             <DialogTitle>{t("system.infoTitle")}</DialogTitle>
             <DialogDescription>
               {viewing
-                ? t("system.infoDescription", {
-                    name: viewing.name,
-                    pid: viewing.pid,
-                  })
+                ? viewing.members.length > 1
+                  ? t("system.infoGroupDescription", {
+                      name: viewing.name,
+                      count: viewing.members.length,
+                    })
+                  : t("system.infoDescription", {
+                      name: viewing.name,
+                      pid: viewing.pid,
+                    })
                 : ""}
             </DialogDescription>
           </DialogHeader>
           {viewing && (
             <SystemProcessInfo
-              p={viewing}
+              row={viewing}
               onCopy={handleCopy}
             />
           )}
@@ -876,7 +944,7 @@ function SortableHeader({
   column,
   label,
 }: {
-  column: Column<SystemProcess>;
+  column: Column<ProcessRow>;
   label: string;
 }) {
   const dir = column.getIsSorted();
@@ -901,10 +969,10 @@ function SortableHeader({
 }
 
 // Generic sticky-column styling (the Processes table's pinnedColAttrs is typed
-// for ProcessView; this is the SystemProcess equivalent). Pins `name` left and
+// for ProcessView; this is the ProcessRow equivalent). Pins `name` left and
 // `actions` right per the table's columnPinning initialState.
 function pinnedColAttrs(
-  column: Column<SystemProcess>,
+  column: Column<ProcessRow>,
   head: boolean,
 ): { className?: string; style?: CSSProperties } {
   const side = column.getIsPinned();
@@ -970,6 +1038,84 @@ function exePathOf(p: SystemProcess): string | null {
   return m ? m[1] || m[2] || null : null;
 }
 
+// A display row for the System table: one process, or several merged because
+// they share the same name AND parent (e.g. a browser's helper swarm). Shared
+// fields come from the first member; the full `members` list powers the ×N
+// badge and the info panel's per-member list — within a group only pid and
+// command line differ, so those are the two per-member fields shown.
+interface ProcessRow {
+  // `${name}|${ppid}` — unique per row (the trailing numeric ppid keeps it
+  // injective even if a name contains "|") and stable across refreshes, so
+  // selection/pending-kill survive regrouping.
+  key: string;
+  members: SystemProcess[];
+  name: string;
+  // Representative member (lowest pid) — drives sorting and row identity.
+  pid: number;
+  ppid: number;
+  cmd: string | null;
+  exe: string | null;
+  // Deduped union of the members' listening ports.
+  ports?: number[];
+}
+
+// Group a snapshot into display rows. Members are kept pid-ascending so the
+// representative is stable, and insertion order preserves the snapshot's
+// ordering for the (unsorted) default view.
+function groupProcesses(processes: SystemProcess[]): ProcessRow[] {
+  const groups = new Map<string, SystemProcess[]>();
+  for (const p of processes) {
+    const key = `${p.name}|${p.ppid}`;
+    const arr = groups.get(key);
+    if (arr) arr.push(p);
+    else groups.set(key, [p]);
+  }
+  const rows: ProcessRow[] = [];
+  for (const [key, members] of groups) {
+    members.sort((a, b) => a.pid - b.pid);
+    const first = members[0];
+    const ports = new Set<number>();
+    for (const m of members) for (const port of m.ports ?? []) ports.add(port);
+    rows.push({
+      key,
+      members,
+      name: first.name,
+      pid: first.pid,
+      ppid: first.ppid,
+      cmd: first.cmd,
+      exe: members.find((m) => m.exe)?.exe ?? null,
+      ports: [...ports].sort((a, b) => a - b),
+    });
+  }
+  return rows;
+}
+
+// Wrap a single process (e.g. a port-lookup hit) as a one-member row so the
+// shared info panel/dialog renders it without special cases.
+function rowOfProcess(p: SystemProcess): ProcessRow {
+  return {
+    key: `${p.name}|${p.ppid}`,
+    members: [p],
+    name: p.name,
+    pid: p.pid,
+    ppid: p.ppid,
+    cmd: p.cmd,
+    exe: p.exe,
+    ports: p.ports,
+  };
+}
+
+// Resolve the best on-disk executable path for a row: the first member whose
+// `exe` or leading command-line token yields a path (merged rows may mix
+// members with and without a resolvable path).
+function exePathOfRow(row: ProcessRow): string | null {
+  for (const m of row.members) {
+    const path = exePathOf(m);
+    if (path) return path;
+  }
+  return null;
+}
+
 // Keep the UI compatible with snapshots produced by older backends and with
 // JSON values that may arrive as strings. A normalized `ports` array is the
 // single source used by both the badge renderer and the port-first comparator.
@@ -990,7 +1136,7 @@ function normalizeSystemProcess(process: SystemProcess): SystemProcess {
 
 // The raw comparable value for a sortable column. Numbers compare numerically
 // (pid/ppid); text compares case-insensitively.
-function sortValue(p: SystemProcess, id: string): number | string {
+function sortValue(p: ProcessRow, id: string): number | string {
   switch (id) {
     case "pid":
       return p.pid;
@@ -1008,14 +1154,14 @@ function sortValue(p: SystemProcess, id: string): number | string {
 }
 
 // Authoritative row comparator for the System table. Ordering, in priority:
-//   1. Processes listening on a port ALWAYS come first (servers stay pinned to
+//   1. Rows listening on a port ALWAYS come first (servers stay pinned to
 //      the top regardless of the active column sort).
 //   2. The user's selected column(s), in sorting-state order (asc/desc).
 //   3. Name ascending (case-insensitive, natural numeric order) as a stable
 //      tiebreaker — also the whole order when no column is selected.
-function compareSystemProcesses(
-  a: SystemProcess,
-  b: SystemProcess,
+function compareProcessRows(
+  a: ProcessRow,
+  b: ProcessRow,
   sorting: SortingState,
 ): number {
   const aHasPorts = (a.ports?.length ?? 0) > 0;
@@ -1038,6 +1184,21 @@ function compareSystemProcesses(
     sensitivity: "base",
     numeric: true,
   });
+}
+
+// A ×N badge marking a merged row — several processes sharing the same name
+// and parent collapsed into one. Purely informational; the member list lives
+// in the info panel/dialog.
+function CountBadge({ count }: { count: number }) {
+  const { t } = useTranslation();
+  return (
+    <span
+      className="text-muted-foreground inline-flex shrink-0 items-center rounded-md border px-1.5 py-0.5 font-mono text-[10px] leading-none"
+      title={t("system.groupBadgeTitle", { count })}
+    >
+      ×{count}
+    </span>
+  );
 }
 
 // A listening-port badge shown next to a process name. Clicking opens
@@ -1065,28 +1226,28 @@ function PortBadge({ port }: { port: number }) {
 // location item is disabled when no path is resolvable; Kill is disabled for
 // protected kernel pids (the backend refuses them anyway).
 function SystemProcessContextMenu({
-  p,
+  row,
   onView,
   onReveal,
   onKill,
 }: {
-  p: SystemProcess;
-  onView: (p: SystemProcess) => void;
-  onReveal: (p: SystemProcess) => void;
-  onKill: (p: SystemProcess) => void;
+  row: ProcessRow;
+  onView: (row: ProcessRow) => void;
+  onReveal: (row: ProcessRow) => void;
+  onKill: (row: ProcessRow) => void;
 }) {
   const { t } = useTranslation();
-  const hasLocation = exePathOf(p) != null;
-  const protectedPid = p.pid <= 4;
+  const hasLocation = exePathOfRow(row) != null;
+  const protectedPid = row.members.some((m) => m.pid <= 4);
   return (
     <ContextMenuPopup>
-      <ContextMenuItem onClick={() => onView(p)}>
+      <ContextMenuItem onClick={() => onView(row)}>
         <EyeIcon aria-hidden="true" />
         {t("system.ctxView")}
       </ContextMenuItem>
       <ContextMenuItem
         disabled={!hasLocation}
-        onClick={() => onReveal(p)}
+        onClick={() => onReveal(row)}
       >
         <FolderOpenIcon aria-hidden="true" />
         {t("system.ctxOpenLocation")}
@@ -1095,7 +1256,7 @@ function SystemProcessContextMenu({
       <ContextMenuItem
         variant="destructive"
         disabled={protectedPid}
-        onClick={() => onKill(p)}
+        onClick={() => onKill(row)}
       >
         <SkullIcon aria-hidden="true" />
         {t("system.ctxKill")}
@@ -1104,35 +1265,40 @@ function SystemProcessContextMenu({
   );
 }
 
-// The read-only process info body rendered inside the "View info" dialog. A
-// definition-list grid of identity fields; the long path + command-line values
-// get their own copy button. Protected pids show a badge.
+// The read-only process info body rendered inside the "View info" dialog and
+// the right-hand panel. A definition-list grid of the row's shared identity
+// fields (the long path value gets a copy button). Merged rows replace the
+// single PID/command entries with a brief per-member list — pid + command
+// line, the only fields that differ within a group — kept action-free.
 function SystemProcessInfo({
-  p,
+  row,
   onCopy,
 }: {
-  p: SystemProcess;
+  row: ProcessRow;
   onCopy: (value: string, label: string) => void;
 }) {
   const { t } = useTranslation();
-  const exe = exePathOf(p);
-  const protectedPid = p.pid <= 4;
+  const merged = row.members.length > 1;
+  const exe = exePathOfRow(row);
+  const protectedPid = row.members.some((m) => m.pid <= 4);
   return (
     <div className="flex flex-col gap-1 py-1 p-3">
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2.5 text-sm">
         <InfoRow label={t("system.colName")}>
-          <span className="font-medium">{p.name}</span>
+          <span className="font-medium">{row.name}</span>
           {protectedPid && (
             <Badge variant="outline" size="sm" className="ml-2">
               {t("system.protectedTitle")}
             </Badge>
           )}
         </InfoRow>
-        <InfoRow label={t("system.colPid")} mono>
-          {String(p.pid)}
+        <InfoRow label={t("system.colPid")} mono={!merged}>
+          {merged
+            ? t("system.groupCount", { count: row.members.length })
+            : String(row.pid)}
         </InfoRow>
         <InfoRow label={t("system.colPpid")} mono>
-          {String(p.ppid)}
+          {String(row.ppid)}
         </InfoRow>
         <InfoRow label={t("system.colPath")}>
           {exe ? (
@@ -1145,18 +1311,40 @@ function SystemProcessInfo({
             <span className="text-muted-foreground/50 text-xs">—</span>
           )}
         </InfoRow>
-        <InfoRow label={t("system.colCommand")}>
-          {p.cmd ? (
-            <CopyableText
-              value={p.cmd}
-              onCopy={() => onCopy(p.cmd as string, t("system.colCommand"))}
-              copyLabel={t("system.copyCommand")}
-            />
-          ) : (
-            <span className="text-muted-foreground/50 text-xs">—</span>
-          )}
-        </InfoRow>
+        {!merged && (
+          <InfoRow label={t("system.colCommand")}>
+            {row.cmd ? (
+              <CopyableText
+                value={row.cmd}
+                onCopy={() => onCopy(row.cmd as string, t("system.colCommand"))}
+                copyLabel={t("system.copyCommand")}
+              />
+            ) : (
+              <span className="text-muted-foreground/50 text-xs">—</span>
+            )}
+          </InfoRow>
+        )}
       </dl>
+      {merged && (
+        <div className="mt-1 flex flex-col gap-1.5 border-t pt-2.5">
+          <div className="text-muted-foreground text-xs font-medium">
+            {t("system.groupMembers")}
+          </div>
+          {row.members.map((m) => (
+            <div key={m.pid} className="flex items-baseline gap-2 text-xs">
+              <span className="text-muted-foreground shrink-0 font-mono tabular-nums">
+                {m.pid}
+              </span>
+              <span
+                className="text-muted-foreground min-w-0 flex-1 truncate font-mono"
+                title={m.cmd ?? m.name}
+              >
+                {m.cmd ?? "—"}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

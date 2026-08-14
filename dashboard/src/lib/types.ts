@@ -35,10 +35,12 @@ export interface ProcessListResponse {
 
 // A single OS-level process row from /api/system-processes. Unlike ProcessView
 // (which tracks procm-mcp's own spawned processes), these are all host-OS
-// processes. `cmd` is the full command line (exe path + args) and `exe` the
-// executable path; either may be null on platforms/scopes that don't expose
-// them (kernel processes, or non-Windows where only `cmd` is known).
-// `ports` lists TCP ports the process is listening on (undefined when none).
+// processes (common OS system processes are already filtered out server-side).
+// `cmd` is the full command line (exe path + args) and `exe` the executable
+// path (best-effort on non-Windows); either may be null when the OS/scope
+// doesn't expose one. `name` is the executable's short name (final path
+// segment — macOS reports full app paths otherwise). `ports` lists TCP ports
+// the process is listening on (undefined when none).
 export interface SystemProcess {
   pid: number;
   ppid: number;

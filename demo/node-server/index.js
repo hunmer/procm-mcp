@@ -1,9 +1,10 @@
 import http from "node:http";
-import { createLogger, createProcmClient } from "@procm-mcp/sdk";
+import { createLogger, createProcmClient, exposeCustomExecution } from "@procm-mcp/sdk";
 
 const port = Number(process.env.PORT || 4310);
 const client = createProcmClient({ clientName: "backend" });
 const logger = createLogger({ client });
+let stopCustomExecution = null;
 
 client.subscribe("backend:ping", (message) => {
   logger.info("Ping request received", { from: message.memberId, payload: message.payload });
@@ -23,8 +24,17 @@ client.subscribe("backend:log-sample", () => {
 
 client.onState((state) => {
   if (state === "open") {
+    stopCustomExecution ??= exposeCustomExecution(client, {
+      target: "backend",
+      context: {
+        getServerData: () => ({ port, pid: process.pid, roomId: client.roomId }),
+      },
+    });
     client.publish("backend:ready", { port, pid: process.pid, initializedAt: Date.now() }, { retain: true });
     logger.info("Backend initialized", { port, roomId: client.roomId });
+  } else if (stopCustomExecution) {
+    stopCustomExecution();
+    stopCustomExecution = null;
   }
 });
 
