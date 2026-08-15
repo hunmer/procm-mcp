@@ -30,7 +30,19 @@ dashboard/
     │   │   ├── ProcessDialogs.tsx     #   详情等弹窗
     │   │   ├── types.ts               #   视图局部类型
     │   │   └── utils.ts               #   视图模式持久化（loadViewMode 等）
-    │   ├── SystemProcessList.tsx      # ★ System Tab：OS 进程列表 + kill
+    │   ├── system-process/            # ★ System Tab 子域（11 文件）
+    │   │   ├── types.ts               #   ProcessRow/RowActions + 偏好持久化 key + 轮询间隔选项
+    │   │   ├── utils.ts               #   分组/排序/端口归一化/exe 解析 + localStorage + 列钉靠
+    │   │   ├── useSystemProcessColumns.tsx # react-table 列定义
+    │   │   ├── SystemProcessFilterBar.tsx  # 搜索/端口过滤/实时刷新工具栏
+    │   │   ├── SystemProcessTableView.tsx # 表格视图（右键菜单触发行）
+    │   │   ├── SystemProcessContextMenu.tsx # 行右键菜单
+    │   │   ├── SystemProcessBadges.tsx # ×N 合并徽章 + 端口徽章
+    │   │   ├── SystemProcessInfo.tsx  #   只读详情主体（dialog/panel 共用）
+    │   │   ├── SystemProcessInfoPanel.tsx # 右侧信息面板
+    │   │   ├── SystemProcessDialogs.tsx # kill 确认/详情/端口查找弹窗
+    │   │   └── SortableHeader.tsx     #   排序表头
+    │   ├── SystemProcessList.tsx      # ★ System Tab 组合层：状态/轮询/过滤/kill（子域见上）
     │   ├── LogPanel.tsx               # ★ 内联右栏日志（REST 历史 + WS 实时 + grep + 下载/复制）
     │   ├── TerminalLog.tsx            # ★ 终端日志渲染（ANSI + JSON data 展开 + 高亮）
     │   ├── ansi.ts                    # ANSI SGR 解析器（16 色调色板）
@@ -70,7 +82,7 @@ dashboard/
 |---|---|
 | 整体布局/状态/WS 接线 | `src/components/App.tsx` |
 | 进程列表列/视图/批量操作 | `src/components/process-list/` |
-| 系统进程 Tab/kill | `src/components/SystemProcessList.tsx` |
+| 系统进程 Tab/kill | `src/components/SystemProcessList.tsx` + `system-process/` 子域 |
 | WebSocket 连接/重连逻辑 | `src/lib/ws.ts` |
 | 某个 REST 调用 | `src/lib/api.ts` |
 | 后端字段对应类型 | `src/lib/types.ts` |

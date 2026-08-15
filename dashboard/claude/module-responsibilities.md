@@ -10,7 +10,7 @@
 | `i18n.ts` | **i18next 初始化**（en/zh 资源、语言探测：localStorage `procm-language` → 浏览器偏好 → 英文）；`LANGUAGES`/`LANGUAGE_LABELS`。 |
 | `components/App.tsx` | **顶层容器**。状态：进程列表 `data`、WS 状态、选中进程、日志折叠/未读、Tab（processes/favorites/system 等）、toast、favorites、弹窗开关。接线 WS（`onProcessesMessage`/`onLogMessage`），未读计数与实时日志转发，启动收藏后自动选中并开日志栏。header（连接灯/New/主题/语言）+ 多 Tab + 分栏 + 弹窗编排。 |
 | `components/process-list/` | **进程列表子域（组合式，13 文件）**。`ProcessList.tsx`（外壳）拼装：`useProcessActions`（批量/单个操作 mutation）、`useProcessColumns`（@tanstack/react-table 列定义）、`ProcessTableView`/`ProcessCardsView`（表格/卡片双视图，`utils.loadViewMode` 持久化切换）、`ProcessFilterBar`（搜索/状态过滤）、`ProcessPagination`（分页）、`SortableHeader`（列排序）、`ProcessContextMenu`（行右键菜单）、`ProcessActions`/`ProcessCardBody`（卡片操作/内容）、`ProcessDialogs`（详情等弹窗）、`types.ts`（视图局部类型）。 |
-| `components/SystemProcessList.tsx` | **System Tab**：OS 级进程列表（`GET /api/system-processes`：pid/ppid/name/cmd/exe/ports），搜索/开关过滤、选中 kill。 |
+| `components/SystemProcessList.tsx` (+ `system-process/` 子域) | **System Tab**：OS 级进程列表（`GET /api/system-processes`：pid/ppid/name/cmd/exe/ports），搜索/开关过滤、选中 kill。状态/轮询/过滤在组合层；列定义、表格视图、工具栏、右键菜单、详情面板、弹窗拆在 `system-process/`（同 process-list 模式）。 |
 | `components/LogPanel.tsx` | **内联右栏日志**。stdout/stderr 切换、grep 搜索、count、复制/下载/打开日志文件位置、复制启动命令。REST 拉历史 + WS 实时追加（经 App 转发的 `onLiveLog`）。`reqId` ref 防竞态。 |
 | `components/TerminalLog.tsx` | **终端日志渲染**：`tokenizeAnsi`（`ansi.ts`）把 ANSI SGR 转带样式片段；结构化日志的 `data` 字段经 `JsonViewer` 展开；搜索命中 `<mark>` 高亮。 |
 | `components/ansi.ts` | **ANSI SGR 解析器**：16 色调色板 + 前景/背景/加粗等属性分段；非 SGR 控制序列（光标/清屏/OSC）丢弃。 |
