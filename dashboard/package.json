@@ -9,8 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@procm-mcp/sdk": "file:../packages/procm-sdk",
     "@base-ui/react": "^1.0.0-alpha.10",
+    "@procm-mcp/sdk": "file:../packages/procm-sdk",
     "@tanstack/react-table": "^8.21.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -19,7 +19,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-i18next": "^17.0.11",
-    "tailwind-merge": "^3.6.0"
+    "tailwind-merge": "^3.6.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@react-dev-inspector/babel-plugin": "^2.0.1",

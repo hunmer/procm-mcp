@@ -24,6 +24,16 @@ await runTest("GET / serves the dashboard page", async () => {
   const html = await res.text();
   assert(html.includes("<!DOCTYPE html"), "serves HTML");
   assert(html.includes("procm-mcp"), "page mentions procm-mcp");
+
+  const assets = Array.from(
+    html.matchAll(/(?:src|href)=["']([^"']+)["']/g),
+    (match) => new URL(match[1], `http://127.0.0.1:${port}/`).href,
+  );
+  assert(assets.length > 0, "dashboard references built assets");
+  for (const assetUrl of assets) {
+    const assetRes = await fetch(assetUrl);
+    assertEqual(assetRes.status, 200, `dashboard asset ${assetUrl}`);
+  }
 });
 
 await runTest("GET /api/processes returns serverId/pid/[]", async () => {

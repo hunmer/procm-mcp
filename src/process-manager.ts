@@ -3,6 +3,7 @@ import kill from "tree-kill";
 import { nanoid } from "nanoid";
 import {
   createProcessStdoutClient,
+  type ProcessStdoutClient,
 } from "./process-stdout-client.js";
 import { toErrorMessage } from "./error.js";
 import { serverLog, logServerId } from "./server-log.js";
@@ -300,6 +301,22 @@ export async function startProcess(
       },
     });
 
+    // Attach log consumers immediately. A command can fail between `spawn`
+    // and the async spawn wait below (for example, a port-in-use startup
+    // error); delaying these consumers loses the only useful stderr lines.
+    const stdoutClientPromise = createProcessStdoutClient({
+      id: processId,
+      type: "stdout",
+      readable: childProcess.stdout,
+      serverId: logServerId,
+    });
+    const stderrClientPromise = createProcessStdoutClient({
+      id: processId,
+      type: "stderr",
+      readable: childProcess.stderr,
+      serverId: logServerId,
+    });
+
     let processMetadata: ProcessMetadata | null = null;
     let status: ProcessStatus = "spawning";
     let pid = childProcess.pid;
@@ -330,15 +347,32 @@ export async function startProcess(
     childProcess.on("exit", (code) => {
       status = "exited";
       exitCode = code;
-      // Surface non-zero / unexpected exits to the console so an operator
-      // watching the backend notices the crash, not just the dashboard.
-      if (code !== 0) {
+      applyProcessState();
+    });
+
+    // `close` runs after stdout/stderr have closed, so the captured tail
+    // includes the process's final error instead of only its exit code.
+    childProcess.on("close", (code, signal) => {
+      if (code === 0) return;
+      void (async () => {
         const label = name || script;
-        const msg = `Process "${label}" (ID: ${processId}) exited with code ${code}`;
+        const stderrClient =
+          processMetadata?.stderrClient ?? (await stderrClientPromise.catch(() => null));
+        const stderrTail = stderrClient ? await stderrClient.top(10) : [];
+        const tailText = stderrTail.map((chunk) => chunk.message).join("\n").trim();
+        const logPath = stderrClient?.textFilePath ?? "unavailable";
+        const reason = code === null ? `signal ${signal ?? "unknown"}` : `code ${code}`;
+        const msg =
+          `Process "${label}" (ID: ${processId}) exited with ${reason}. ` +
+          `Command: ${script} ${(args ?? []).join(" ")}; cwd: ${cwd}; stderr log: ${logPath}` +
+          (tailText ? `\nLast stderr (up to 10 lines):\n${tailText}` : "\nLast stderr: <empty>");
         serverLog(msg);
         console.error(`procm-mcp: ${msg}`);
-      }
-      applyProcessState();
+      })().catch((error) => {
+        const msg = `Failed to collect exit diagnostics for process "${name || script}" (ID: ${processId}): ${toErrorMessage(error)}`;
+        serverLog(msg);
+        console.error(`procm-mcp: ${msg}`);
+      });
     });
 
     childProcess.on("error", (error) => {
@@ -362,20 +396,8 @@ export async function startProcess(
     });
     await spawnOutcome;
 
-    const [stdoutClient, stderrClient] = await Promise.all([
-      await createProcessStdoutClient({
-        id: processId,
-        type: "stdout",
-        readable: childProcess.stdout,
-        serverId: logServerId,
-      }),
-      await createProcessStdoutClient({
-        id: processId,
-        type: "stderr",
-        readable: childProcess.stderr,
-        serverId: logServerId,
-      }),
-    ]);
+    const [stdoutClient, stderrClient]: [ProcessStdoutClient, ProcessStdoutClient] =
+      await Promise.all([stdoutClientPromise, stderrClientPromise]);
 
     serverLog(
       `Process started: ${name || script} with args: ${

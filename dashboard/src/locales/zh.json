@@ -24,6 +24,7 @@
     "tabProcesses": "进程",
     "tabSystem": "系统",
     "tabHistory": "历史日志",
+    "tabPlayground": "Playground",
     "running": "{{count}} 个运行中",
     "clearAll": "全部清除",
     "clearAllTitle": "清除全部进程",
@@ -382,5 +383,25 @@
   },
   "devInspector": {
     "title": "检查 React 组件源码 ({{hotkey}})"
+  },
+  "playground": {
+    "groups": {
+      "server": "服务器",
+      "processes": "进程",
+      "rooms": "房间",
+      "system": "系统进程",
+      "files": "文件与目录",
+      "logs": "日志文件"
+    },
+    "sectionPath": "路径参数",
+    "sectionQuery": "查询参数",
+    "sectionBody": "请求体",
+    "send": "发送",
+    "response": "响应",
+    "required": "此项为必填",
+    "invalidNumber": "必须是数字",
+    "omit": "省略",
+    "noFields": "该接口无参数，直接发送即可。",
+    "networkError": "网络错误"
   }
 }

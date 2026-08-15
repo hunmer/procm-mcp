@@ -10,6 +10,7 @@ import {
 } from "@/registry/default/ui/tabs";
 import {
   ActivityIcon,
+  FlaskConicalIcon,
   HistoryIcon,
   LanguagesIcon,
   ListIcon,
@@ -28,6 +29,7 @@ import { ProcessList } from "./ProcessList";
 import { SystemProcessList } from "./SystemProcessList";
 import { LogPanel } from "./LogPanel";
 import { LogFilesView } from "./LogFilesView";
+import { Playground } from "./playground/Playground";
 import { Toast } from "./Toast";
 import { DevInspector } from "./DevInspector";
 import { useTheme } from "@/lib/useTheme";
@@ -86,9 +88,10 @@ export function App() {
   const [unread, setUnread] = useState<Record<string, number>>({});
   // Which list tab is shown: the merged process list (live processes grouped
   // together with the favorites they were started from), the OS-level
-  // system-process monitor, or the on-disk history log files.
+  // system-process monitor, the on-disk history log files, or the HTTP API
+  // playground.
   const [activeTab, setActiveTab] = useState<
-    "processes" | "system" | "history"
+    "processes" | "system" | "history" | "playground"
   >("processes");
   const { theme, toggle } = useTheme();
   const { language, changeLanguage } = useLanguage();
@@ -493,7 +496,13 @@ export function App() {
                 value={activeTab}
                 onValueChange={(v) =>
                   setActiveTab(
-                    v === "system" ? "system" : v === "history" ? "history" : "processes",
+                    v === "system"
+                      ? "system"
+                      : v === "history"
+                        ? "history"
+                        : v === "playground"
+                          ? "playground"
+                          : "processes",
                   )
                 }
               >
@@ -514,6 +523,10 @@ export function App() {
                   <TabsTab value="system">
                     <ActivityIcon className="size-3.5" />
                     {t("header.tabSystem")}
+                  </TabsTab>
+                  <TabsTab value="playground">
+                    <FlaskConicalIcon className="size-3.5" />
+                    {t("header.tabPlayground")}
                   </TabsTab>
 
                   <TabsIndicator />
@@ -578,6 +591,8 @@ export function App() {
               </div>
             ) : activeTab === "system" ? (
               <SystemProcessList onToast={showToast} />
+            ) : activeTab === "playground" ? (
+              <Playground />
             ) : (
               <LogFilesView />
             )}

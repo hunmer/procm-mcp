@@ -14,6 +14,7 @@ const scripts = [
   "logs-grep.mjs",
   "http-api.mjs",
   "mcp-http.mjs",
+  "noisy-custom-execution.mjs",
   "cli-roundtrip.mjs",
   "data-path.mjs",
   "room-sdk.mjs",

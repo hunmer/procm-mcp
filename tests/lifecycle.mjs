@@ -33,6 +33,25 @@ await runTest("failed starts do not poison later process cleanup", async () => {
   );
 });
 
+await runTest("fast exits preserve final stderr diagnostics", async () => {
+  const marker = "PROCM_FAST_EXIT_DIAGNOSTIC";
+  const started = await http(port, "POST", "/api/processes", {
+    script: "node",
+    args: ["-e", `console.error('${marker}'); process.exit(1)`],
+    cwd: projectRoot,
+    name: "fast-exit-diagnostic",
+  });
+  assertEqual(started.status, 201, "fast exit start status");
+  await sleep(300);
+  const logs = await http(
+    port,
+    "GET",
+    `/api/processes/${started.data.id}/logs?stream=stderr&count=10`,
+  );
+  assertEqual(logs.status, 200, "fast exit stderr status");
+  assert(logs.data.text.includes(marker), "fast exit stderr is retained");
+});
+
 await runTest("start a process and see it running", async () => {
   const { data, status } = await http(port, "POST", "/api/processes", {
     script: "node",

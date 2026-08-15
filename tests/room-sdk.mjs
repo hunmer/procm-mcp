@@ -192,7 +192,7 @@ await runTest("process roomId survives restart and structured logs are queryable
   const port = randomPort();
   const backend = await startBackend({ port });
   try {
-    const source = `import('@procm-mcp/sdk').then(({createLogger})=>{createLogger({clientName:'fixture',memberId:'fixture:logger'}).info('fixture ready',{answer:42},{traceId:'fixture-trace'})})`;
+    const source = `import('@procm-mcp/sdk').then(({createLogger})=>{const logger=createLogger({clientName:'fixture',memberId:'fixture:logger'});logger.info('fixture ready',{answer:42},{traceId:'fixture-trace'});logger.info('unrelated trace',undefined,{traceId:'other-trace'})})`;
     const started = await http(port, "POST", "/api/processes", {
       script: "node",
       args: ["-e", source],
@@ -214,6 +214,10 @@ await runTest("process roomId survives restart and structured logs are queryable
     assertEqual(logs.status, 200, "room log query succeeds");
     assert(logs.data.entries.some((entry) => entry.message === "fixture ready" && entry.data?.answer === 42), "structured log data is decoded from existing log file");
     assert(logs.data.entries.some((entry) => entry.traceId === "fixture-trace"), "room log parsing preserves traceId");
+    const traceLogs = await http(port, "GET", "/api/rooms/log-room/logs?level=info&traceId=fixture-trace&count=20");
+    assertEqual(traceLogs.status, 200, "room log traceId query succeeds");
+    assert(traceLogs.data.entries.length > 0, "traceId query returns matching logs");
+    assert(traceLogs.data.entries.every((entry) => entry.traceId === "fixture-trace"), "traceId query excludes unrelated logs");
   } finally {
     stopBackend(backend);
   }

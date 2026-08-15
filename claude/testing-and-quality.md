@@ -3,8 +3,9 @@
 ## 命令
 
 ```bash
-npm test                 # build + node tests/run-all.mjs（10 套串行，每套独立临时数据目录）
+npm test                 # build + node tests/run-all.mjs（11 套串行，每套独立临时数据目录）
 npm run test:lifecycle   # 单套（:logs / :http / :mcp / :cli / :trace 同理）
+npm run test:custom-noise # 两个高噪音持久进程的 SDK custom-execution 端到端测试
 node tests/ws-livecheck.mjs   # WebSocket 端到端（不在 run-all 内，手动跑）
 ```
 
@@ -16,14 +17,15 @@ run-all 会给每套测试设独立 `PROCM_MCP_DIR`（mkdtemp 临时目录）并
 - HTTP / MCP-stdio 辅助 + 极简 assert（`runTest`/`summarize`）。
 - MCP-stdio 测试**串行**发请求（一次一个等响应），并发会被 SDK 并行 dispatch 引发竞态。**永远不关 stdin**（关 stdin 触发 cleanup+exit），用 `SIGKILL` 收尾。
 
-## 测试套件（`tests/run-all.mjs` 注册 10 套）
+## 测试套件（`tests/run-all.mjs` 注册 11 套）
 
 | 文件 | 覆盖 |
 |---|---|
 | `lifecycle.mjs` | HTTP 路径：start→info→list→restart→stop；启动失败的清理 |
 | `logs-grep.mjs` | stdout/stderr 捕获、tail、正则 grep（用 `example-process.js`） |
 | `http-api.mjs` | dashboard 页托管、`/api/processes` 形状、404、token 鉴权 |
-| `mcp-http.mjs` | `/mcp` initialize、`tools/list`（**8 个**，缺 `process-input` 为预期）、HTTP 工具调用、与 REST 共享状态 |
+| `mcp-http.mjs` | `/mcp` initialize、`tools/list`（**10 个**，缺 `process-input` 为预期）、HTTP 工具调用、与 REST 共享状态 |
+| `noisy-custom-execution.mjs` | 两个持续输出 stdout/stderr 噪音的 Node 进程，经 SDK custom-execution 调用并校验返回值和清理 |
 | `cli-roundtrip.mjs` | `node build/index.js <cmd>` 客户端命令对已运行后端的往返 |
 | `data-path.mjs` | `--data-path` / `PROCM_MCP_DIR` 数据目录选择与隔离 |
 | `room-sdk.mjs` | SDK `ProcmClient` 经 `/room` 的订阅/发布/成员事件 + room REST |

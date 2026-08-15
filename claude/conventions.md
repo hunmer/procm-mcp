@@ -8,7 +8,7 @@ npm run build:sdk          # 仅编 packages/procm-sdk（改 SDK 后必须，后
 npm run build:dashboard    # 仅构建 dashboard（dashboard/ -> dashboard/dist）
 npm run dev:dashboard      # dashboard dev server（proxy 到 PROCM_DEV_BACKEND/后端端口）
 npm run watch              # tsc -w
-npm test                   # build + 跑 10 套测试（run-all）
+npm test                   # build + 跑 11 套测试（run-all）
 npm run test:lifecycle     # 单套（logs/http/mcp/cli/trace 同理）
 npm run start:server       # node ./build/index.js --server
 npm run link               # 全局 link 本地 checkout（npm link）

@@ -1,13 +1,13 @@
 import http from "http";
 import path from "path";
-import { readFile, open, readdir, stat } from "fs/promises";
+import { readFile, open, stat } from "fs/promises";
 import { spawn } from "child_process";
 import {
   dashboardNotBuiltHtml,
   getDashboardServeState,
   readDashboardAsset,
 } from "./dashboard-html.js";
-import { serverLog, serverId, logServerId, serverStartedAt } from "./server-log.js";
+import { serverLog, serverId, serverStartedAt } from "./server-log.js";
 import {
   listProcesses,
   listProcessRecords,
@@ -33,8 +33,8 @@ import { getRoom, listRooms, patchRoom } from "./room-hub.js";
 import { queryRoomLogs } from "./room-logs.js";
 import { scanProjectCommands } from "./project-scanner.js";
 import { listSystemProcesses, killProcessTree, findProcessByPort } from "./system-processes.js";
-import { ServerDir } from "./server-dir.js";
 import { ProcmMcpDir } from "./procm-mcp-dir.js";
+import { listProcessLogFiles } from "./process-log-files.js";
 
 const HOST = "127.0.0.1";
 
@@ -68,9 +68,12 @@ function asset(
   res.end(body);
 }
 
-// Dashboard bundle state is resolved once per server start. If unavailable,
-// GET / falls back to the "not built" page; assets 404.
-const dashboardState = getDashboardServeState();
+// Resolve on each request. `npm link` can replace the built dashboard while a
+// backend is running; caching index.html would then point browsers at asset
+// hashes that no longer exist on disk.
+function currentDashboardState() {
+  return getDashboardServeState();
+}
 
 function toPublicView(p: ProcessMetadata) {
   return {
@@ -350,13 +353,6 @@ async function readLogFile(filePath: string): Promise<string> {
   }
 }
 
-// The per-server directory holding the append-only process log files
-// (<serverDir>/processes/<id>-<type>.log), the same location
-// createProcessStdoutClient writes to.
-function processLogDir(): string {
-  return path.join(ServerDir({ serverId: logServerId }), "processes");
-}
-
 // Log file names are `<processId>-<stdout|stderr>.log`. The greedy `.+` keeps
 // ids containing dashes (nanoid's alphabet includes `-`) intact.
 const LOG_FILE_NAME_RE = /^(.+)-(stdout|stderr)\.log$/;
@@ -387,68 +383,6 @@ async function readLogFileCapped(
   } finally {
     await fh.close();
   }
-}
-
-// Everything the dashboard's history-log view needs about one on-disk log
-// file. Two sources are merged: the CURRENT server's processes dir (files of
-// live/known processes), plus files referenced by persisted records — those
-// live under previous server generations' dirs (serverId changes every
-// restart) and must stay listed so history survives a backend restart.
-async function listProcessLogFiles(): Promise<
-  {
-    name: string;
-    path: string;
-    processId: string;
-    stream: "stdout" | "stderr";
-    size: number;
-    modifiedAt: number;
-    processName: string | null;
-    status: string | null;
-  }[]
-> {
-  const records = await listProcessRecords();
-  const byId = new Map(records.map((r) => [r.id, r] as const));
-
-  // Candidate absolute paths: current dir scan + record-referenced files.
-  const dir = processLogDir();
-  const candidates = new Set<string>();
-  try {
-    for (const name of await readdir(dir)) {
-      if (LOG_FILE_NAME_RE.test(name)) {
-        candidates.add(path.join(dir, name));
-      }
-    }
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
-  }
-  for (const r of records) {
-    for (const p of [r.stdoutLogPath, r.stderrLogPath]) {
-      if (p && LOG_FILE_NAME_RE.test(path.basename(p))) candidates.add(p);
-    }
-  }
-
-  const files = await Promise.all(
-    Array.from(candidates).map(async (filePath) => {
-      const m = path.basename(filePath).match(LOG_FILE_NAME_RE);
-      if (!m) return null;
-      const st = await stat(filePath).catch(() => null);
-      if (!st?.isFile()) return null;
-      const record = byId.get(m[1]);
-      return {
-        name: m[0],
-        path: filePath,
-        processId: m[1],
-        stream: m[2] as "stdout" | "stderr",
-        size: st.size,
-        modifiedAt: st.mtimeMs,
-        processName: record?.name ?? null,
-        status: record?.status ?? null,
-      };
-    }),
-  );
-  return files
-    .filter((f) => f !== null)
-    .sort((a, b) => b.modifiedAt - a.modifiedAt);
 }
 
 // Return the last `count` lines of a raw log blob (record-sourced logs have no
@@ -568,6 +502,7 @@ function createRequestHandler(token: string | undefined) {
 
       // GET /  -> built React dashboard, or a fallback page if not built yet.
       if (method === "GET" && pathname === "/") {
+        const dashboardState = currentDashboardState();
         if (dashboardState.available && dashboardState.index) {
           html(res, 200, dashboardState.index);
         } else {
@@ -580,14 +515,30 @@ function createRequestHandler(token: string | undefined) {
       // Only served when the bundle exists.
       if (
         method === "GET" &&
-        dashboardState.available &&
-        dashboardState.distDir &&
         pathname.startsWith("/assets/")
       ) {
+        const dashboardState = currentDashboardState();
+        if (!dashboardState.available || !dashboardState.distDir) {
+          const message = `Dashboard asset requested but bundle is unavailable: request=${pathname}`;
+          serverLog(message);
+          console.error(`procm-mcp: ${message}`);
+          json(res, 404, { error: "Dashboard bundle not found" });
+          return;
+        }
         const file = readDashboardAsset(dashboardState.distDir, pathname);
         if (file) {
           asset(res, 200, file.body, file.contentType);
         } else {
+          const referencedAssets = Array.from(
+            dashboardState.index?.matchAll(/(?:src|href)=["']([^"']+)["']/g) ?? [],
+            (match) => match[1],
+          );
+          const message =
+            `Dashboard asset not found: request=${pathname}, dist=${dashboardState.distDir}, ` +
+            `currentIndexAssets=${referencedAssets.join(",") || "none"}. ` +
+            "The browser may have stale HTML from before a build/link; reload the page.";
+          serverLog(message);
+          console.error(`procm-mcp: ${message}`);
           json(res, 404, { error: "Asset not found" });
         }
         return;
@@ -663,6 +614,7 @@ function createRequestHandler(token: string | undefined) {
           const entries = await queryRoomLogs(roomId, {
             memberPrefix: url.searchParams.get("memberPrefix") || undefined,
             level,
+            traceId: url.searchParams.get("traceId") || undefined,
             count: Number(url.searchParams.get("count")) || undefined,
           });
           if (!entries) json(res, 404, { error: `Room ${roomId} not found` });
@@ -1154,6 +1106,7 @@ function createRequestHandler(token: string | undefined) {
 // failure so the caller can surface it instead of letting it reach
 // `uncaughtException`.
 export function startHttpServer(port: number): Promise<http.Server> {
+  const dashboardState = currentDashboardState();
   if (dashboardState.available) {
     serverLog(`Serving built dashboard from ${dashboardState.distDir}`);
   } else {

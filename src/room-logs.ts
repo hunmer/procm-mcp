@@ -19,6 +19,7 @@ export interface RoomLogEntry {
 export interface RoomLogQuery {
   memberPrefix?: string;
   level?: LogLevel;
+  traceId?: string;
   count?: number;
 }
 
@@ -77,6 +78,7 @@ export async function queryRoomLogs(roomId: string, query: RoomLogQuery = {}): P
         const row = parseLine(raw, roomId, processId, stream, seq++);
         if (!row) continue;
         if (query.level && row.level !== query.level) continue;
+        if (query.traceId && row.traceId !== query.traceId) continue;
         if (query.memberPrefix && !row.memberId?.startsWith(query.memberPrefix) && !row.clientName?.startsWith(query.memberPrefix)) continue;
         rows.push({ ...row, seq });
       }

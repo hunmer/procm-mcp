@@ -36,17 +36,18 @@ export function registerRoomTools(server: McpServer): void {
 
   server.tool(
     "room-logs",
-    "Read structured logs for all processes in a room, optionally filtering by member/client prefix and level.",
+    "Read structured logs for all processes in a room, optionally filtering by member/client prefix, level, and trace ID.",
     {
       roomId: z.string(),
       memberPrefix: z.string().optional(),
       level: z.enum(["debug", "info", "warn", "error"]).optional(),
+      traceId: z.string().optional(),
       count: z.number().int().min(1).max(5000).optional(),
     },
-    async ({ roomId, memberPrefix, level, count }) => {
-      logToolStart("room-logs", { roomId, memberPrefix, level, count });
+    async ({ roomId, memberPrefix, level, traceId, count }) => {
+      logToolStart("room-logs", { roomId, memberPrefix, level, traceId, count });
       try {
-        const entries = await queryRoomLogs(roomId, { memberPrefix, level, count });
+        const entries = await queryRoomLogs(roomId, { memberPrefix, level, traceId, count });
         if (!entries) return textResult(`Room ${roomId} not found.`);
         logToolEnd("room-logs", { roomId, count: entries.length });
         return textResult(JSON.stringify({ roomId, entries }, null, 2));

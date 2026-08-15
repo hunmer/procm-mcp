@@ -71,7 +71,7 @@ HTTP API (same origin):
 - `POST /api/processes/:id/restart` → restart
 - `GET /api/rooms` → list room metadata and active members
 - `GET|PATCH /api/rooms/:roomId` → inspect or update room title/note
-- `GET /api/rooms/:roomId/logs?memberPrefix=&level=&count=` → merged structured room logs
+- `GET /api/rooms/:roomId/logs?memberPrefix=&level=&traceId=&count=` → merged structured room logs
 
 ### Backend mode (`--server`)
 
@@ -201,6 +201,7 @@ npm run build:sdk
 npm run build
 npm test
 npm run test:trace
+npm run test:custom-noise
 ```
 
 Managed processes receive `PROCM_ROOM_ID`, `PROCM_PROCESS_ID`, `PROCM_WS_URL`, and optional authentication automatically. Explicit SDK options override environment values. See `demo/` for the Node.js and Electron workflow.
@@ -242,6 +243,8 @@ For network-facing setups, optional `PROCM_HTTP_TOKEN` requires an `Authorizatio
   - `id` (required for get/delete/restart): The process ID
   - `delete` stops and removes a process by ID. The default signal is SIGTERM, but SIGKILL (force killing) is sent after 10 seconds unless the process exits.
 - `process-logs` Read a process's logs by ID (tail recent, or grep with a regex)
+- `process-log-files` Return absolute stdout/stderr log file paths for a process, including history
+- `log-files` List historical process log files with absolute paths, optionally filtered by process and stream
   - `id` (required): The process ID
   - `pattern` (optional): A regular expression. If omitted, tails the most recent chunks instead of searching.
   - `stream` (optional): `"stdout"` or `"stderr"`. Tail defaults to `"stdout"`; in grep mode, omit to search both.
@@ -257,7 +260,7 @@ For network-facing setups, optional `PROCM_HTTP_TOKEN` requires an `Authorizatio
   - `name` (required for start): The command name as defined in the file
   - `cwd` (optional): Project directory containing `procm-commands.json` (default: current working directory)
 - `room` List, inspect, or update room metadata and active members
-- `room-logs` Merge structured logs for a room with optional member-prefix and level filters
+- `room-logs` Merge structured logs for a room with optional member-prefix, level, and trace-ID filters
 - `trace-get` Read a complete in-memory trace by exact ID from the current procm-mcp instance
 
 ## License

@@ -24,6 +24,7 @@
     "tabProcesses": "Processes",
     "tabSystem": "System",
     "tabHistory": "History Logs",
+    "tabPlayground": "Playground",
     "running": "{{count}} running",
     "clearAll": "Clear all",
     "clearAllTitle": "Clear all processes",
@@ -382,5 +383,25 @@
   },
   "devInspector": {
     "title": "Inspect React component source ({{hotkey}})"
+  },
+  "playground": {
+    "groups": {
+      "server": "Server",
+      "processes": "Processes",
+      "rooms": "Rooms",
+      "system": "System Processes",
+      "files": "Files & Folders",
+      "logs": "Log Files"
+    },
+    "sectionPath": "Path parameters",
+    "sectionQuery": "Query parameters",
+    "sectionBody": "Request body",
+    "send": "Send",
+    "response": "Response",
+    "required": "This field is required",
+    "invalidNumber": "Must be a number",
+    "omit": "omit",
+    "noFields": "This endpoint takes no inputs — just hit Send.",
+    "networkError": "Network error"
   }
 }

@@ -13,6 +13,7 @@ import { serverLog } from "./server-log.js";
 import { toErrorMessage } from "./error.js";
 import { registerProcessTools } from "./tools/process.js";
 import { registerProcessLogTools } from "./tools/process-logs.js";
+import { registerProcessLogFileTools } from "./tools/process-log-files.js";
 import { registerProcmCommandsTools } from "./tools/procm-commands.js";
 import { registerRoomTools } from "./tools/room.js";
 import { registerTraceTools } from "./tools/trace.js";
@@ -22,6 +23,7 @@ import { registerTraceTools } from "./tools/trace.js";
 function registerAllTools(server: McpServer) {
   registerProcessTools(server);
   registerProcessLogTools(server);
+  registerProcessLogFileTools(server);
   registerProcmCommandsTools(server);
   registerRoomTools(server);
   registerTraceTools(server);

@@ -11,6 +11,7 @@ import {
 } from "./http-server.js";
 import { registerProcessTools } from "./tools/process.js";
 import { registerProcessLogTools } from "./tools/process-logs.js";
+import { registerProcessLogFileTools } from "./tools/process-log-files.js";
 import { registerProcessInputTools } from "./tools/process-input.js";
 import { registerProcmCommandsTools } from "./tools/procm-commands.js";
 import { registerRoomTools } from "./tools/room.js";
@@ -122,6 +123,7 @@ try {
 
     registerProcessTools(server);
     registerProcessLogTools(server);
+    registerProcessLogFileTools(server);
     registerProcessInputTools(server);
     registerProcmCommandsTools(server);
     registerRoomTools(server);

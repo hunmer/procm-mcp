@@ -2,8 +2,8 @@
 
 ## MCP 工具
 
-**stdio（9 个）**：`start-process`、`batch-process`、`process`、`process-logs`、`process-input`、`procm-command`、`room`、`room-logs`、`trace-get`。
-**`/mcp` HTTP（8 个）**：同上去掉 `process-input`（HTTP MCP 不注册输入工具；可用 REST `POST /api/processes/:id/input` 或 dashboard 代替）。
+**stdio（11 个）**：`start-process`、`batch-process`、`process`、`process-logs`、`process-log-files`、`log-files`、`process-input`、`procm-command`、`room`、`room-logs`、`trace-get`。
+**`/mcp` HTTP（10 个）**：同上去掉 `process-input`（HTTP MCP 不注册输入工具；可用 REST `POST /api/processes/:id/input` 或 dashboard 代替）。
 
 | 工具 | 参数 | 说明 |
 |---|---|---|
@@ -11,10 +11,12 @@
 | `batch-process` | `action`(必) + `processes?[]`/`ids?[]` `concurrency?` | 批量 start 或 restart；≤100 项、有界并发（batch-process MCP 工具上限）、逐项 `{ok,...}` 结果。 |
 | `process` | `action`(必) `id?` | `action` ∈ `get`/`delete`/`restart`/`list`；get/delete/restart 需 `id`。delete 默认 SIGTERM，10s 未退出则 SIGKILL。 |
 | `process-logs` | `id`(必) `stream?` `pattern?` `count?` `ignoreCase?` | 无 pattern → tail（默认 stdout，count 10）；有 pattern → 正则 grep（默认 50，可搜双流）。 |
+| `process-log-files` | `id`(必) | 返回指定进程 stdout/stderr 日志文件绝对路径，支持历史进程。 |
+| `log-files` | `processId?` `stream?` `limit?` | 列出历史日志文件及绝对路径，按修改时间倒序，可按进程/流筛选。 |
 | `process-input` | `id`(必) `text?` `newline?` `signal?` | `text` 写 stdin（`newline` 默认 true）或 `signal` 发信号；二选一。signal ∈ `SIGINT`/`SIGTERM`/`SIGKILL`/`SIGHUP`/`SIGUSR1`/`SIGUSR2`/`SIGTSTP`/`SIGCONT`/`SIGQUIT`。**stdio 限定。** |
 | `procm-command` | `action`(必) `name?` `cwd?` | `action` ∈ `list`/`start`；start 需 `name`，读项目根 `procm-commands.json` 按名启动（`cwd` 相对项目目录解析为绝对路径）。 |
 | `room` | `action`(必) `roomId?` `title?` `note?` | `action` ∈ `list`/`get`/`update`；房间元数据 + 活跃成员。 |
-| `room-logs` | `roomId`(必) `memberPrefix?` `level?` `count?` | 合并房间成员结构化日志（marker 解析自各进程 `.log`），可按成员前缀/级别过滤。 |
+| `room-logs` | `roomId`(必) `memberPrefix?` `level?` `traceId?` `count?` | 合并房间成员结构化日志（marker 解析自各进程 `.log`），可按成员前缀/级别/trace ID 过滤。 |
 | `trace-get` | `id`(必) | 读当前实例内存中的完整 trace；`{ok:true,trace}` 或 `{ok:false,error:{code}}`（`TRACE_NOT_FOUND` 等稳定码）。 |
 
 ## REST API（同源，绑 `127.0.0.1`）
@@ -38,7 +40,7 @@
 | GET | `/api/meta` | `{serverId, pid, cwd, startedAt}` |
 | GET | `/api/rooms` | 房间列表（元数据 + 活跃成员） |
 | GET / PATCH | `/api/rooms/:roomId` | 查看 / 更新房间 title/note |
-| GET | `/api/rooms/:roomId/logs?memberPrefix=&level=&count=` | 合并房间结构化日志 |
+| GET | `/api/rooms/:roomId/logs?memberPrefix=&level=&traceId=&count=` | 合并房间结构化日志 |
 | GET | `/api/system-processes` | OS 级进程列表（pid/ppid/name/cmd/exe/ports） |
 | POST | `/api/favorites/scan` | body `{path}` 扫项目清单 → `{candidates}`（无状态，dashboard 存 localStorage） |
 | POST | `/api/open-folder` | body `{path}` 调 `explorer`/`open`/`xdg-open` |
