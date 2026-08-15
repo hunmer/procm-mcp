@@ -25,6 +25,7 @@ import {
   Select,
   SelectIcon,
   SelectItem,
+  SelectItemText,
   SelectPopup,
   SelectTrigger,
   SelectValue,
@@ -84,11 +85,6 @@ export function SettingsDialog({
   // Hidden file input triggered by the import button — keeps the native file
   // picker without rendering its default look.
   const fileRef = useRef<HTMLInputElement>(null);
-  // Container for the Select dropdowns' portals. They must stay inside the
-  // dialog's DOM — portaling to <body> puts them outside the modal's subtree,
-  // where the dialog's overlay stacking swallows them.
-  const contentRef = useRef<HTMLDivElement>(null);
-
   // items-driven selects (p-field-11): SelectValue renders the selected
   // item's label automatically. Labels go through t() so they follow the UI
   // language on change.
@@ -171,7 +167,7 @@ export function SettingsDialog({
           <DialogDescription>{t("settings.description")}</DialogDescription>
         </DialogHeader>
         <DialogPanel>
-          <div ref={contentRef} className="min-w-0">
+          <div className="min-w-0">
           {/* Vertical tabs (p-tabs-11): underline list with a start border,
               panels to its right. */}
           <Tabs
@@ -205,10 +201,10 @@ export function SettingsDialog({
                     <SelectValue />
                     <SelectIcon />
                   </SelectTrigger>
-                  <SelectPopup portalProps={{ container: contentRef }}>
+                  <SelectPopup>
                     {languageItems.map(({ label, value }) => (
                       <SelectItem key={value} value={value}>
-                        {label}
+                        <SelectItemText>{label}</SelectItemText>
                       </SelectItem>
                     ))}
                   </SelectPopup>
@@ -226,10 +222,10 @@ export function SettingsDialog({
                     <SelectValue />
                     <SelectIcon />
                   </SelectTrigger>
-                  <SelectPopup portalProps={{ container: contentRef }}>
+                  <SelectPopup>
                     {themeItems.map(({ label, value }) => (
                       <SelectItem key={value} value={value}>
-                        {label}
+                        <SelectItemText>{label}</SelectItemText>
                       </SelectItem>
                     ))}
                   </SelectPopup>

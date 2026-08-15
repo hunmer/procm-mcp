@@ -57,7 +57,7 @@ function parseArgs(argv: string[]) {
           "",
           "Options:",
           "  --port <number>   Dashboard port (default: 7331, or PROCM_HTTP_PORT).",
-          "  --data-path <path>  Data directory (default: current working directory; use 'global' for ~/.procm-mcp).",
+          "  --data-path <path>  Data directory (default: .procm-mcp in the current working directory; use 'global' for ~/.procm-mcp).",
           "  -h, --help        Show this help.",
         ].join("\n") + "\n",
       );

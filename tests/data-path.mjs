@@ -56,11 +56,12 @@ await runTest("default data path is the process working directory", async () => 
 
   try {
     const deadline = Date.now() + 8000;
-    while (Date.now() < deadline && !existsSync(join(root, "processes.json"))) {
+    const dataDir = join(root, ".procm-mcp");
+    while (Date.now() < deadline && !existsSync(join(dataDir, "processes.json"))) {
       if (child.exitCode !== null) throw new Error(`backend exited with code ${child.exitCode}`);
       await sleep(100);
     }
-    assert(existsSync(join(root, "processes.json")), "working directory contains processes.json");
+    assert(existsSync(join(dataDir, "processes.json")), ".procm-mcp contains processes.json");
   } finally {
     child.kill("SIGTERM");
     await Promise.race([
