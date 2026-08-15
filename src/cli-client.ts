@@ -7,10 +7,16 @@
 //
 // Commands:
 //   ps                                    List running processes
+//   ps [--status <s>] [--group <g>]        Filter process list
 //   info <id>                             Show details of a process
 //   logs <id> [--stream stdout|stderr] [-n <count>]   Tail recent logs
 //   grep <id> <pattern> [--stream s] [-n <count>] [--ignore-case|-i]
 //   start <script> [args...] [--cwd <dir>] [--name <n>] [--group <n>] [--env KEY=VAL ...]
+//          [--overwrite] [--restart] [--favorite]
+//   edit <id> [--name <n>] [--script <s>] [--args <json>] [--cwd <dir>] [--desc <d>]
+//          [--app-port <n>|--no-port] [--envs <json>] [--favorite|--unfavorite]
+//   import [--config <json>]                 Save a process configuration without starting
+//   clear-logs                               Delete logs for non-running processes
 //   restart <id>                          Restart a process
 //   stop <id>                             Stop and delete a process
 //   ping                                  Check the backend is reachable
@@ -34,6 +40,8 @@ type ProcView = {
   exitCode: number | null;
   error: string | null;
   group?: string | null;
+  favorite?: boolean;
+  startedAt?: string;
 };
 
 function fail(msg: string, code = 1): never {
@@ -169,8 +177,18 @@ function fmtInfo(p: ProcView) {
 
 // ---- command handlers ----
 
-async function cmdPs(port: number, token?: string) {
-  fmtPs(await request(port, "GET", "/api/processes", undefined, token));
+async function cmdPs(port: number, args: string[], token?: string) {
+  const query = new URLSearchParams();
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === "--status") query.set("status", args[++i] || "");
+    else if (a.startsWith("--status=")) query.set("status", a.slice(9));
+    else if (a === "--group") query.set("group", args[++i] || "");
+    else if (a.startsWith("--group=")) query.set("group", a.slice(8));
+    else fail(`unexpected argument "${a}"`);
+  }
+  const suffix = query.toString() ? `?${query}` : "";
+  fmtPs(await request(port, "GET", `/api/processes${suffix}`, undefined, token));
 }
 
 async function cmdInfo(port: number, args: string[], token?: string) {
@@ -238,6 +256,9 @@ async function cmdStart(port: number, args: string[], token?: string) {
   let cwd = process.cwd();
   let name: string | undefined;
   let group: string | undefined;
+  let overwrite = false;
+  let restart = false;
+  let favorite = false;
   const envs: Record<string, string> = {};
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -247,6 +268,9 @@ async function cmdStart(port: number, args: string[], token?: string) {
     else if (a.startsWith("--name=")) name = a.slice("--name=".length);
     else if (a === "--group") group = args[++i];
     else if (a.startsWith("--group=")) group = a.slice("--group=".length);
+    else if (a === "--overwrite") overwrite = true;
+    else if (a === "--restart") restart = true;
+    else if (a === "--favorite") favorite = true;
     else if (a === "--env") {
       const kv = args[++i] || "";
       const eq = kv.indexOf("=");
@@ -263,10 +287,54 @@ async function cmdStart(port: number, args: string[], token?: string) {
     port,
     "POST",
     "/api/processes",
-    { script, args: scriptArgs, cwd, name, group, envs },
+    { script, args: scriptArgs, cwd, name, group, envs, overwrite, restart, favorite },
     token,
   );
   console.log(`Process started: ${data.name} (ID: ${data.id})`);
+}
+
+async function cmdEdit(port: number, args: string[], token?: string) {
+  const id = args[0];
+  if (!id) fail("usage: procm-mcp edit <id> [fields]");
+  const body: Record<string, unknown> = {};
+  for (let i = 1; i < args.length; i++) {
+    const a = args[i];
+    const next = () => args[++i];
+    if (a === "--name") body.name = next();
+    else if (a === "--script") body.script = next();
+    else if (a === "--args") body.args = JSON.parse(next() || "[]");
+    else if (a === "--cwd") body.cwd = next();
+    else if (a === "--desc") body.desc = next();
+    // --port is reserved as the backend connection flag by splitFlags().
+    else if (a === "--app-port") body.port = Number(next());
+    else if (a === "--no-port") body.port = null;
+    else if (a === "--envs") body.envs = JSON.parse(next() || "{}");
+    else if (a === "--favorite") body.favorite = true;
+    else if (a === "--unfavorite") body.favorite = false;
+    else fail(`unexpected argument "${a}"`);
+  }
+  if (Object.keys(body).length === 0) fail("edit requires at least one field");
+  await request(port, "PATCH", `/api/processes/${encodeURIComponent(id)}`, body, token);
+  console.log(`Process ${id} updated.`);
+}
+
+async function cmdImport(port: number, args: string[], token?: string) {
+  let raw: string | undefined;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--config") raw = args[++i];
+    else if (args[i].startsWith("--config=")) raw = args[i].slice(9);
+    else fail(`unexpected argument "${args[i]}"`);
+  }
+  if (!raw) fail("usage: procm-mcp import --config '<json>'");
+  const config = tryJson(raw);
+  if (!config || typeof config !== "object" || Array.isArray(config)) fail("--config must be a JSON object");
+  const data = await request(port, "POST", "/api/processes/import", config, token);
+  console.log(`Process configuration imported: ${data.name || data.id || "ok"}`);
+}
+
+async function cmdClearLogs(port: number, token?: string) {
+  const data = await request(port, "DELETE", "/api/log-files", undefined, token);
+  console.log(`Deleted ${data.deleted?.length || 0} log file(s); skipped ${data.skipped?.length || 0}.`);
 }
 
 async function cmdRestart(port: number, args: string[], token?: string) {
@@ -467,7 +535,7 @@ async function cmdMcpTool(port: number, args: string[], token?: string) {
   }
 }
 
-const COMMANDS = ["ps", "info", "logs", "grep", "start", "restart", "stop", "ping", "mcptool"];
+const COMMANDS = ["ps", "info", "logs", "grep", "start", "edit", "import", "clear-logs", "restart", "stop", "ping", "mcptool"];
 
 export function isClientCommand(arg: string | undefined): boolean {
   return !!arg && COMMANDS.includes(arg);
@@ -478,13 +546,16 @@ export function clientHelp(): string {
     "Usage: procm-mcp <command> [args] [--port <n>] [--token <t>]",
     "",
     "Client commands (connect to a running --server backend; default port 7331):",
-    "  ps                                    List running processes",
+    "  ps [--status <s>] [--group <g>]        List/filter processes",
     "  info <id>                             Show details of a process",
     "  logs <id> [--stream stdout|stderr] [-n <count>]   Tail recent logs",
     "  grep <id> <pattern> [--stream s] [-n <count>] [-i]   Search logs with a regex",
-    "  start <script> [args...] [--cwd <dir>] [--name <n>] [--group <n>] [--env KEY=VAL ...]",
+    "  start <script> [args...] [--cwd <dir>] [--name <n>] [--group <n>] [--env KEY=VAL ...] [--overwrite] [--restart] [--favorite]",
     "                                        Start a new process",
     "  restart <id>                          Restart a process",
+    "  edit <id> [fields]                     Update process configuration (--app-port for process port)",
+    "  import --config '<json>'               Save configuration without starting",
+    "  clear-logs                             Delete logs for non-running processes",
     "  stop <id>                             Stop and delete a process",
     "  ping                                  Check the backend is reachable",
     "  mcptool                               List MCP tools",
@@ -504,7 +575,7 @@ export async function runClient(argv: string[]): Promise<void> {
 
   switch (command) {
     case "ps":
-      return cmdPs(p, t);
+      return cmdPs(p, args, t);
     case "info":
       return cmdInfo(p, args, t);
     case "logs":
@@ -513,6 +584,12 @@ export async function runClient(argv: string[]): Promise<void> {
       return cmdGrep(p, args, t);
     case "start":
       return cmdStart(p, args, t);
+    case "edit":
+      return cmdEdit(p, args, t);
+    case "import":
+      return cmdImport(p, args, t);
+    case "clear-logs":
+      return cmdClearLogs(p, t);
     case "restart":
       return cmdRestart(p, args, t);
     case "stop":
