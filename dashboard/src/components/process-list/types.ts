@@ -1,11 +1,12 @@
 import type { ProcessStatus, ProcessView } from "@/lib/types";
+import type { Favorite } from "@/lib/favorites";
 
 interface ProcessListProps {
   processes: ProcessView[];
+  // Saved launch recipes merged into the same grouped list; each group section
+  // shows its favorites next to the processes started from them.
+  favorites: Favorite[];
   selectedId: string | null;
-  // Wall-clock "now" (epoch ms) that ticks every second from the parent, so the
-  // uptime column stays live without this component owning its own timer.
-  now: number;
   // Per-process unread log counts, keyed by process id.
   unread: Record<string, number>;
   // Set of favorited launch signatures, so rows show the filled star.
@@ -15,6 +16,18 @@ interface ProcessListProps {
   onSelectLogs: (p: ProcessView) => void;
   onView: (p: ProcessView) => void;
   onToast: (message: string, isError?: boolean) => void;
+  // Launch a favorite as a real process via the backend.
+  onLaunchFavorite: (fav: Favorite) => void;
+  // Open the favorite editor dialog on a favorite card.
+  onEditFavorite: (fav: Favorite) => void;
+  // Remove a favorite by id.
+  onRemoveFavorite: (id: string) => void;
+  // Open the folder-import dialog (scan a project dir for commands).
+  onImport: () => void;
+  // Open a group's folder in the OS file manager (group label is a path).
+  onOpenFolder: (path: string) => void;
+  // Delete every favorite in a group, given the ids of its items.
+  onRemoveCategory: (ids: string[]) => void;
 }
 
 export type { ProcessListProps };
@@ -40,14 +53,8 @@ export const STATUS_OPTIONS: { value: StatusFilter; labelKey: string }[] = [
   { value: "expired", labelKey: "processes.filterExpired" },
 ];
 
-export const PAGE_SIZE = 8;
-
-// Layout toggle for the process list: "table" (rows) or "cards" (grid).
-export type ViewMode = "table" | "cards";
-export const VIEW_KEY = "procm.processView";
-
-// Bundled per-row action callbacks. Passed as a single object to the views,
-// the columns hook, and the shared context menu so call sites stay terse.
+// Bundled per-row action callbacks. Passed as a single object to the views
+// and the shared context menu so call sites stay terse.
 export interface RowActions {
   onSelectLogs: (p: ProcessView) => void;
   onView: (p: ProcessView) => void;

@@ -155,14 +155,19 @@ function TerminalLine({
       ) : (
         <AnsiText text={entry.message} highlight={highlight} />
       )}
-      {showJson && isJsonValue(entry.data) && (
-        <details className="ml-4 mt-0.5 text-zinc-400">
-          <summary className="cursor-pointer select-none text-[11px] text-zinc-500">JSON</summary>
-          <div className="my-1 max-w-full overflow-x-auto border-l border-zinc-700 pl-1">
-            <JsonViewer data={entry.data} rootName="data" defaultExpanded={1} mini />
+      {isJsonValue(entry.data) &&
+        (showJson ? (
+          <div className="my-1 ml-4 max-w-full overflow-x-auto border-l border-zinc-700 pl-1">
+            <JsonViewer data={entry.data} rootName="data" defaultExpanded={true} mini />
           </div>
-        </details>
-      )}
+        ) : (
+          <details className="ml-4 mt-0.5 text-zinc-400">
+            <summary className="cursor-pointer select-none text-[11px] text-zinc-500">JSON</summary>
+            <div className="my-1 max-w-full overflow-x-auto border-l border-zinc-700 pl-1">
+              <JsonViewer data={entry.data} rootName="data" defaultExpanded={1} mini />
+            </div>
+          </details>
+        ))}
     </div>
   );
 }
@@ -171,8 +176,9 @@ export interface TerminalLogProps {
   entries: LogEntry[];
   showTime: boolean;
   showLineNumbers: boolean;
-  // Whether the structured `data` payload of an entry is rendered (as an
-  // interactive JSON tree). Toggled from the LogPanel view settings.
+  // Whether the structured `data` payload of an entry renders always
+  // expanded; when off it stays collapsed behind a <details> toggle.
+  // Toggled from the LogPanel view settings.
   showJson: boolean;
   formatTime: (ts: number) => string;
   highlight: RegExp | null;

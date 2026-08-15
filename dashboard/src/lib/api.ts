@@ -1,5 +1,6 @@
 import type {
   LogEntry,
+  LogFileSummary,
   LogsResponse,
   ProcessListResponse,
   ProcessStream,
@@ -131,10 +132,31 @@ export function getLogFiles(
 }
 
 // URL of the merged-log download endpoint (the browser streams the real
-// on-disk .log files, merged chronologically, as an attachment). Returned as
-// a plain string so the caller can set it as an <a download> href.
+// on-disk .log files, merged chronologically, as an attachment). Returned as a
+// plain string so the caller can set it as an <a download> href.
 export function downloadLogUrl(id: string): string {
   return `/api/processes/${encodeURIComponent(id)}/log-download`;
+}
+
+// List every on-disk process log file the server has written (its processes
+// dir), newest-modified first. Includes files of processes that were later
+// deleted. Powers the history-log tab and the per-process log-files dialog.
+export async function listLogFiles(): Promise<LogFileSummary[]> {
+  const r = await api<{ files: LogFileSummary[] }>("GET", "/api/log-files");
+  return r.files;
+}
+
+// Read one log file's text, capped server-side at 10MB (oversized files
+// return only the trailing bytes, flagged via `truncated`). `path` is the
+// LogFileSummary.path of a file previously returned by listLogFiles; the
+// backend validates it stays inside its data root.
+export function readLogFileContent(
+  path: string,
+): Promise<{ path: string; text: string; truncated: boolean }> {
+  return api<{ path: string; text: string; truncated: boolean }>(
+    "GET",
+    `/api/log-files/content?path=${encodeURIComponent(path)}`,
+  );
 }
 
 // A single-line, paste-and-run terminal command reproducing how the process

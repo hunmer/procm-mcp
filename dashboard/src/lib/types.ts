@@ -59,6 +59,22 @@ export interface LogsResponse {
   text: string;
 }
 
+// One on-disk process log file from GET /api/log-files (the append-only
+// `<id>-<stream>.log` files the server writes per process). Files referenced
+// by persisted records from previous server generations are included too, so
+// history survives backend restarts. processName/status are joined from live +
+// historical records; null when only the file remains.
+export interface LogFileSummary {
+  name: string; // "<processId>-<stream>.log"
+  path: string; // absolute on-disk path
+  processId: string;
+  stream: ProcessStream;
+  size: number; // bytes
+  modifiedAt: number; // epoch ms
+  processName: string | null;
+  status: ProcessStatus | null;
+}
+
 // A single structured log line, with its source stream. stdout and stderr are
 // merged into one chronologically ordered list in the UI.
 export interface LogEntry {

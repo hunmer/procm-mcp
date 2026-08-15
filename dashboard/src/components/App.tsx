@@ -10,11 +10,11 @@ import {
 } from "@/registry/default/ui/tabs";
 import {
   ActivityIcon,
+  HistoryIcon,
   LanguagesIcon,
   ListIcon,
   MoonIcon,
   PanelLeftOpenIcon,
-  StarIcon,
   SunIcon,
   TrashIcon,
 } from "lucide-react";
@@ -26,8 +26,8 @@ import {
 import { ImportFavoritesDialog } from "./ImportFavoritesDialog";
 import { ProcessList } from "./ProcessList";
 import { SystemProcessList } from "./SystemProcessList";
-import { FavoritesView } from "./FavoritesView";
 import { LogPanel } from "./LogPanel";
+import { LogFilesView } from "./LogFilesView";
 import { Toast } from "./Toast";
 import { DevInspector } from "./DevInspector";
 import { useTheme } from "@/lib/useTheme";
@@ -84,10 +84,11 @@ export function App() {
   // Per-process unread log counters (incremented on live log push, cleared
   // when that process's log panel is open).
   const [unread, setUnread] = useState<Record<string, number>>({});
-  // Which list tab is shown: the live process table, the favorites grid, or
-  // the OS-level system-process monitor.
+  // Which list tab is shown: the merged process list (live processes grouped
+  // together with the favorites they were started from), the OS-level
+  // system-process monitor, or the on-disk history log files.
   const [activeTab, setActiveTab] = useState<
-    "processes" | "favorites" | "system"
+    "processes" | "system" | "history"
   >("processes");
   const { theme, toggle } = useTheme();
   const { language, changeLanguage } = useLanguage();
@@ -360,15 +361,14 @@ export function App() {
     if (n > 0) showToast(t("toasts.deletedGroup", { count: n }));
   }
 
-  // Launch a favorite as a real process via the backend. On success, jump to
-  // the Processes tab and arm `pendingSelectRef` so the log panel auto-opens
-  // on this process the moment the WS push delivers its row.
+  // Launch a favorite as a real process via the backend. On success, arm
+  // `pendingSelectRef` so the log panel auto-opens on this process the moment
+  // the WS push delivers its row.
   async function handleLaunchFavorite(fav: Favorite) {
     try {
       const r = await startProcess(favoriteToStartBody(fav));
       pendingSelectRef.current = r.id;
       showToast(t("toasts.started", { id: r.id }));
-      setActiveTab("processes");
     } catch (err) {
       showToast(err instanceof Error ? err.message : String(err), true);
     }
@@ -486,18 +486,14 @@ export function App() {
         <main className="flex min-w-0 flex-1 flex-col gap-4 p-5">
           <div className="bg-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
             <div className="flex shrink-0 items-center justify-between border-b px-4 py-2.5">
-              {/* Tabs double as the section title: 进程 (Processes) / 收藏
-                  (Favorites). Switching is purely client-side — favorites are
-                  persisted in localStorage, independent of the backend. */}
+              {/* Tabs double as the section title. Switching is purely
+                  client-side — favorites are persisted in localStorage,
+                  independent of the backend. */}
               <Tabs
                 value={activeTab}
                 onValueChange={(v) =>
                   setActiveTab(
-                    v === "favorites"
-                      ? "favorites"
-                      : v === "system"
-                        ? "system"
-                        : "processes",
+                    v === "system" ? "system" : v === "history" ? "history" : "processes",
                   )
                 }
               >
@@ -505,20 +501,15 @@ export function App() {
                   <TabsTab value="processes">
                     <ListIcon className="size-3.5" />
                     {t("header.tabProcesses")}
-                    {processes.length > 0 && (
+                    {processes.length + favorites.length > 0 && (
                       <span className="text-muted-foreground text-xs">
-                        ({processes.length})
+                        ({processes.length + favorites.length})
                       </span>
                     )}
                   </TabsTab>
-                  <TabsTab value="favorites">
-                    <StarIcon className="size-3.5" />
-                    {t("header.tabFavorites")}
-                    {favorites.length > 0 && (
-                      <span className="text-muted-foreground text-xs">
-                        ({favorites.length})
-                      </span>
-                    )}
+                  <TabsTab value="history">
+                    <HistoryIcon className="size-3.5" />
+                    {t("header.tabHistory")}
                   </TabsTab>
                   <TabsTab value="system">
                     <ActivityIcon className="size-3.5" />
@@ -553,8 +544,8 @@ export function App() {
                 <div className="flex min-w-0 flex-1 flex-col">
                   <ProcessList
                     processes={processes}
+                    favorites={favorites}
                     selectedId={selected?.id ?? null}
-                    now={now}
                     unread={unread}
                     favoritedSignatures={favoritedSignatures}
                     onToggleFavorite={handleToggleFavorite}
@@ -564,6 +555,12 @@ export function App() {
                       setDetailsOpen(true);
                     }}
                     onToast={showToast}
+                    onLaunchFavorite={handleLaunchFavorite}
+                    onEditFavorite={handleEditFavoriteCard}
+                    onRemoveFavorite={handleRemoveFavorite}
+                    onImport={() => setImportOpen(true)}
+                    onOpenFolder={handleOpenFolder}
+                    onRemoveCategory={handleRemoveCategory}
                   />
                 </div>
                 {selected && !logCollapsed && (
@@ -582,15 +579,7 @@ export function App() {
             ) : activeTab === "system" ? (
               <SystemProcessList onToast={showToast} />
             ) : (
-              <FavoritesView
-                favorites={favorites}
-                onLaunch={handleLaunchFavorite}
-                onEdit={handleEditFavoriteCard}
-                onRemove={handleRemoveFavorite}
-                onImport={() => setImportOpen(true)}
-                onOpenFolder={handleOpenFolder}
-                onRemoveCategory={handleRemoveCategory}
-              />
+              <LogFilesView />
             )}
           </div>
         </main>

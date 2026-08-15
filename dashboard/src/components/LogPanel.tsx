@@ -1,66 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button } from "@/registry/default/ui/button";
-import { Input } from "@/registry/default/ui/input";
-import { Textarea } from "@/registry/default/ui/textarea";
-import { Badge } from "@/registry/default/ui/badge";
-import { ScrollArea } from "@/registry/default/ui/scroll-area";
-import { Separator } from "@/registry/default/ui/separator";
-import {
-  CircleOffIcon,
-  CopyIcon,
-  DownloadIcon,
-  EllipsisIcon,
-  EllipsisVerticalIcon,
-  EraserIcon,
-  FileTextIcon,
-  FolderTreeIcon,
-  PanelRightCloseIcon,
-  PlayIcon,
-  RotateCwIcon,
-  SearchIcon,
-  SendIcon,
-  SettingsIcon,
-  SquareIcon,
-  TerminalIcon,
-  SquareTerminalIcon,
-  XIcon,
-} from "lucide-react";
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from "@/registry/default/ui/alert";
-import {
-  AlertDialog,
-  AlertDialogClose,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogPopup,
-  AlertDialogTitle,
-} from "@/registry/default/ui/alert-dialog";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/registry/default/ui/empty";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuSeparator,
-  MenuTrigger,
-} from "@/registry/default/ui/menu";
-import {
-  Popover,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@/registry/default/ui/popover";
-import { Checkbox } from "@/registry/default/ui/checkbox";
-import { Slider } from "@/registry/default/ui/slider";
 import {
   downloadLogUrl,
   getLogFiles,
@@ -69,6 +8,7 @@ import {
   grepMergedLogs,
   mergeEntries,
   restartProcess,
+  revealPath,
   sendProcessInput,
   stopProcess,
 } from "@/lib/api";
@@ -77,7 +17,19 @@ import type {
   ProcessView,
   WsLogMessage,
 } from "@/lib/types";
-import { TerminalLog, stripAnsi } from "./TerminalLog";
+import { stripAnsi } from "./TerminalLog";
+import {
+  GREP_COUNT,
+  HISTORY_COUNT,
+  loadShowJson,
+} from "./log-panel/constants";
+import { LogPanelHeader } from "./log-panel/LogPanelHeader";
+import { LogPanelCommandStrip } from "./log-panel/LogPanelCommandStrip";
+import { LogPanelBody } from "./log-panel/LogPanelBody";
+import { LogPanelStdinBar } from "./log-panel/LogPanelStdinBar";
+import { LogPanelFooter } from "./log-panel/LogPanelFooter";
+import { LogPanelStopDialog } from "./log-panel/LogPanelStopDialog";
+import type { FontSize, LevelFilter } from "./log-panel/types";
 
 interface LogPanelProps {
   process: ProcessView;
@@ -88,50 +40,15 @@ interface LogPanelProps {
   onToast: (message: string, isError?: boolean) => void;
 }
 
-const HISTORY_COUNT = 100;
-const GREP_COUNT = 500;
-
-// Whether structured JSON payloads are rendered as an interactive tree.
-// Persisted to localStorage (best-effort) matching the useTheme.ts pattern.
-const SHOW_JSON_KEY = "procm-log-show-json";
-
-function loadShowJson(): boolean {
-  if (typeof localStorage === "undefined") return true;
-  try {
-    const v = localStorage.getItem(SHOW_JSON_KEY);
-    return v === null ? true : v === "1";
-  } catch {
-    return true;
-  }
-}
-
-function persistShowJson(v: boolean): void {
-  try {
-    localStorage.setItem(SHOW_JSON_KEY, v ? "1" : "0");
-  } catch {
-    // localStorage may be unavailable (private mode); ignore.
-  }
-}
-
-// Structured-level filters shown as a compact segmented control. Legacy plain
-// lines remain visible under "all" while exact levels show SDK Logger entries.
-const LEVEL_FILTERS: {
-  label: string;
-  level: "all" | "debug" | "info" | "warn" | "error";
-  variant: React.ComponentProps<typeof Badge>["variant"];
-}[] = [
-  { label: "all", level: "all", variant: "outline" },
-  { label: "debug", level: "debug", variant: "secondary" },
-  { label: "info", level: "info", variant: "info" },
-  { label: "warn", level: "warn", variant: "warning" },
-  { label: "error", level: "error", variant: "error" },
-];
-
+// Orchestrator for the per-process log panel: owns all state (entries,
+// search, view toggles, stdin, stop dialog) and data loading, and composes
+// the presentational sub-components from ./log-panel/.
 export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps) {
   const { t } = useTranslation();
   // Merged (stdout+stderr) chronological log lines.
   const [entries, setEntries] = useState<LogEntry[]>([]);
-  const [levelFilter, setLevelFilter] = useState<(typeof LEVEL_FILTERS)[number]["level"]>("all");
+  // Checked levels in the quick filter. Empty set = show every line.
+  const [selectedLevels, setSelectedLevels] = useState<Set<LevelFilter>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -156,7 +73,7 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
   const [autoScroll, setAutoScroll] = useState(true);
   // Log body font size, driven from the view-settings popover. The default
   // ("xs") matches the previous hardcoded text-xs scale.
-  const [fontSize, setFontSize] = useState<"xs" | "sm" | "md">("xs");
+  const [fontSize, setFontSize] = useState<FontSize>("xs");
   const fontTextClass =
     fontSize === "xs" ? "text-xs" : fontSize === "sm" ? "text-sm" : "text-base";
   const fontLineClass = fontSize === "xs" ? "leading-relaxed" : "leading-normal";
@@ -331,6 +248,27 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
       }
       await navigator.clipboard.writeText(paths.join("\n"));
       onToast(t("logs.toastCopiedLocation"));
+    } catch (err) {
+      onToast(
+        err instanceof Error ? err.message : t("logs.toastCopyFailed"),
+        true,
+      );
+    }
+  }
+
+  // Reveal the process's stdout log file in the OS file manager (the panel is
+  // a merged view, so the stdout file — the primary stream — is the target;
+  // falls back to stderr when there is no stdout file). Like the copy action,
+  // paths come from the backend since the browser can't know them.
+  async function handleRevealLogFile() {
+    try {
+      const { stdoutPath, stderrPath } = await getLogFiles(process.id);
+      const target = stdoutPath ?? stderrPath;
+      if (!target) {
+        onToast(t("logs.toastNoLogFile"), true);
+        return;
+      }
+      await revealPath(target);
     } catch (err) {
       onToast(
         err instanceof Error ? err.message : t("logs.toastCopyFailed"),
@@ -555,9 +493,29 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
     return entries.some((e) => new Date(e.timestamp).getHours() !== firstHour);
   }, [entries]);
   const visibleEntries = useMemo(
-    () => levelFilter === "all" ? entries : entries.filter((entry) => entry.level === levelFilter),
-    [entries, levelFilter],
+    () => selectedLevels.size === 0
+      ? entries
+      : entries.filter((entry) => entry.level !== undefined && selectedLevels.has(entry.level)),
+    [entries, selectedLevels],
   );
+
+  // Per-level counts for the quick-filter badges, computed over the full
+  // (unfiltered) entry list so they stay accurate while a filter is active.
+  const levelCounts = useMemo(() => {
+    const counts: Record<LevelFilter, number> = { debug: 0, info: 0, warn: 0, error: 0 };
+    for (const e of entries) if (e.level) counts[e.level]++;
+    return counts;
+  }, [entries]);
+
+  // Toggle one level checkbox in the quick filter.
+  const toggleLevel = (level: LevelFilter) => {
+    setSelectedLevels((prev) => {
+      const next = new Set(prev);
+      if (next.has(level)) next.delete(level);
+      else next.add(level);
+      return next;
+    });
+  };
 
   // Regex used to highlight the active search term in displayed lines. Same
   // compile rules as the backend grep: try the term as a regex, fall back to
@@ -585,504 +543,89 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
       ref={asideRef}
       className="flex h-full min-w-0 flex-col overflow-hidden"
     >
-      <header className="flex shrink-0 flex-col gap-3 border-b p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold">
-              {t("logs.panelTitle", { name: process.name })}
-            </h2>
-            <div className="flex items-center gap-1.5">
-              <p className="text-muted-foreground truncate font-mono text-xs">
-                {process.id}
-              </p>
-              <button
-                type="button"
-                aria-label={t("logs.copyIdAria")}
-                title={t("logs.copyIdTitle")}
-                onClick={handleCopyId}
-                className="text-muted-foreground hover:text-foreground shrink-0"
-              >
-                <CopyIcon className="size-3.5" />
-              </button>
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-1">
-            {/* Run (restart) button: only shown when the process can't be
-                stopped (stopped/exited/error), so a closed process can be
-                relaunched straight from its panel header. */}
-            {!canStop && (
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label={t("logs.runAria", { name: process.name })}
-                title={t("logs.runTitle")}
-                onClick={handleRestart}
-                className="text-muted-foreground hover:text-success"
-              >
-                <PlayIcon />
-              </Button>
-            )}
-           
-            {/* Process controls pulled into the header so the open process
-                can be restarted / stopped without scrolling to the toolbar.
-                Mirrors the ProcessList row actions. */}
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              aria-label={t("logs.restartAria", { name: process.name })}
-              title={t("logs.restartTitle")}
-              onClick={handleRestart}
-              className="text-muted-foreground hover:text-success"
-            >
-              <RotateCwIcon />
-            </Button>
-            {canStop && (
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label={t("logs.stopAria", { name: process.name })}
-                title={t("logs.stopTitle")}
-                onClick={requestStop}
-                className="text-muted-foreground hover:text-warning"
-              >
-                <SquareIcon />
-              </Button>
-            )}
-             <Button
-              size="icon-sm"
-              variant="ghost"
-              aria-label={t("logs.collapseAria")}
-              title={t("logs.collapseTitle")}
-              onClick={onClose}
-            >
-              <PanelRightCloseIcon />
-            </Button>
-          </div>
-        </div>
+      <LogPanelHeader
+        processName={process.name}
+        processId={process.id}
+        canStop={canStop}
+        onCopyId={handleCopyId}
+        onRestart={handleRestart}
+        onRequestStop={requestStop}
+        onClose={onClose}
+        search={search}
+        onSearchChange={setSearch}
+        activeGrep={activeGrep}
+        searching={searching}
+        hasEntries={entries.length > 0}
+        afterContext={afterContext}
+        onAfterContextChange={setAfterContext}
+        selectedLevels={selectedLevels}
+        onToggleLevel={toggleLevel}
+        levelCounts={levelCounts}
+        showTime={showTime}
+        onShowTimeChange={setShowTime}
+        showLineNumbers={showLineNumbers}
+        onShowLineNumbersChange={setShowLineNumbers}
+        autoScroll={autoScroll}
+        onAutoScrollChange={setAutoScroll}
+        showJson={showJson}
+        onShowJsonChange={setShowJson}
+        fontSize={fontSize}
+        onFontSizeChange={setFontSize}
+      />
 
-        {/* Search: queries the backend's full log history (both streams) via
-            the /logs?grep= route. While active, live tailing is suspended. */}
-        <div className="relative">
-          <SearchIcon className="text-foreground/50 pointer-events-none absolute top-1/2 left-2.5 z-10 size-3.5 -translate-y-1/2" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t("logs.searchPlaceholder")}
-            className="h-8 pl-8 pr-8 text-xs"
-          />
-          {search && (
-            <button
-              type="button"
-              aria-label={t("logs.clearSearch")}
-              onClick={() => setSearch("")}
-              className="text-muted-foreground hover:text-foreground absolute right-2 top-1/2 -translate-y-1/2"
-            >
-              <XIcon className="size-3.5" />
-            </button>
-          )}
-        </div>
+      {command && <LogPanelCommandStrip command={command} />}
 
-        {/* Context-lines slider: only relevant while viewing search results.
-            Controls how many trailing lines are shown after each match; moving
-            it re-runs the debounced grep with the new after-context count. */}
-        {activeGrep && !searching && entries.length > 0 && (
-          <div className="flex items-center gap-2 px-0.5">
-            <span className="text-muted-foreground w-20 shrink-0 text-xs">
-              {t("logs.contextAfter")}
-            </span>
-            <Slider
-              value={afterContext}
-              onValueChange={(v) =>
-                setAfterContext(Array.isArray(v) ? v[0] : (v as number))
-              }
-              min={0}
-              max={10}
-              aria-label={t("logs.contextAfter")}
-              className="flex-1"
-            />
-            <span className="text-muted-foreground w-6 shrink-0 text-right text-xs tabular-nums">
-              {afterContext}
-            </span>
-          </div>
-        )}
+      <LogPanelBody
+        closedNotice={closedNotice}
+        error={error}
+        entries={visibleEntries}
+        grep={activeGrep}
+        showTime={showTime}
+        showLineNumbers={showLineNumbers}
+        showJson={showJson}
+        formatTime={formatTime}
+        highlight={highlightRegex}
+        fontTextClass={fontTextClass}
+        fontLineClass={fontLineClass}
+      />
 
-        {/* Quick-filter keywords: click to drop the term into the search box
-            (grep is regex, these are plain words so they match literally). */}
-        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Log level">
-          {LEVEL_FILTERS.map((f) => {
-            const active = levelFilter === f.level;
-            return (
-              <button
-                key={f.level}
-                type="button"
-                onClick={() => setLevelFilter(f.level)}
-                title={t("logs.filterByTerm", { term: f.label })}
-                aria-pressed={active}
-              >
-                <Badge
-                  variant={active ? "default" : f.variant}
-                  size="sm"
-                  className="cursor-pointer"
-                >
-                  {f.label}
-                </Badge>
-              </button>
-            );
-          })}
-          {/* View settings: a popover (stays open while toggling) holding the
-              per-log view toggles + font-size picker, collapsed behind a gear
-              so the quick-filter row stays compact. ms-auto pins it to the far
-              right of the quick-filter row even when the chips wrap. */}
-          <Popover>
-            <PopoverTrigger
-              render={
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  className="ms-auto"
-                  aria-label={t("logs.viewSettingsAria")}
-                  title={t("logs.viewSettingsTitle")}
-                />
-              }
-            >
-              <SettingsIcon />
-            </PopoverTrigger>
-            <PopoverPopup className="w-60">
-              {/* Toggles: timestamps, line numbers, auto-scroll. */}
-              <label className="hover:bg-accent flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm">
-                <Checkbox
-                  checked={showTime}
-                  onCheckedChange={(v) => setShowTime(v)}
-                />
-                {t("logs.timestampsOption")}
-              </label>
-              <label className="hover:bg-accent flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm">
-                <Checkbox
-                  checked={showLineNumbers}
-                  onCheckedChange={(v) => setShowLineNumbers(v)}
-                />
-                {t("logs.lineNumbersOption")}
-              </label>
-              <label className="hover:bg-accent flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm">
-                <Checkbox
-                  checked={autoScroll}
-                  onCheckedChange={(v) => setAutoScroll(v)}
-                />
-                {t("logs.autoScrollOption")}
-              </label>
-              <label className="hover:bg-accent flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm">
-                <Checkbox
-                  checked={showJson}
-                  onCheckedChange={(v) => {
-                    setShowJson(v);
-                    persistShowJson(v);
-                  }}
-                />
-                {t("logs.jsonOption")}
-              </label>
-              <Separator className="my-1" />
-              {/* Font size: segmented pick of small / medium / large. */}
-              <div className="px-1 pb-1">
-                <span className="text-muted-foreground px-1 text-xs">
-                  {t("logs.fontSizeOption")}
-                </span>
-                <div className="mt-1.5 grid grid-cols-3 gap-1">
-                  {(["xs", "sm", "md"] as const).map((size, i) => (
-                    <Button
-                      key={size}
-                      size="xs"
-                      variant={fontSize === size ? "default" : "outline"}
-                      aria-pressed={fontSize === size}
-                      onClick={() => setFontSize(size)}
-                    >
-                      {[
-                        t("logs.fontSizeSmall"),
-                        t("logs.fontSizeMedium"),
-                        t("logs.fontSizeLarge"),
-                      ][i]}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            </PopoverPopup>
-          </Popover>
-        </div>
-      </header>
-
-      {/* Launch command strip: a compact, read-only display of how the process
-          was started. Shown once the command resolves (live: full command with
-          envs; closed: best-effort reconstruction from public fields). */}
-      {command && (
-        <Alert
-          variant="info"
-          className="shrink-0 gap-2 rounded-none border-x-0 border-t-0 px-4 py-2"
-        >
-          <SquareTerminalIcon className="mt-0.5 size-4 shrink-0" />
-          <div className="min-w-0">
-            <AlertTitle className="text-xs">{t("logs.commandLabel")}</AlertTitle>
-            <AlertDescription className="text-foreground break-all font-mono text-xs">
-              {command}
-            </AlertDescription>
-          </div>
-        </Alert>
-      )}
-
-      {/* Log body: a themed "code block" surface that fills the remaining
-          height. Uses bg-muted so it adapts to light/dark themes instead of a
-          hardcoded black. The log-selectable class re-enables text selection
-          (disabled app-wide) so users can copy log lines. */}
-      {/* Log body: a dark "terminal" surface so the ANSI color palette renders
-          with the contrast its authors intended (mirrors the embedded-terminal
-          convention used by VS Code / xterm). The log-selectable class
-          re-enables text selection (disabled app-wide) so users can copy lines. */}
-      <ScrollArea className="log-selectable bg-zinc-950 text-zinc-300 min-h-0 flex-1">
-        <div className="min-h-full p-4">
-          {closedNotice && (
-            <Alert variant="warning" className="mb-3">
-              <CircleOffIcon className="mt-0.5 size-4 shrink-0" />
-              <div className="min-w-0">
-                <AlertTitle>{t("logs.closedNoticeTitle")}</AlertTitle>
-                <AlertDescription>
-                  {t("logs.closedNoticeDesc")}
-                </AlertDescription>
-              </div>
-            </Alert>
-          )}
-          {error ? (
-            <pre className={`m-0 whitespace-pre-wrap break-words ${fontTextClass} ${fontLineClass}`}>
-              <span className="text-red-400">{t("logs.errorPrefix", { message: error })}</span>
-            </pre>
-          ) : visibleEntries.length === 0 ? (
-            <Empty className="min-h-[200px] text-zinc-400">
-              <EmptyHeader>
-                <EmptyMedia variant="icon" className="bg-zinc-800 text-zinc-400">
-                  <FileTextIcon />
-                </EmptyMedia>
-                <EmptyTitle className="text-zinc-300">
-                  {activeGrep ? t("logs.emptyNoMatches") : t("logs.emptyNoLogs")}
-                </EmptyTitle>
-                <EmptyDescription className="text-zinc-500">
-                  {activeGrep
-                    ? t("logs.emptyNoMatchesDesc", { grep: activeGrep })
-                    : t("logs.emptyNoLogsDesc")}
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          ) : (
-            <TerminalLog
-              entries={visibleEntries}
-              showTime={showTime}
-              showLineNumbers={showLineNumbers}
-              showJson={showJson}
-              formatTime={formatTime}
-              highlight={highlightRegex}
-              className={`${fontTextClass} ${fontLineClass}`}
-            />
-          )}
-        </div>
-      </ScrollArea>
-
-      {/* Stdin input bar: write text directly to the process's standard input.
-          Shown only while the process is live (canStop) AND the user has
-          toggled the bar on from the footer (hidden by default so the log view
-          stays uncluttered). Uses an auto-sizing textarea (field-sizing-content
-          grows with input). Enter submits; Shift+Enter inserts a newline. The
-          dots menu inserts common snippets / signals. */}
       {canStop && showStdin && (
-        <div className="flex shrink-0 items-end gap-1.5 border-t px-2 py-1.5">
-          <Textarea
-            size="sm"
-            value={stdinValue}
-            onChange={(e) => setStdinValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void handleSendInput();
-              }
-            }}
-            placeholder={t("logs.inputPlaceholder")}
-            disabled={sendingInput}
-            rows={1}
-            className="max-h-40 text-xs"
-          />
-          {/* Snippets dropdown: insert common stdin snippets or deliver an OS
-              signal (Ctrl+C / Ctrl+D / SIGTERM / SIGHUP). Plain text is
-              appended to the box; signals are sent immediately. */}
-          <Menu>
-            <MenuTrigger
-              render={
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label={t("logs.snippetsAria")}
-                  title={t("logs.snippetsTitle")}
-                  className="shrink-0"
-                />
-              }
-            >
-              <EllipsisIcon />
-            </MenuTrigger>
-            <MenuPopup>
-              <MenuItem
-                onClick={() => sendSignal("SIGINT", t("logs.snippetCtrlC"))}
-              >
-                <SquareTerminalIcon aria-hidden="true" />
-                {t("logs.snippetCtrlC")}
-              </MenuItem>
-              <MenuItem
-                onClick={() => sendSignal("SIGTERM", t("logs.snippetSigterm"))}
-              >
-                <SquareTerminalIcon aria-hidden="true" />
-                {t("logs.snippetSigterm")}
-              </MenuItem>
-              <MenuItem
-                onClick={() => sendSignal("SIGHUP", t("logs.snippetSighup"))}
-              >
-                <SquareTerminalIcon aria-hidden="true" />
-                {t("logs.snippetSighup")}
-              </MenuItem>
-              <MenuItem onClick={() => appendSnippet("\u0004")}>
-                {t("logs.snippetCtrlD")}
-              </MenuItem>
-              <MenuSeparator />
-              <MenuItem onClick={() => appendSnippet("\n")}>
-                {t("logs.snippetNewline")}
-              </MenuItem>
-              <MenuItem onClick={() => appendSnippet("yes")}>
-                {t("logs.snippetYes")}
-              </MenuItem>
-              <MenuItem onClick={() => appendSnippet("no")}>
-                {t("logs.snippetNo")}
-              </MenuItem>
-              <MenuItem onClick={() => appendSnippet("exit")}>
-                {t("logs.snippetExit")}
-              </MenuItem>
-              <MenuItem onClick={() => appendSnippet("clear")}>
-                {t("logs.snippetClear")}
-              </MenuItem>
-            </MenuPopup>
-          </Menu>
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label={t("logs.sendAria", { name: process.name })}
-            title={t("logs.sendTitle")}
-            onClick={handleSendInput}
-            disabled={sendingInput || !stdinValue}
-            className="shrink-0"
-          >
-            <SendIcon />
-          </Button>
-        </div>
+        <LogPanelStdinBar
+          processName={process.name}
+          value={stdinValue}
+          onValueChange={setStdinValue}
+          onSubmit={handleSendInput}
+          sending={sendingInput}
+          onAppendSnippet={appendSnippet}
+          onSendSignal={sendSignal}
+        />
       )}
 
-      {/* Footer toolbar: per-log view toggles + copy text (left), line count
-          + overflow actions dropdown (right). */}
-      <div className="flex shrink-0 items-center justify-between gap-1 border-t px-2 py-1.5">
-        <div className="flex items-center gap-1">
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label={t("logs.copyLogsAria")}
-            title={t("logs.copyLogsTitle")}
-            onClick={handleCopyText}
-          >
-            <CopyIcon />
-          </Button>
-          {/* Clear-view button. Ctrl+C and other signals moved to the stdin
-              bar's snippets menu. */}
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label={t("logs.clearLogsAria")}
-            title={t("logs.clearLogsTitle")}
-            onClick={handleClearLogs}
-          >
-            <EraserIcon />
-          </Button>
-          {/* Toggle the stdin input bar (only meaningful for a live process).
-              Hidden by default so the log view stays uncluttered; the active
-              variant shows when input is on. */}
-          {canStop && (
-            <Button
-              size="icon-sm"
-              variant={showStdin ? "default" : "ghost"}
-              aria-pressed={showStdin}
-              aria-label={t("logs.toggleStdinAria")}
-              title={
-                showStdin ? t("logs.hideStdin") : t("logs.showStdin")
-              }
-              onClick={() => setShowStdin((v) => !v)}
-            >
-              <TerminalIcon />
-            </Button>
-          )}
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="text-muted-foreground px-1 text-[11px] tabular-nums">
-            {activeGrep
-              ? searching
-                ? t("logs.countSearching")
-                : t("logs.countMatches", { count: entries.length })
-              : loading
-                ? t("logs.countLoading")
-                : t("logs.countLines", { count: visibleEntries.length })}
-          </span>
-          <Menu>
-            <MenuTrigger
-              render={
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label={t("logs.moreActions")}
-                  title={t("logs.moreActions")}
-                />
-              }
-            >
-              <EllipsisVerticalIcon />
-            </MenuTrigger>
-            <MenuPopup>
-              <MenuItem onClick={handleCopyLocation}>
-                <FolderTreeIcon aria-hidden="true" />
-                {t("logs.copyLocation")}
-              </MenuItem>
-              <MenuItem onClick={handleDownloadLog}>
-                <DownloadIcon aria-hidden="true" />
-                {t("logs.downloadLog")}
-              </MenuItem>
-            </MenuPopup>
-          </Menu>
-        </div>
-      </div>
+      <LogPanelFooter
+        onCopyText={handleCopyText}
+        onClearLogs={handleClearLogs}
+        canStop={canStop}
+        showStdin={showStdin}
+        onToggleStdin={() => setShowStdin((v) => !v)}
+        grep={activeGrep}
+        searching={searching}
+        loading={loading}
+        totalEntries={entries.length}
+        visibleCount={visibleEntries.length}
+        onCopyLocation={handleCopyLocation}
+        onRevealLogFile={handleRevealLogFile}
+        onDownloadLog={handleDownloadLog}
+      />
 
-      {/* Stop confirmation: triggered from the footer Stop button. Stopping
-          keeps the record (and its on-disk logs) as history. */}
-      <AlertDialog
+      <LogPanelStopDialog
         open={pendingStop}
         onOpenChange={(open) => {
           if (!open) setPendingStop(false);
         }}
-      >
-        <AlertDialogPopup>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("logs.stopQuestion")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("logs.stopDescription", { name: process.name, id: process.id })}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogClose render={<Button variant="ghost" />}>
-              {t("common.cancel")}
-            </AlertDialogClose>
-            <AlertDialogClose
-              render={<Button variant="destructive" />}
-              onClick={confirmStop}
-            >
-              {t("common.stop")}
-            </AlertDialogClose>
-          </AlertDialogFooter>
-        </AlertDialogPopup>
-      </AlertDialog>
+        onConfirm={confirmStop}
+        processName={process.name}
+        processId={process.id}
+      />
     </aside>
   );
 }

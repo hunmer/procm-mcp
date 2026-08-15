@@ -1,5 +1,8 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  EllipsisIcon,
+  FileTextIcon,
   PlayIcon,
   RotateCwIcon,
   SquareIcon,
@@ -7,8 +10,15 @@ import {
   TrashIcon,
 } from "lucide-react";
 import { Button } from "@/registry/default/ui/button";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@/registry/default/ui/menu";
 import type { ProcessView } from "@/lib/types";
 import { canStopProcess } from "./utils";
+import { ProcessLogFilesDialog } from "./ProcessLogFilesDialog";
 
 // The per-process action buttons (favorite / restart-or-run / stop / delete).
 // Shared by the table's actions cell and the card footer so both stay in sync.
@@ -35,6 +45,8 @@ export function ProcessActions({
   // Whether the process can currently be stopped — mirrors the context-menu
   // Stop item (running/spawning only). Anything else shows a Play button.
   const canStop = canStopProcess(p);
+  // The log-files dropdown's dialog (on-disk .log files for this process).
+  const [logFilesOpen, setLogFilesOpen] = useState(false);
   return (
     <div
       className={"flex gap-1.5" + (align === "end" ? " justify-end" : "")}
@@ -94,6 +106,34 @@ export function ProcessActions({
           <PlayIcon />
         </Button>
       )}
+      {/* Overflow menu: view this process's on-disk log files (dialog with the
+          file list + terminal content). */}
+      <Menu>
+        <MenuTrigger
+          render={
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label={t("processes.viewLogFilesAria", { name: p.name })}
+              title={t("processes.viewLogFilesTitle")}
+              className="text-muted-foreground"
+            />
+          }
+        >
+          <EllipsisIcon />
+        </MenuTrigger>
+        <MenuPopup>
+          <MenuItem onClick={() => setLogFilesOpen(true)}>
+            <FileTextIcon aria-hidden="true" />
+            {t("processes.viewLogFiles")}
+          </MenuItem>
+        </MenuPopup>
+      </Menu>
+      <ProcessLogFilesDialog
+        process={p}
+        open={logFilesOpen}
+        onOpenChange={setLogFilesOpen}
+      />
       <Button
         size="icon-sm"
         variant="ghost"

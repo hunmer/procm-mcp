@@ -1,12 +1,13 @@
 import http from "http";
-import { readFile, stat } from "fs/promises";
+import path from "path";
+import { readFile, open, readdir, stat } from "fs/promises";
 import { spawn } from "child_process";
 import {
   dashboardNotBuiltHtml,
   getDashboardServeState,
   readDashboardAsset,
 } from "./dashboard-html.js";
-import { serverLog, serverId, serverStartedAt } from "./server-log.js";
+import { serverLog, serverId, logServerId, serverStartedAt } from "./server-log.js";
 import {
   listProcesses,
   listProcessRecords,
@@ -32,6 +33,8 @@ import { getRoom, listRooms, patchRoom } from "./room-hub.js";
 import { queryRoomLogs } from "./room-logs.js";
 import { scanProjectCommands } from "./project-scanner.js";
 import { listSystemProcesses, killProcessTree, findProcessByPort } from "./system-processes.js";
+import { ServerDir } from "./server-dir.js";
+import { ProcmMcpDir } from "./procm-mcp-dir.js";
 
 const HOST = "127.0.0.1";
 
@@ -347,6 +350,107 @@ async function readLogFile(filePath: string): Promise<string> {
   }
 }
 
+// The per-server directory holding the append-only process log files
+// (<serverDir>/processes/<id>-<type>.log), the same location
+// createProcessStdoutClient writes to.
+function processLogDir(): string {
+  return path.join(ServerDir({ serverId: logServerId }), "processes");
+}
+
+// Log file names are `<processId>-<stdout|stderr>.log`. The greedy `.+` keeps
+// ids containing dashes (nanoid's alphabet includes `-`) intact.
+const LOG_FILE_NAME_RE = /^(.+)-(stdout|stderr)\.log$/;
+
+// Cap on the text returned by /api/log-files/content. Larger files are
+// tail-cut to the last 10MB so a runaway process can't blow up the browser.
+const MAX_LOG_FILE_CONTENT_BYTES = 10 * 1024 * 1024;
+
+// Read a log file for the history view, capped at MAX_LOG_FILE_CONTENT_BYTES.
+// Oversized files return only the trailing bytes (logs are newest-last), with
+// the leading partial line dropped so the text starts on a line boundary.
+async function readLogFileCapped(
+  filePath: string,
+): Promise<{ text: string; truncated: boolean }> {
+  const st = await stat(filePath).catch(() => null);
+  if (!st || st.size <= MAX_LOG_FILE_CONTENT_BYTES) {
+    return { text: await readLogFile(filePath), truncated: false };
+  }
+  const len = MAX_LOG_FILE_CONTENT_BYTES;
+  const fh = await open(filePath, "r");
+  try {
+    const buf = Buffer.alloc(len);
+    await fh.read(buf, 0, len, st.size - len);
+    let text = buf.toString("utf8");
+    const nl = text.indexOf("\n");
+    if (nl !== -1) text = text.slice(nl + 1);
+    return { text, truncated: true };
+  } finally {
+    await fh.close();
+  }
+}
+
+// Everything the dashboard's history-log view needs about one on-disk log
+// file. Two sources are merged: the CURRENT server's processes dir (files of
+// live/known processes), plus files referenced by persisted records — those
+// live under previous server generations' dirs (serverId changes every
+// restart) and must stay listed so history survives a backend restart.
+async function listProcessLogFiles(): Promise<
+  {
+    name: string;
+    path: string;
+    processId: string;
+    stream: "stdout" | "stderr";
+    size: number;
+    modifiedAt: number;
+    processName: string | null;
+    status: string | null;
+  }[]
+> {
+  const records = await listProcessRecords();
+  const byId = new Map(records.map((r) => [r.id, r] as const));
+
+  // Candidate absolute paths: current dir scan + record-referenced files.
+  const dir = processLogDir();
+  const candidates = new Set<string>();
+  try {
+    for (const name of await readdir(dir)) {
+      if (LOG_FILE_NAME_RE.test(name)) {
+        candidates.add(path.join(dir, name));
+      }
+    }
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+  }
+  for (const r of records) {
+    for (const p of [r.stdoutLogPath, r.stderrLogPath]) {
+      if (p && LOG_FILE_NAME_RE.test(path.basename(p))) candidates.add(p);
+    }
+  }
+
+  const files = await Promise.all(
+    Array.from(candidates).map(async (filePath) => {
+      const m = path.basename(filePath).match(LOG_FILE_NAME_RE);
+      if (!m) return null;
+      const st = await stat(filePath).catch(() => null);
+      if (!st?.isFile()) return null;
+      const record = byId.get(m[1]);
+      return {
+        name: m[0],
+        path: filePath,
+        processId: m[1],
+        stream: m[2] as "stdout" | "stderr",
+        size: st.size,
+        modifiedAt: st.mtimeMs,
+        processName: record?.name ?? null,
+        status: record?.status ?? null,
+      };
+    }),
+  );
+  return files
+    .filter((f) => f !== null)
+    .sort((a, b) => b.modifiedAt - a.modifiedAt);
+}
+
 // Return the last `count` lines of a raw log blob (record-sourced logs have no
 // timestamps, so we tail by line). Empty input → empty string.
 function tailLogFile(fullText: string, count: number): string {
@@ -508,6 +612,42 @@ function createRequestHandler(token: string | undefined) {
 
       if (method === "GET" && pathname === "/api/rooms") {
         json(res, 200, { rooms: await listRooms() });
+        return;
+      }
+
+      // GET /api/log-files -> every on-disk process log file this server has
+      // written (including processes since deleted), newest-modified first.
+      // Powers the dashboard's history-log tab.
+      if (method === "GET" && pathname === "/api/log-files") {
+        json(res, 200, { files: await listProcessLogFiles() });
+        return;
+      }
+
+      // GET /api/log-files/content?path=<absolute path> -> the file's full
+      // text. The path must name a `<id>-<stream>.log` file inside the
+      // procm-mcp data root (any server generation's dir), so the route can
+      // never be aimed at arbitrary files.
+      if (method === "GET" && pathname === "/api/log-files/content") {
+        const raw = url.searchParams.get("path") || "";
+        const filePath = path.normalize(raw);
+        const root = path.normalize(ProcmMcpDir() + path.sep);
+        if (
+          !LOG_FILE_NAME_RE.test(path.basename(filePath)) ||
+          !filePath.startsWith(root)
+        ) {
+          json(res, 400, { error: "Invalid log file path" });
+          return;
+        }
+        try {
+          const { text, truncated } = await readLogFileCapped(filePath);
+          json(res, 200, { path: filePath, text, truncated });
+        } catch (e) {
+          if ((e as NodeJS.ErrnoException).code === "ENOENT") {
+            json(res, 200, { path: filePath, text: "", truncated: false });
+            return;
+          }
+          throw e;
+        }
         return;
       }
 

@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { SkullIcon } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -119,9 +120,10 @@ export function ProcessInfoDialog({
   );
 }
 
-// Toolbar "view port" lookup: enter a port, the backend runs find-process,
-// and the owning process opens in the info dialog. Quick-pick chips list
-// ports already seen in the current snapshot.
+// Toolbar "view port" lookup: enter a port (or click a quick-pick chip — it
+// searches with that port immediately), the backend runs find-process, and
+// the owning process is shown inline. When a process is found the footer
+// gains a Kill button that arms the shared kill confirmation.
 export function PortLookupDialog({
   open,
   onOpenChange,
@@ -129,7 +131,10 @@ export function PortLookupDialog({
   onPortInputChange,
   lookingUp,
   knownPorts,
+  result,
   onLookup,
+  onCopy,
+  onKill,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -137,7 +142,14 @@ export function PortLookupDialog({
   onPortInputChange: (v: string) => void;
   lookingUp: boolean;
   knownPorts: number[];
-  onLookup: (e?: React.FormEvent) => void;
+  // The process found by the last lookup (null = none yet / last lookup
+  // missed) — rendered inline with a Kill action in the footer.
+  result: ProcessRow | null;
+  // `port` is the value to search (explicit so chip clicks don't race the
+  // controlled input state); `e` is only passed by the form submit.
+  onLookup: (port: number, e?: React.FormEvent) => void;
+  onCopy: (value: string, label: string) => void;
+  onKill: (row: ProcessRow) => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -151,7 +163,7 @@ export function PortLookupDialog({
         </DialogHeader>
         <form
           className="flex items-center gap-2 p-3"
-          onSubmit={(e) => void onLookup(e)}
+          onSubmit={(e) => void onLookup(Number(portInput), e)}
         >
           <Input
             value={portInput}
@@ -173,7 +185,7 @@ export function PortLookupDialog({
                 type="button"
                 onClick={() => {
                   onPortInputChange(String(port));
-                  void onLookup();
+                  void onLookup(port);
                 }}
                 className="hover:bg-accent rounded-md border px-1.5 py-0.5 font-mono text-[11px] leading-none"
               >
@@ -182,7 +194,14 @@ export function PortLookupDialog({
             ))}
           </div>
         )}
+        {result && <SystemProcessInfo row={result} onCopy={onCopy} />}
         <DialogFooter>
+          {result && (
+            <Button variant="destructive" onClick={() => onKill(result)}>
+              <SkullIcon aria-hidden="true" />
+              {t("system.kill")}
+            </Button>
+          )}
           <DialogClose render={<Button variant="ghost" />}>
             {t("common.close")}
           </DialogClose>

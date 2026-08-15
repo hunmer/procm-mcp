@@ -104,10 +104,15 @@ export function SystemProcessList({
   // sets this; the panel reuses the same SystemProcessInfo body as the dialog.
   const [selected, setSelected] = useState<ProcessRow | null>(null);
   // Toolbar "view port" lookup: a dialog with a port input that runs
-  // find-process on the backend and opens the info dialog for the owner.
+  // find-process on the backend and shows the owning process inline.
   const [portLookupOpen, setPortLookupOpen] = useState(false);
   const [portInput, setPortInput] = useState("");
   const [portLookingUp, setPortLookingUp] = useState(false);
+  // The process found by the last lookup (null = none/missed) — rendered
+  // inline in the dialog with a Kill action in its footer.
+  const [portLookupResult, setPortLookupResult] = useState<ProcessRow | null>(
+    null,
+  );
 
   // Non-overlapping fetch guard: a slow PowerShell run shouldn't stack on top
   // of the next interval tick. Kept in a ref so the polling effect (registered
@@ -323,27 +328,27 @@ export function SystemProcessList({
     return [...set].sort((a, b) => a - b);
   }, [processes]);
 
-  // Look up the owner of a port via find-process (backend). On a hit, close the
-  // lookup dialog and open the read-only info dialog for the owning process;
-  // otherwise toast that nothing is listening there.
+  // Look up the owner of a port via find-process (backend). On a hit, keep
+  // the lookup dialog open and show the owning process inline (its footer
+  // gains a Kill button); otherwise toast that nothing is listening there.
+  // `port` is explicit so quick-pick chips can search without racing the
+  // controlled input state.
   const handlePortLookup = useCallback(
-    async (e?: React.FormEvent) => {
+    async (port: number, e?: React.FormEvent) => {
       e?.preventDefault();
-      const port = Number(portInput);
       if (!Number.isFinite(port) || port < 1 || port > 65535) {
         onToast(t("system.invalidPortToast"), true);
         return;
       }
       setPortLookingUp(true);
+      setPortLookupResult(null);
       try {
         const found = await findProcessByPort(port);
         if (found.length === 0) {
           onToast(t("system.portNotFoundToast", { port }), true);
           return;
         }
-        setPortLookupOpen(false);
-        setPortInput("");
-        setViewing(rowOfProcess(found[0]));
+        setPortLookupResult(rowOfProcess(found[0]));
       } catch (err) {
         onToast(
           t("system.portLookupFailedToast", {
@@ -355,8 +360,17 @@ export function SystemProcessList({
         setPortLookingUp(false);
       }
     },
-    [portInput, onToast, t],
+    [onToast, t],
   );
+
+  // Close the lookup dialog and clear its transient state. Used both by the
+  // Dialog's onOpenChange and the footer Kill button (which then arms the
+  // shared kill confirmation) so a reopen never shows a stale result.
+  const closePortLookup = useCallback(() => {
+    setPortLookupOpen(false);
+    setPortInput("");
+    setPortLookupResult(null);
+  }, []);
 
   const rowCount = table.getRowCount();
 
@@ -437,15 +451,18 @@ export function SystemProcessList({
       />
       <PortLookupDialog
         open={portLookupOpen}
-        onOpenChange={(o) => {
-          setPortLookupOpen(o);
-          if (!o) setPortInput("");
-        }}
+        onOpenChange={(o) => (o ? setPortLookupOpen(true) : closePortLookup())}
         portInput={portInput}
         onPortInputChange={setPortInput}
         lookingUp={portLookingUp}
         knownPorts={knownPorts}
+        result={portLookupResult}
         onLookup={handlePortLookup}
+        onCopy={handleCopy}
+        onKill={(row) => {
+          closePortLookup();
+          setPendingKill(row);
+        }}
       />
     </div>
   );

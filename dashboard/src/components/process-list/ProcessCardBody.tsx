@@ -16,11 +16,9 @@ export function ProcessCardBody({
   unreadCount,
 }: {
   p: ProcessView;
-  now: number;
   unreadCount: number;
 }) {
   const { t } = useTranslation();
-  const cmd = `${p.script}${p.args?.length ? " " + p.args.join(" ") : ""}`;
   const port = typeof p.port === "number" ? p.port : null;
   const portHref = port ? `http://localhost:${port}` : null;
   return (
@@ -73,10 +71,6 @@ export function ProcessCardBody({
           ) : null}
         </div>
       </CardAction>
-      {/* Command line, shown under the title row. */}
-      <code className="text-foreground/90 line-clamp-2 break-all bg-transparent text-xs">
-        {cmd}
-      </code>
     </CardHeader>
   );
 }

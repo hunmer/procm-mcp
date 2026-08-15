@@ -23,7 +23,9 @@ createProcmClient(options?: ProcmClientOptions): ProcmClient
 
 ## createLogger / Logger（logger.ts）
 
-`createLogger({client?, clientName?, memberId?, processId?, console?})` → `debug/info/warn/error(message, data?, {traceId}?)` 与 `log(level, ...)`。console + `$procm/log` 双写。
+`createLogger({client?, clientName?, memberId?, processId?, console?, level?})` → `debug/info/warn/error(message, data?, {traceId}?)` 与 `log(level, ...)`。console + `$procm/log` 双写；`level`（默认 `"debug"`，可 `"silent"`）为输出下限，可用 `setLevel()` 运行时调整。
+
+消费侧过滤：`matchesLogFilter(entry, {minLevel?, clientNames?, memberIds?})` 谓词，及 `subscribeLogs(client, handler, filter?)`（订阅 `$procm/log`，仅转发通过过滤且 payload 合法的条目，返回退订函数；空数组 = 不限制）。类型 `LogFilter`。
 
 ## createHook / hookProperty（hook.ts）
 

@@ -67,6 +67,16 @@ function defaultPresets(repoCwd: string): ProcessPreset[] {
       args: "127.0.0.1",
       envs: "",
     },
+    {
+      id: "level-log",
+      label: "Level logger",
+      description: "SDK structured logs cycling levels; LOG_LEVEL controls output",
+      name: "level-log",
+      script: "node",
+      args: `${repoCwd}/scripts/demo/level-log.mjs`,
+      cwd: repoCwd,
+      envs: "LOG_LEVEL=debug",
+    },
   ];
 }
 

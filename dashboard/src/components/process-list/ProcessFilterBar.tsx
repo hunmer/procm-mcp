@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { LayoutGridIcon, LayoutListIcon, SearchIcon } from "lucide-react";
+import { DownloadIcon, SearchIcon } from "lucide-react";
 import { Button } from "@/registry/default/ui/button";
 import { Input } from "@/registry/default/ui/input";
 import {
@@ -15,30 +15,28 @@ import {
   STATUS_DOT,
   STATUS_OPTIONS,
   type StatusFilter,
-  type ViewMode,
 } from "./types";
 
-// The filter bar above the list: status select + name search + result count,
-// plus the table/cards layout toggle. Stateless — all values/setters come in
-// as props so the orchestrator owns the state.
+// The filter bar above the merged list: status select (processes only) + name
+// search (processes and favorites) + result count, plus the folder-import
+// button for favorites. Stateless — all values/setters come in as props so the
+// orchestrator owns the state.
 export function ProcessFilterBar({
   statusFilter,
   onStatusFilterChange,
   nameFilter,
   onNameFilterChange,
-  viewMode,
-  onViewModeChange,
   shownCount,
   totalCount,
+  onImport,
 }: {
   statusFilter: StatusFilter;
   onStatusFilterChange: (v: StatusFilter) => void;
   nameFilter: string;
   onNameFilterChange: (v: string) => void;
-  viewMode: ViewMode;
-  onViewModeChange: (mode: ViewMode) => void;
   shownCount: number;
   totalCount: number;
+  onImport: () => void;
 }) {
   const { t } = useTranslation();
   const current =
@@ -94,27 +92,15 @@ export function ProcessFilterBar({
       <span className="text-muted-foreground text-xs">
         {t("processes.countOfTotal", { shown: shownCount, total: totalCount })}
       </span>
-      {/* Layout toggle: table rows vs card grid. */}
       <div className="ml-auto flex items-center gap-0.5">
         <Button
           size="icon-sm"
-          variant={viewMode === "table" ? "secondary" : "ghost"}
-          aria-label={t("processes.viewTableAria")}
-          title={t("processes.viewTableTitle")}
-          aria-pressed={viewMode === "table"}
-          onClick={() => onViewModeChange("table")}
+          variant="outline"
+          aria-label={t("favorites.importAria")}
+          title={t("favorites.importTitle")}
+          onClick={onImport}
         >
-          <LayoutListIcon />
-        </Button>
-        <Button
-          size="icon-sm"
-          variant={viewMode === "cards" ? "secondary" : "ghost"}
-          aria-label={t("processes.viewCardsAria")}
-          title={t("processes.viewCardsTitle")}
-          aria-pressed={viewMode === "cards"}
-          onClick={() => onViewModeChange("cards")}
-        >
-          <LayoutGridIcon />
+          <DownloadIcon />
         </Button>
       </div>
     </div>

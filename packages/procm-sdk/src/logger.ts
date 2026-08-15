@@ -4,6 +4,7 @@ import {
   encodeStructuredLog,
   type JsonValue,
   type LogLevel,
+  type RoomMessage,
   type StructuredLog,
 } from "./protocol.js";
 import type { ProcmClient } from "./client.js";
@@ -14,17 +15,38 @@ export interface LoggerOptions {
   memberId?: string;
   processId?: string;
   console?: Pick<Console, "debug" | "info" | "warn" | "error">;
+  // Minimum level to emit; entries below it are dropped before reaching the
+  // console or the room. "silent" suppresses everything. Defaults to "debug".
+  level?: LogLevel | "silent";
 }
 
 export interface LogContext {
   traceId?: string;
 }
 
+const LEVEL_ORDER: Record<LogLevel | "silent", number> = {
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3,
+  silent: 4,
+};
+
 export class Logger {
   private readonly output: Pick<Console, "debug" | "info" | "warn" | "error">;
+  private level: LogLevel | "silent";
 
   constructor(private readonly options: LoggerOptions = {}) {
     this.output = options.console ?? console;
+    this.level = options.level ?? "debug";
+  }
+
+  setLevel(level: LogLevel | "silent"): void {
+    this.level = level;
+  }
+
+  getLevel(): LogLevel | "silent" {
+    return this.level;
   }
 
   debug(message: string, data?: JsonValue, context?: LogContext): void { this.write("debug", message, data, context); }
@@ -37,6 +59,7 @@ export class Logger {
   }
 
   private write(level: LogLevel, message: string, data?: JsonValue, context?: LogContext): void {
+    if (LEVEL_ORDER[level] < LEVEL_ORDER[this.level]) return;
     const client = this.options.client;
     const entry: StructuredLog = {
       version: PROCM_PROTOCOL_VERSION,
@@ -63,4 +86,36 @@ export class Logger {
 
 export function createLogger(options: LoggerOptions = {}): Logger {
   return new Logger(options);
+}
+
+// Consumer-side filter for room log streams: entries below minLevel or from
+// unlisted sources are dropped before reaching the handler. An empty/omitted
+// clientNames/memberIds list means "no restriction".
+export interface LogFilter {
+  minLevel?: LogLevel | "silent";
+  clientNames?: string[];
+  memberIds?: string[];
+}
+
+export function matchesLogFilter(entry: StructuredLog, filter: LogFilter = {}): boolean {
+  if (filter.minLevel !== undefined && LEVEL_ORDER[entry.level] < LEVEL_ORDER[filter.minLevel]) return false;
+  if (filter.clientNames?.length && !filter.clientNames.includes(entry.clientName)) return false;
+  if (filter.memberIds?.length && !filter.memberIds.includes(entry.memberId)) return false;
+  return true;
+}
+
+// Subscribe to the room's structured-log topic, forwarding only entries that
+// pass the filter (and skipping payloads that are not structured logs).
+// Returns the unsubscribe function.
+export function subscribeLogs(
+  client: ProcmClient,
+  handler: (entry: StructuredLog, message: RoomMessage) => void,
+  filter: LogFilter = {},
+): () => void {
+  return client.subscribe(PROCM_LOG_TOPIC, (message) => {
+    const entry = message.payload as unknown as StructuredLog | null;
+    if (!entry || typeof entry !== "object" || typeof entry.level !== "string" || typeof entry.message !== "string") return;
+    if (!matchesLogFilter(entry, filter)) return;
+    handler(entry, message);
+  });
 }

@@ -58,15 +58,16 @@ export function favoriteToStartBody(f: Favorite): StartProcessBody {
   };
 }
 
-// The grouping identity for favorites without an explicit category. Kept as a
-// stable English constant so Map keys / sort comparisons are locale-independent;
-// it is translated only at the display site (FavoritesView).
-export const UNCATEGORIZED = "Uncategorized";
+// The grouping identity for the merged list's catch-all bucket: favorites
+// without an explicit category and processes that match no favorite both land
+// here. Kept as a stable English constant so Map keys / sort comparisons are
+// locale-independent; it is translated only at the display site.
+export const UNGROUPED = "Ungrouped";
 
-// Normalized category label: blank/whitespace collapses to "Uncategorized".
-export function categoryLabel(c: string | undefined): string {
-  const v = (c ?? "").trim();
-  return v.length ? v : UNCATEGORIZED;
+// Normalized group label: blank/whitespace category collapses to "Ungrouped".
+export function groupKeyOf(category: string | undefined): string {
+  const v = (category ?? "").trim();
+  return v.length ? v : UNGROUPED;
 }
 
 function makeId(): string {
@@ -198,31 +199,6 @@ export function useFavorites() {
     removeFavorite,
     updateFavorite,
   };
-}
-
-// All distinct category labels currently in use, sorted with Uncategorized
-// first then alphabetical. Used to render grouped sections in the UI.
-export function groupByCategory(
-  favorites: Favorite[],
-): { label: string; items: Favorite[] }[] {
-  const map = new Map<string, Favorite[]>();
-  for (const f of favorites) {
-    const label = categoryLabel(f.category);
-    const arr = map.get(label);
-    if (arr) arr.push(f);
-    else map.set(label, [f]);
-  }
-  return [...map.entries()]
-    .map(([label, items]) => ({
-      label,
-      // Newest first within a group.
-      items: items.sort((a, b) => b.createdAt - a.createdAt),
-    }))
-    .sort((a, b) => {
-      if (a.label === UNCATEGORIZED) return -1;
-      if (b.label === UNCATEGORIZED) return 1;
-      return a.label.localeCompare(b.label);
-    });
 }
 
 export function makeFavoriteId(): string {
