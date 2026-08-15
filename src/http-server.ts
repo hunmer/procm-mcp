@@ -36,7 +36,12 @@ import { setConnectionConfig } from "./connection-config.js";
 import { getRoom, listRooms, patchRoom } from "./room-hub.js";
 import { queryRoomLogs } from "./room-logs.js";
 import { scanProjectCommands } from "./project-scanner.js";
-import { openDirectory } from "popups-file-dialog";
+import { createRequire } from "module";
+// native-file-dialog ships only a compiled .node addon (no CJS wrapper), so
+// the ESM loader can't import it — pull it through createRequire.
+const { folder_dialog } = createRequire(import.meta.url)(
+  "native-file-dialog",
+) as { folder_dialog: () => string };
 import { listSystemProcesses, killProcessTree, findProcessByPort } from "./system-processes.js";
 import { ProcmMcpDir } from "./procm-mcp-dir.js";
 import { listProcessLogFiles, deleteProcessLogFiles } from "./process-log-files.js";
@@ -656,29 +661,20 @@ function createRequestHandler(token: string | undefined) {
       }
 
       // POST /api/select-directory -> open the OS-native directory picker
-      // (popups-file-dialog on top of tinyfiledialogs; Windows/Linux, macOS
-      // build pending upstream). The browser can't do this, so the dashboard
-      // asks the backend. Resolves { canceled: true } when the user dismisses
-      // the picker without choosing anything.
+      // (native-file-dialog, a Rust addon over the OS dialogs; Windows/macOS).
+      // The browser can't do this, so the dashboard asks the backend. The
+      // picker is synchronous — it blocks the event loop until the user
+      // chooses, which is fine for this local single-user tool. Resolves
+      // { canceled: true } when the user dismisses the picker.
       if (method === "POST" && pathname === "/api/select-directory") {
-        const body = JSON.parse((await readBody(req)) || "{}");
         try {
-          const dir = (
-            await openDirectory({
-              title: body.title ? String(body.title) : undefined,
-            })
-          ).trim();
-          if (!dir) {
+          const dir = folder_dialog().trim();
+          if (!dir || dir === "UserCancelled") {
             json(res, 200, { canceled: true, path: null });
             return;
           }
           json(res, 200, { canceled: false, path: dir });
         } catch (e) {
-          // The picker rejects with NoSelectedDirectoryError on cancel.
-          if (e instanceof Error && e.name === "NoSelectedDirectoryError") {
-            json(res, 200, { canceled: true, path: null });
-            return;
-          }
           json(res, 500, { error: toErrorMessage(e) });
         }
         return;

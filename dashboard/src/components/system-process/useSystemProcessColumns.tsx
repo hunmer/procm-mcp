@@ -43,9 +43,6 @@ export function useSystemProcessColumns({
               {r.members.length > 1 && (
                 <CountBadge count={r.members.length} />
               )}
-              {r.ports?.map((port) => (
-                <PortBadge key={port} port={port} />
-              ))}
             </div>
           );
         },
@@ -71,6 +68,26 @@ export function useSystemProcessColumns({
             {row.original.ppid}
           </span>
         ),
+      },
+      {
+        id: "ports",
+        // Sort by the lowest listening port (0 = none) — see sortValue in utils.
+        accessorFn: (p) => p.ports?.[0] ?? 0,
+        header: ({ column }) => (
+          <SortableHeader column={column} label={t("system.colPorts")} />
+        ),
+        cell: ({ row }) => {
+          const ports = row.original.ports;
+          return ports?.length ? (
+            <div className="flex flex-wrap gap-1">
+              {ports.map((port) => (
+                <PortBadge key={port} port={port} />
+              ))}
+            </div>
+          ) : (
+            <span className="text-muted-foreground/50 text-xs">—</span>
+          );
+        },
       },
       {
         id: "path",

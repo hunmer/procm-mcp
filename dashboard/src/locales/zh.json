@@ -138,6 +138,7 @@
     "colName": "名称",
     "colPid": "PID",
     "colPpid": "PPID",
+    "colPorts": "端口",
     "colPath": "路径",
     "colCommand": "命令行",
     "colActions": "操作",
@@ -325,7 +326,8 @@
       "groupHelp": "用于在进程列表中分组。留空则归入“未分组”。",
       "envsLabel": "环境变量（每行一个 KEY=VALUE）",
       "envsPlaceholder": "NODE_ENV=development\nPORT=3000",
-      "envsHelp": "可选。每行一个变量，格式为 KEY=VALUE。"
+      "envsHelp": "可选。每行一个变量，格式为 KEY=VALUE。",
+      "groupEmpty": "没有匹配的分组，可直接回车使用输入的名称"
     }
   },
   "favorites": {

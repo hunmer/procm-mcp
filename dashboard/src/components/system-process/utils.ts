@@ -128,6 +128,8 @@ function sortValue(p: ProcessRow, id: string): number | string {
       return p.pid;
     case "ppid":
       return p.ppid;
+    case "ports":
+      return p.ports?.[0] ?? 0;
     case "name":
       return p.name.toLowerCase();
     case "path":

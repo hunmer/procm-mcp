@@ -16,7 +16,7 @@ export function CountBadge({ count }: { count: number }) {
   );
 }
 
-// A listening-port badge shown next to a process name. Clicking opens
+// A listening-port badge shown in the ports column. Clicking opens
 // http://localhost:<port> in a new tab; stopPropagation keeps the row's
 // context-menu trigger from also firing.
 export function PortBadge({ port }: { port: number }) {

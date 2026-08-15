@@ -37,7 +37,13 @@ export function ImportGroupDialog({
     try {
       const found = await scanDirectory(target);
       setCandidates(found);
-      setSelected(new Set());
+      // Keep the current checkbox selection across rescans; only clamp to
+      // indices that still exist.
+      setSelected((current) => {
+        const alive = new Set<number>();
+        for (const index of current) if (index < found.length) alive.add(index);
+        return alive;
+      });
     } catch (err) {
       onToast(err instanceof Error ? err.message : String(err), true);
     } finally {

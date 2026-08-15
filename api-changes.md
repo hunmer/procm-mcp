@@ -12,4 +12,4 @@
   - 请求 body（可选）：`{ "title": string }`（原生选择框标题）
   - 响应 200：`{ "canceled": boolean, "path": string | null }`（用户取消时 `canceled: true, path: null`）
   - 响应 500：`{ "error": string }`（选择器无法弹出等错误）
-  - 说明：通过 `popups-file-dialog`（tinyfiledialogs）弹出系统原生目录选择器，供 dashboard「从目录导入」使用；Windows/Linux 可用，macOS 上游尚未构建。
+  - 说明：通过 `native-file-dialog`（Rust 原生模块，Windows/macOS）弹出系统原生目录选择器，供 dashboard「从目录导入」使用；同步阻塞直到用户选择。原 `popups-file-dialog` 方案在 Windows 上 CLI 无输出，已移除。

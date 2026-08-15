@@ -50,7 +50,7 @@
     "lru-cache": "11.5.2",
     "mkdirp": "^3.0.1",
     "nanoid": "^5.1.5",
-    "popups-file-dialog": "^1.7.7",
+    "native-file-dialog": "^0.2.0",
     "ps-list": "^9.0.0",
     "tree-kill": "^1.2.2",
     "ws": "^8.21.1",

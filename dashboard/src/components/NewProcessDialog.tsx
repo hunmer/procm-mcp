@@ -19,6 +19,14 @@ import {
   FieldDescription,
   FieldLabel,
 } from "@/registry/default/ui/field";
+import {
+  Combobox,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxPopup,
+} from "@/registry/default/ui/combobox";
 import { PlusIcon, ZapIcon } from "lucide-react";
 import { parseEnvs, startProcess, updateProcess } from "@/lib/api";
 import { applyPreset, useProcessPresets } from "@/lib/presets";
@@ -32,6 +40,11 @@ interface NewProcessDialogProps {
   // is not rendered.
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  // Group pre-filled into the form when the dialog opens (e.g. the group the
+  // "+" button in a group header was clicked on).
+  defaultGroup?: string;
+  // Existing group labels offered in the group combobox.
+  groupOptions?: string[];
 }
 
 // Optional controlled "edit" mode. When `viewProcess` is provided the dialog
@@ -53,6 +66,8 @@ export function NewProcessDialog({
   onError,
   open: openProp,
   onOpenChange,
+  defaultGroup,
+  groupOptions,
 }: NewProcessDialogProps) {
   const { t } = useTranslation();
   const [internalOpen, setInternalOpen] = useState(false);
@@ -66,8 +81,15 @@ export function NewProcessDialog({
   const [desc, setDesc] = useState("");
   const [envs, setEnvs] = useState("");
   const [port, setPort] = useState("");
+  const [group, setGroup] = useState("");
 
   const presets = useProcessPresets();
+
+  // Re-seed the group field from defaultGroup on every open so a group
+  // header's "+" always pre-fills that group, and a plain reopen clears it.
+  useEffect(() => {
+    if (open) setGroup(defaultGroup ?? "");
+  }, [open, defaultGroup]);
 
   function reset() {
     setName("");
@@ -104,6 +126,7 @@ export function NewProcessDialog({
         envs: parseEnvs(envs),
         desc: desc.trim() || undefined,
         port: portNum,
+        group: group.trim() || undefined,
       });
       reset();
       setOpen(false);
@@ -142,6 +165,9 @@ export function NewProcessDialog({
           envs={envs}
           port={port}
           setters={{ setName, setScript, setArgs, setCwd, setDesc, setEnvs, setPort }}
+          group={group}
+          setGroup={setGroup}
+          groupOptions={groupOptions ?? []}
           presets={presets}
           submitting={submitting}
           onSubmit={handleSubmit}
@@ -283,6 +309,11 @@ interface ProcessFormProps {
     setEnvs: (v: string) => void;
     setPort: (v: string) => void;
   };
+  // Target group. Only rendered when `setGroup` is provided (the new-process
+  // dialog offers a group picker; the details dialog keeps its current fields).
+  group?: string;
+  setGroup?: (v: string) => void;
+  groupOptions?: string[];
   presets: ReturnType<typeof useProcessPresets>;
   readOnly?: boolean;
   submitting: boolean;
@@ -302,6 +333,9 @@ function ProcessForm({
   envs,
   port,
   setters,
+  group,
+  setGroup,
+  groupOptions,
   presets,
   readOnly,
   submitting,
@@ -309,6 +343,9 @@ function ProcessForm({
   onSubmit,
 }: ProcessFormProps) {
   const { t } = useTranslation();
+  // Combobox items are {value,label} objects so selecting one fills the
+  // input with the label automatically (Base UI single-select behavior).
+  const groupItems = (groupOptions ?? []).map((g) => ({ value: g, label: g }));
   return (
     <form className="contents" onSubmit={onSubmit}>
       <DialogPanel>
@@ -401,6 +438,38 @@ function ProcessForm({
               </FieldDescription>
             )}
           </Field>
+          {setGroup && !readOnly && (
+            <Field>
+              <FieldLabel htmlFor="f-group">
+                {t("dialogs.form.groupLabel")}
+              </FieldLabel>
+              {/* Combobox with a free-text input: existing groups are offered
+                  in the popup, but any typed name is kept as-is. */}
+              <Combobox
+                items={groupItems}
+                inputValue={group}
+                onInputValueChange={(v) => setGroup(v)}
+              >
+                <ComboboxInput
+                  id="f-group"
+                  placeholder={t("dialogs.form.groupPlaceholder")}
+                />
+                <ComboboxPopup aria-label={t("dialogs.form.groupLabel")}>
+                  <ComboboxEmpty>{t("dialogs.form.groupEmpty")}</ComboboxEmpty>
+                  <ComboboxList>
+                    {(item: { value: string; label: string }) => (
+                      <ComboboxItem key={item.value} value={item}>
+                        {item.label}
+                      </ComboboxItem>
+                    )}
+                  </ComboboxList>
+                </ComboboxPopup>
+              </Combobox>
+              <FieldDescription>
+                {t("dialogs.form.groupHelp")}
+              </FieldDescription>
+            </Field>
+          )}
         </div>
         <Field className="mt-4">
           <FieldLabel htmlFor="f-desc">{t("dialogs.form.descLabel")}</FieldLabel>

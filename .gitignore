@@ -5,3 +5,4 @@ dashboard/node_modules
 dashboard/dist
 .procm-mcp-data
 .procm-mcp/
+.tmp-cli-out.txt

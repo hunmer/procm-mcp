@@ -106,6 +106,16 @@ export function ProcessActions({
           <PlayIcon />
         </Button>
       )}
+      <Button
+        size="icon-sm"
+        variant="ghost"
+        aria-label={t("processes.deleteAria", { name: p.name })}
+        title={t("processes.deleteTitle")}
+        onClick={() => onDelete(p)}
+        className="text-muted-foreground hover:text-destructive"
+      >
+        <TrashIcon />
+      </Button>
       {/* Overflow menu: view this process's on-disk log files (dialog with the
           file list + terminal content). */}
       <Menu>
@@ -134,16 +144,7 @@ export function ProcessActions({
         open={logFilesOpen}
         onOpenChange={setLogFilesOpen}
       />
-      <Button
-        size="icon-sm"
-        variant="ghost"
-        aria-label={t("processes.deleteAria", { name: p.name })}
-        title={t("processes.deleteTitle")}
-        onClick={() => onDelete(p)}
-        className="text-muted-foreground hover:text-destructive"
-      >
-        <TrashIcon />
-      </Button>
+
     </div>
   );
 }

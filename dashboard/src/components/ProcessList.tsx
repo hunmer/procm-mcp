@@ -6,6 +6,7 @@ import {
   FolderOpenIcon,
   InboxIcon,
   ListXIcon,
+  PlusIcon,
 } from "lucide-react";
 import { clearAllProcesses } from "@/lib/api";
 import { Badge } from "@/registry/default/ui/badge";
@@ -35,6 +36,7 @@ import { canStopProcess } from "./process-list/utils";
 import { ProcessFilterBar } from "./process-list/ProcessFilterBar";
 import { ProcessCard } from "./process-list/ProcessCard";
 import { ProcessDialogs } from "./process-list/ProcessDialogs";
+import { NewProcessDialog } from "./NewProcessDialog";
 
 // Whether a group label looks like an absolute folder path that the backend
 // could open in the OS file manager. Matches Windows drive paths (C:\, C:/),
@@ -131,6 +133,9 @@ interface GroupSectionProps {
   // Only called for the Ungrouped bucket: stop its running processes and
   // remove every record from the list.
   onClearUngrouped: (g: Group) => void;
+  // Open the new-process dialog pre-filled with this group's label ("" for
+  // the Ungrouped bucket).
+  onNewInGroup: (label: string) => void;
 }
 
 // One category section, following the "Frame with collapsible content" pattern
@@ -148,6 +153,7 @@ function GroupSection({
   onOpenFolder,
   onTogglePin,
   onClearUngrouped,
+  onNewInGroup,
 }: GroupSectionProps) {
   const { t } = useTranslation();
   const runningCount = g.processes.filter(canStopProcess).length;
@@ -179,6 +185,18 @@ function GroupSection({
                 {runningCount}
               </Badge>
             )}
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label={t("header.newProcess")}
+              title={t("header.newProcess")}
+              onClick={() =>
+                onNewInGroup(g.label === UNGROUPED ? "" : g.label)
+              }
+              className="text-muted-foreground"
+            >
+              <PlusIcon />
+            </Button>
             {looksLikePath(g.label) && (
               <Button
                 size="icon-sm"
@@ -293,6 +311,26 @@ export function ProcessList({
   // from click time, so WS updates arriving while the dialog is open don't
   // change what gets cleared.
   const [pendingClear, setPendingClear] = useState<Group | null>(null);
+
+  // New-process dialog opened from a group header's "+": the group label is
+  // captured at click time so it pre-fills the dialog's group field.
+  const [newIn, setNewIn] = useState<{ open: boolean; group: string }>({
+    open: false,
+    group: "",
+  });
+
+  function requestNewInGroup(label: string) {
+    setNewIn({ open: true, group: label });
+  }
+
+  // Existing group labels offered by the dialog's group combobox.
+  const groupOptions = useMemo(
+    () =>
+      [...new Set(processes.map((p) => p.group?.trim()).filter((g): g is string => !!g))].sort(
+        (a, b) => a.localeCompare(b),
+      ),
+    [processes],
+  );
 
   function requestClearUngrouped(g: Group) {
     if (g.label !== UNGROUPED) return;
@@ -423,6 +461,7 @@ export function ProcessList({
                 actions={actions}
                 onOpenFolder={onOpenFolder}
                 onClearUngrouped={requestClearUngrouped}
+                onNewInGroup={requestNewInGroup}
                 pinnedIds={pinnedIds}
                 onTogglePin={togglePin}
               />
@@ -441,6 +480,7 @@ export function ProcessList({
                   actions={actions}
                   onOpenFolder={onOpenFolder}
                   onClearUngrouped={requestClearUngrouped}
+                  onNewInGroup={requestNewInGroup}
                   pinnedIds={pinnedIds}
                   onTogglePin={togglePin}
                 />
@@ -459,6 +499,7 @@ export function ProcessList({
             actions={actions}
             onOpenFolder={onOpenFolder}
             onClearUngrouped={requestClearUngrouped}
+            onNewInGroup={requestNewInGroup}
             pinnedIds={pinnedIds}
             onTogglePin={togglePin}
           />
@@ -495,6 +536,18 @@ export function ProcessList({
         onDismissDelete={dismissDelete}
         onDismissStop={dismissStop}
         onDismissClearUngrouped={() => setPendingClear(null)}
+      />
+
+      {/* Group-header "+": same new-process dialog as the header one, with the
+          clicked group pre-filled. onStarted/onError mirror the callbacks
+          App.tsx wires into CreateDropdown. */}
+      <NewProcessDialog
+        open={newIn.open}
+        onOpenChange={(open) => setNewIn((s) => ({ ...s, open }))}
+        defaultGroup={newIn.group}
+        groupOptions={groupOptions}
+        onStarted={(id) => onToast(t("toasts.started", { id }))}
+        onError={(m) => onToast(m, true)}
       />
     </div>
   );

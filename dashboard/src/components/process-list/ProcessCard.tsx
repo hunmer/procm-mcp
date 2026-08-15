@@ -83,12 +83,12 @@ export function ProcessCard({
               onDelete={actions.onRequestDelete}
             />
             {canStop ? (
-              <Button size="sm" onClick={(e) => { e.stopPropagation(); actions.onRequestStop(p); }}>
+              <Button size="sm" variant="destructive" onClick={(e) => { e.stopPropagation(); actions.onRequestStop(p); }}>
                 <SquareIcon />
                 {t("processes.stopTitle")}
               </Button>
             ) : (
-              <Button size="sm" onClick={(e) => { e.stopPropagation(); actions.onRestart(p.id); }}>
+              <Button size="sm" variant="default" onClick={(e) => { e.stopPropagation(); actions.onRestart(p.id); }}>
                 <PlayIcon />
                 {t("processes.runTitle")}
               </Button>

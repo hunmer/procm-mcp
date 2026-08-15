@@ -138,6 +138,7 @@
     "colName": "Name",
     "colPid": "PID",
     "colPpid": "PPID",
+    "colPorts": "Ports",
     "colPath": "Path",
     "colCommand": "Command line",
     "colActions": "Actions",
@@ -325,7 +326,8 @@
       "groupHelp": "Groups this favorite in the process list. Leave blank for “Ungrouped”.",
       "envsLabel": "Environment variables (KEY=VALUE per line)",
       "envsPlaceholder": "NODE_ENV=development\nPORT=3000",
-      "envsHelp": "Optional. One variable per line, written as KEY=VALUE."
+      "envsHelp": "Optional. One variable per line, written as KEY=VALUE.",
+      "groupEmpty": "No matching groups — the typed name will be used"
     }
   },
   "favorites": {
