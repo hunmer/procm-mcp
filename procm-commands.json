@@ -15,11 +15,12 @@
       "desc": "Start the dashboard development server"
     },
     "demo-node-server": {
-      "script": "npm",
+      "script": "pnpm",
       "args": ["start"],
       "cwd": "demo/node-server",
       "envs": {
-        "PROCM_WS_URL": "ws://127.0.0.1:7332/room"
+        "PROCM_WS_URL": "ws://127.0.0.1:7332/room",
+        "PROCM_DEMO_WS_URL": "ws://127.0.0.1:7332/room"
       },
       "desc": "Start the demo Node.js server"
     },
@@ -28,7 +29,8 @@
       "args": ["start"],
       "cwd": "demo/electron-client",
       "envs": {
-        "PROCM_WS_URL": "ws://127.0.0.1:7332/room"
+        "PROCM_WS_URL": "ws://127.0.0.1:7332/room",
+        "PROCM_DEMO_WS_URL": "ws://127.0.0.1:7332/room"
       },
       "desc": "Start the demo Electron client"
     }

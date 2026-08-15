@@ -11,6 +11,7 @@ import { ProcessMetadata, ProcessStatus } from "./types.js";
 import { getConnectionEnv } from "./connection-config.js";
 import { ensureRoom, removeProcessFromRooms } from "./room-repository.js";
 import path from "path";
+import { existsSync } from "fs";
 import { ProcmMcpDir } from "./procm-mcp-dir.js";
 import { mkdirp } from "mkdirp";
 import {
@@ -221,6 +222,48 @@ export function createCommand(script: string, args: string[] | undefined): strin
   return [script, ...(args || [])].join(" ");
 }
 
+// On Windows, bare commands such as `npm` are usually installed as `npm.cmd`
+// batch shims. spawn() only resolves `.exe` through CreateProcess, so look the
+// command up on PATH with the PATHEXT extensions and route .cmd/.bat files
+// through the shell — spawning batch files directly throws EINVAL on modern
+// Node (CVE-2024-27980). Non-Windows platforms keep the script untouched.
+export function resolveSpawnTarget(
+  script: string,
+  cwd: string,
+): { command: string; shell: boolean } {
+  if (process.platform !== "win32") return { command: script, shell: false };
+
+  const exts = (process.env.PATHEXT || ".COM;.EXE;.BAT;.CMD")
+    .split(";")
+    .filter(Boolean);
+  const hasDir = /[\\/]/.test(script);
+  const dirs = hasDir
+    ? [path.dirname(path.resolve(cwd, script))]
+    : (process.env.PATH || "").split(path.delimiter).filter(Boolean);
+  const base = path.basename(script);
+
+  for (const dir of dirs) {
+    // With an explicit extension (e.g. `npm.cmd`) try the exact name first;
+    // extension-less names are only completed with PATHEXT extensions.
+    const names = /\.(cmd|bat|exe|com)$/i.test(base)
+      ? [base, ...exts.map((ext) => base + ext)]
+      : exts.map((ext) => base + ext);
+    for (const name of names) {
+      const candidate = path.join(dir, name);
+      if (!existsSync(candidate)) continue;
+      if (/\.(cmd|bat)$/i.test(candidate)) {
+        // shell mode joins command and args with plain spaces, so quote the
+        // path ourselves to keep paths containing spaces intact.
+        return { command: `"${candidate}"`, shell: true };
+      }
+      return { command: candidate, shell: false };
+    }
+  }
+  // Nothing found via PATHEXT: keep the original script (CreateProcess still
+  // resolves bare `.exe` names) and let spawn surface the real error.
+  return { command: script, shell: false };
+}
+
 export async function startProcess(
   processId: string,
   script: string,
@@ -246,8 +289,10 @@ export async function startProcess(
       PROCM_PROCESS_ID: processId,
     };
     if (roomId) roomEnv.PROCM_ROOM_ID = roomId;
-    const childProcess = spawn(script, args || [], {
+    const spawnTarget = resolveSpawnTarget(script, cwd);
+    const childProcess = spawn(spawnTarget.command, args || [], {
       cwd,
+      shell: spawnTarget.shell,
       env: {
         ...process.env,
         ...envs,

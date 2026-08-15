@@ -539,6 +539,11 @@ export function SystemProcessList({
       {/* Filter + refresh bar. Three independent substring filters, a manual
           refresh button, and the live-refresh toggle with its interval. */}
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-4 py-2.5">
+        
+        <span className="text-muted-foreground whitespace-nowrap text-xs">
+          {t("system.countOfTotal", { shown: rowCount, total: rows.length })}
+        </span>
+
         <FilterInput
           value={nameFilter}
           onChange={setNameFilter}
@@ -569,13 +574,9 @@ export function SystemProcessList({
           {t("system.portsOnly")}
         </label>
 
-        <span className="text-muted-foreground whitespace-nowrap text-xs">
-          {t("system.countOfTotal", { shown: rowCount, total: rows.length })}
-        </span>
-
         <div className="ml-auto flex items-center gap-3">
           {/* Live refresh toggle + interval. The interval select is only
-              relevant while polling, so it's disabled when the switch is off. */}
+              relevant while polling, so it only renders when the switch is on. */}
           <div className="flex items-center gap-2">
             <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs">
               <Switch
@@ -585,24 +586,25 @@ export function SystemProcessList({
               />
               {t("system.liveRefresh")}
             </label>
-            <Select
-              value={String(intervalMs)}
-              onValueChange={(v) =>
-                setIntervalMs(Number(v) || 2000)
-              }
-              disabled={!liveRefresh}
-            >
-              <SelectTrigger size="sm" className="h-8 w-[68px]">
-                <SelectValue>{intervalLabel(intervalMs)}</SelectValue>
-              </SelectTrigger>
-              <SelectPopup>
-                {INTERVAL_OPTIONS.map((ms) => (
-                  <SelectItem key={ms} value={String(ms)}>
-                    <SelectItemText>{intervalLabel(ms)}</SelectItemText>
-                  </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
+            {liveRefresh && (
+              <Select
+                value={String(intervalMs)}
+                onValueChange={(v) =>
+                  setIntervalMs(Number(v) || 2000)
+                }
+              >
+                <SelectTrigger size="sm" className="h-8 w-[68px]">
+                  <SelectValue>{intervalLabel(intervalMs)}</SelectValue>
+                </SelectTrigger>
+                <SelectPopup>
+                  {INTERVAL_OPTIONS.map((ms) => (
+                    <SelectItem key={ms} value={String(ms)}>
+                      <SelectItemText>{intervalLabel(ms)}</SelectItemText>
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+            )}
           </div>
           <Button
             size="icon-sm"

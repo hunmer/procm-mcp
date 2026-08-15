@@ -31,6 +31,9 @@ export interface RoomMessage<T = JsonValue> {
   timestamp: number;
   payload: T;
   retain?: boolean;
+  // Request/response correlation: publishers may tag a message, responders
+  // echo the tag on the reply so both sides can pair them up.
+  correlationId?: string;
 }
 
 export interface StructuredLog {
@@ -75,6 +78,7 @@ export type ClientFrame =
       timestamp: number;
       payload: JsonValue;
       retain?: boolean;
+      correlationId?: string;
     }
   | {
       version: typeof PROCM_PROTOCOL_VERSION;
@@ -143,6 +147,7 @@ export function parseClientFrame(value: unknown): ClientFrame | null {
       return typeof value.messageId === "string" &&
         typeof value.topic === "string" &&
         typeof value.timestamp === "number" &&
+        (value.correlationId === undefined || typeof value.correlationId === "string") &&
         "payload" in value
         ? (value as unknown as ClientFrame)
         : null;

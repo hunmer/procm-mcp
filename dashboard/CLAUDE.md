@@ -1,8 +1,8 @@
 # procm-mcp dashboard
 
-procm-mcp 的 Web 管理界面，由后端在 `GET /` 静态托管（构建产物 `dist/` 打包进 npm 包）。独立的 React + Vite 工程，经同源 **WebSocket `/ws`**（实时进程/日志推送，自动重连）+ REST `/api/*`（操作与历史）与后端通信。提供进程列表（双流日志查看/grep/下载）、收藏夹（纯 localStorage 启动配方，支持文件夹导入）、批量管理。默认暗色，支持亮/暗切换。
+procm-mcp 的 Web 管理界面，由后端在 `GET /` 静态托管（构建产物 `dist/` 打包进 npm 包）。独立的 React + Vite 工程，经同源 **WebSocket `/ws`**（实时进程/日志推送，自动重连）+ REST `/api/*`（操作与历史）与后端通信。进程列表支持表格/卡片双视图、过滤、分页、排序、右键菜单与批量操作；System Tab 查看/终止 OS 级进程；日志面板带 ANSI 终端渲染与结构化 JSON 展开（经 `@procm-mcp/sdk` 解码）；收藏夹（纯 localStorage 启动配方，支持文件夹导入）；en/zh 双语；默认暗色，支持亮/暗切换，选中状态可经 URL 还原。
 
-技术栈：**React 19** + **Vite 6** + **Tailwind CSS v4** + **coss**（基于 `@base-ui/react`）+ `@tanstack/react-table` + `lucide-react`。
+技术栈：**React 19** + **Vite 6** + **Tailwind CSS v4** + **coss**（基于 `@base-ui/react`）+ `@tanstack/react-table` + `react-i18next` + `lucide-react`。
 
 ## 约定（高优先级）
 
@@ -12,6 +12,7 @@ procm-mcp 的 Web 管理界面，由后端在 `GET /` 静态托管（构建产�
 - **form-in-dialog 不变量**：`DialogHeader` 在 form 外，`<form className="contents">` 包 `DialogPanel`+`DialogFooter`。
 - 后端 `ProcessView` 字段变动时，同步改 `src/lib/types.ts`。
 - 实时数据：WS 回调用 `onProcessesMessage`/`onLogMessage` 注册（内部存 ref，不重订阅）；收藏是纯前端 localStorage（`lib/favorites.ts`）。
+- 新 UI 文案要同时补 `locales/en.json` 与 `locales/zh.json`（`useTranslation` 取键）。
 - dev 模式：`vite.config.ts` **已配 proxy**（`/api`、`/mcp`、`/assets`、`/ws` → `PROCM_DEV_BACKEND`），先 `npm run start:server` 再 `npm run dev:dashboard`。
 
 详见 [claude/conventions.md](claude/conventions.md)。
@@ -34,7 +35,7 @@ procm-mcp 的 Web 管理界面，由后端在 `GET /` 静态托管（构建产�
 
 ## 扫描状态
 
-- **更新时间**：2026-08-01
-- **已扫描**：`src/main.tsx`、`src/components/*.tsx`(8)、`src/lib/*.ts`(7：api/ws/types/favorites/presets/cwd/useTheme)、`registry/default/lib/utils.ts`、`index.html`、`package.json`、`tsconfig.json`、`vite.config.ts`。
-- **未详读**：`src/registry/default/ui/*.tsx`(22 个 vendored coss 组件，已归纳用法)；`node_modules/`、`dist/`、`tsconfig.tsbuildinfo`、`src/index.css`（已归纳主题 token 策略）。
-- **缺口**：零自动化测试；REST 客户端未支持 token 注入（受保护后端 dashboard 的 REST 会 401）。详见 [claude/changelog.md](claude/changelog.md)。
+- **更新时间**：2026-08-15
+- **已扫描**：`src/main.tsx`、`src/i18n.ts`、`src/components/*.tsx`（12 个，8-15 新增的 `SystemProcessList`/`TerminalLog`/`JsonViewer`/`ansi` 按头部+导出抽查）、`components/process-list/`（13 文件，结构级）、`src/lib/*.ts`（9 个）、`index.html`、`package.json`、`tsconfig.json`、`vite.config.ts`。
+- **未详读**：`src/registry/default/ui/*.tsx`（26 个 vendored coss 组件，已归纳用法）；`node_modules/`、`dist/`、`tsconfig.tsbuildinfo`、`src/index.css`（已归纳主题 token 策略）。
+- **缺口**：零自动化测试；REST 客户端未支持 token 注入（受保护后端 dashboard 的 REST 会 401）；`process-list/` 与 `SystemProcessList` 本轮仅结构级扫描。详见 [claude/changelog.md](claude/changelog.md)。

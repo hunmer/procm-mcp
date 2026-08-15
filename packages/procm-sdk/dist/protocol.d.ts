@@ -23,6 +23,7 @@ export interface RoomMessage<T = JsonValue> {
     timestamp: number;
     payload: T;
     retain?: boolean;
+    correlationId?: string;
 }
 export interface StructuredLog {
     version: typeof PROCM_PROTOCOL_VERSION;
@@ -61,6 +62,7 @@ export type ClientFrame = {
     timestamp: number;
     payload: JsonValue;
     retain?: boolean;
+    correlationId?: string;
 } | {
     version: typeof PROCM_PROTOCOL_VERSION;
     type: "trace:put";

@@ -36,6 +36,17 @@ delete/stop: kill（SIGTERM，10s 未退则 SIGKILL）+ 移除内存 + 持久化
 - 停止的进程无内存缓冲时，仍从磁盘 `.log` 读取。
 - 历史目录里可能残留旧版 `.json` 日志（旧版双写 `.json`+.log），当前源只写 `.log`。
 
+## 房间（room 子域）
+
+- `RoomRecord`（`room-repository.ts`，落盘 `<数据目录>/rooms.json`）：`{id, title, note, processIds[], createdAt, updatedAt}`——进程重启后凭 `roomId` 重新挂回房间。
+- 活跃成员 = `/room` WS 连接的 `RoomMember`（memberId/clientName/processId/metadata），协议帧（hello/welcome/subscribe/publish/member/…）定义在 `packages/procm-sdk/src/protocol.ts`，版本常量 1。
+- 结构化日志：SDK `Logger` 在进程 stdout 打「可读前缀 + `@@PROCM_LOG_V1@@` + base64url(JSON)」；`room-logs.ts` 读各进程 `.log` 用 `decodeStructuredLogLine` 还原为 `RoomLogEntry`（timestamp/level/memberId/message/data?/traceId?）。
+
+## 追踪（trace 子域）
+
+- `StoredTraceEnvelope`（`trace-store.ts`）：`{version:1, traceId, createdAt, roomId, memberId, processId?, data}`；`data` 常为 SDK 的 `FunctionTrace`（name/durationMs/status/callChain/args?/result?/error?）。
+- 存储约束：LRU 总量 64 MiB、单条 256 KiB、TTL 1~604800s（默认 `PROCM_TRACE_TTL_SECONDS` 或 86400）；错误码稳定（`TRACE_NOT_FOUND`/`TRACE_INVALID_ID`/`TRACE_INVALID_PAYLOAD`/`TRACE_STORE_CONFLICT`/`TRACE_STORE_ERROR`/`TRACE_REQUEST_TIMEOUT`）。
+
 ## WS 消息
 
 ```

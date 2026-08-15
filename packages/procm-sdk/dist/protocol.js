@@ -28,6 +28,7 @@ export function parseClientFrame(value) {
             return typeof value.messageId === "string" &&
                 typeof value.topic === "string" &&
                 typeof value.timestamp === "number" &&
+                (value.correlationId === undefined || typeof value.correlationId === "string") &&
                 "payload" in value
                 ? value
                 : null;

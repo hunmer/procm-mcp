@@ -38,6 +38,15 @@ export class ProcmClient {
     get pendingTraceRequestCount() {
         return this.pendingTraceRequests.size;
     }
+    // Resolved WebSocket connection target (raw URL + optional auth token) as
+    // used by connect(). Exposed so companion transports, e.g. the MCP HTTP
+    // endpoint derived in trace.ts, can reach the same backend.
+    get connectionTarget() {
+        return {
+            url: this.options.url ?? env("PROCM_WS_URL") ?? "",
+            token: this.options.token ?? env("PROCM_HTTP_TOKEN"),
+        };
+    }
     connect() {
         if (this.disposed || this.socket?.readyState === WebSocket.OPEN || this.socket?.readyState === WebSocket.CONNECTING)
             return;
@@ -94,6 +103,7 @@ export class ProcmClient {
             timestamp: Date.now(),
             payload,
             retain: options.retain,
+            correlationId: options.correlationId,
         });
         return messageId;
     }

@@ -1,18 +1,20 @@
 # procm-mcp
 
-一个用于**进程管理**的 Model Context Protocol (MCP) 服务器。让 LLM 与人类操作者通过统一接口启动、监控、重启、停止子进程，写入其 stdin 或发送信号，并读取其 stdout/stderr 日志。纯 Node.js + TypeScript（ESM），前端 dashboard 是独立的 React + Vite 工程。
+一个用于**进程管理**的 Model Context Protocol (MCP) 服务器。让 LLM 与人类操作者通过统一接口启动、监控、重启、停止子进程，写入其 stdin 或发送信号，并读取其 stdout/stderr 日志。在此之上提供两个子域：**房间**（被管进程经 WebSocket `/room` 互发消息与结构化日志，SDK 为 `@procm-mcp/sdk`）与**追踪**（SDK hook 捕获函数调用存内存 LRU，经 `trace-get` 读取）。纯 Node.js + TypeScript（ESM），前端 dashboard 是独立的 React + Vite 工程。
 
-后端有三种形态（stdio MCP / `--server` HTTP 后端 / CLI 客户端）共享同一套模块级状态，并额外在 HTTP 端口暴露 stateless 的 `/mcp` 端点与一个仅绑定 `127.0.0.1` 的 dashboard（经 WebSocket `/ws` 实时推送进程状态与日志）。进程历史持久化到全局 `processes.json`，跨重启可见。**进程启动没有任何白名单/审批门控**：`start-process` / `procm-command` 直接执行给定命令，应像对待任意 shell 命令一样保留人工确认。
+后端有三种形态（stdio MCP / `--server` HTTP 后端 / CLI 客户端）共享同一套模块级状态，并额外在 HTTP 端口暴露 stateless 的 `/mcp` 端点与一个仅绑定 `127.0.0.1` 的 dashboard（经 WebSocket `/ws` 实时推送进程状态与日志）。进程历史持久化到 `processes.json`，跨重启可见。**进程启动没有任何白名单/审批门控**：`start-process` / `procm-command` 直接执行给定命令，应像对待任意 shell 命令一样保留人工确认。
 
-技术栈：Node.js（ESM/Node16）、`@modelcontextprotocol/sdk`、`zod`、`lowdb`、`tree-kill`、`ws`、`nanoid`。
+技术栈：Node.js（ESM/Node16）、`@modelcontextprotocol/sdk`、`zod`、`lowdb`、`tree-kill`、`ws`、`nanoid`、`lru-cache`；房间协议与 SDK 见 `packages/procm-sdk/`。
 
 ## 约定（高优先级）
 
-- 改 TS 源码后**必须 `npm run build`**（= 先 `build:dashboard` 再 `tsc`）——运行入口是 `build/index.js`。
+- 改 TS 源码后**必须 `npm run build`**（= `build:sdk` → `sync:demos` → `build:dashboard` → `tsc`）——运行入口是 `build/index.js`。改 SDK 源码同理（后端消费 `packages/procm-sdk/dist`）。
 - 源码 import **必须带 `.js` 后缀**（Node16 ESM），即使源文件是 `.ts`。
-- 新增 MCP 工具要在 `index.ts`（stdio）**和** `mcp-http.ts` 的 `registerAllTools`（HTTP `/mcp`）两处都注册——这两条路径工具集**不完全相同**（`process-input` 目前只在 stdio 注册）。
+- 新增 MCP 工具要在 `index.ts`（stdio，9 工具）**和** `mcp-http.ts` 的 `registerAllTools`（HTTP `/mcp`，8 工具）两处都注册——这两条路径工具集**不完全相同**（`process-input` 目前只在 stdio 注册）。
 - 进程能力统一在 `src/process-manager.ts`，MCP 工具层与 HTTP 层都调它；新增进程状态/日志变更记得 `dashboardEvents.emitProcessChange()`/`emitLog()` 以驱动 WS 推送。
+- room/trace 协议以 `packages/procm-sdk/src/protocol.ts` 为单一事实源（后端 `room-hub.ts` import 它），改协议先改 SDK 并重编。
 - stdio 模式下**不要往 stdout 打业务日志**（stdout 是协议通道），用 `serverLog()` 或 `console.error`。
+- 本仓服务进程由全局 `procm-mcp` 经 `procm-commands.json` 统一管理，调试前先读 [debug.md](debug.md)。
 
 详见 [claude/conventions.md](claude/conventions.md)。
 
@@ -36,8 +38,9 @@
 
 | 模块 | 职责摘要 | 入口 |
 |---|---|---|
-| 根后端（`src/`） | MCP 服务器 + HTTP 后端 + CLI 客户端 + 进程/日志领域核心 + WS 实时推送 | `src/index.ts` |
-| dashboard（`dashboard/`） | React + Vite + coss 的 Web UI，经 WebSocket 实时推送 + 同源 REST 管理进程 | `dashboard/src/main.tsx` |
+| 根后端（`src/`） | MCP 服务器（9 工具）+ HTTP 后端 + CLI 客户端 + 进程/日志/房间/追踪领域核心 + WS 双端点 | `src/index.ts` |
+| procm-sdk（`packages/procm-sdk/`） | `@procm-mcp/sdk`：房间客户端、结构化日志、函数 hook/trace、custom-execution RPC | `packages/procm-sdk/src/index.ts` |
+| dashboard（`dashboard/`） | React + Vite + coss 的 Web UI，经 WebSocket 实时推送 + 同源 REST 管理进程（含系统进程 Tab、i18n） | `dashboard/src/main.tsx` |
 
 ```mermaid
 flowchart LR
@@ -46,11 +49,14 @@ flowchart LR
     HTTPC["HTTP MCP Client (/mcp)"]
     CLI["CLI Client (ps/start/...)"]
     BR["Browser (dashboard)"]
+    SDK["@procm-mcp/sdk 进程 (demo 等)"]
   end
   subgraph 后端["procm-mcp 后端 (src/)"]
     IDX["index.ts (入口/分流)"]
     PM["process-manager.ts ★"]
     LOG["日志 (stdout-client + lowdb)"]
+    ROOM["room-hub.ts (/room)"]
+    TRACE["trace-store.ts (内存 LRU)"]
     HTTP["http-server.ts (REST + 静态 + /mcp)"]
     EVT["events.ts (EventEmitter)"]
     WS["websocket-server.ts (/ws)"]
@@ -69,11 +75,14 @@ flowchart LR
   EVT --> WS
   WS -- "实时推送 /ws" --> BR
   HTTP -- serves --> DASH
+  SDK -- "/room 消息+trace:put" --> ROOM
+  ROOM --> TRACE
+  ROOM -- "注入 PROCM_WS_URL" --> PM
 ```
 
 ## 扫描状态
 
-- **更新时间**：2026-08-14
-- **已扫描**：后端 `src/`（20 个顶层 `.ts` + `tools/` 4 个）、`tests/`（5 套 + `ws-livecheck` + helpers + fixture）、根配置（package/tsconfig/server.json/.mcp.json/.gitignore）、dashboard `src/`（组件 + lib + locales + registry）。本轮移除了已废弃的 allow-x / `allowed-process` 功能：删除 `build/` 中 3 个孤儿产物（`tools/allowed-process.js`、`allowed-process-creations.js`、`logs-repository.js`），并据当前代码重写全部索引与详情文件。
-- **跳过**：`build/`、`node_modules/`、`dashboard/dist`、`dashboard/node_modules`（产物/依赖）；`dashboard/src/registry/default/ui/*`（vendored coss 组件）；`.agents/` `.codex/` `.zcode/` `.claude/`（agent 工具配置，非项目源码）。
-- **下一步建议**：补单元测试覆盖纯函数（`validateScript`/`project-scanner`）；评估日志轮转；核实 `/mcp` 工具集与 stdio 的差异是否需要文档化补齐（`process-input` 缺席 HTTP MCP）。详见 [claude/changelog.md](claude/changelog.md)。
+- **更新时间**：2026-08-15
+- **已扫描**：后端 `src/` 全部 25 个顶层 `.ts` + `tools/` 6 个（含 8-14 后落地的 room/trace/system-processes 子域与未提交的 `resolveSpawnTarget`）、`packages/procm-sdk/src/` 全部 7 文件（100%）、`tests/`（run-all 10 套 + ws-livecheck + _smoke + fixtures）、根配置（package/tsconfig/server.json/.mcp.json/procm-commands.json）、dashboard `src/`（组件 + lib + locales + registry，组件按导出/头部抽查）。
+- **跳过**：`build/`、`node_modules/`、`dist`/`dashboard/dist`（产物/依赖）；`dashboard/src/registry/default/ui/*`（vendored coss 组件）；`.agents/` `.codex/` `.zcode/` `.claude/` `.github/`（agent/CI 配置）；`demo/`、`scripts/`、`handoff/`（仅按需浏览）。
+- **下一步建议**：dashboard 新组件（`process-list/` 13 文件、`SystemProcessList`、`TerminalLog`/`ansi`、i18n）本轮仅结构级扫描，建议下轮逐行细读更新 dashboard 详情；补单元测试覆盖纯函数（`resolveSpawnTarget`/`validateScript`/`project-scanner`）；评估日志轮转。详见 [claude/changelog.md](claude/changelog.md)。

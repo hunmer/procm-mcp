@@ -60,6 +60,38 @@ await runTest("room SDK forwarding, prefix subscriptions, and retained waitFor",
   }
 });
 
+await runTest("publish correlationId survives forwarding and round-trips on replies", async () => {
+  const port = randomPort();
+  const backend = await startBackend({ port });
+  const url = `ws://127.0.0.1:${port}/room`;
+  const requester = createProcmClient({ url, roomId: "corr-room", clientName: "requester", reconnect: false });
+  const responder = createProcmClient({ url, roomId: "corr-room", clientName: "responder", reconnect: false });
+  try {
+    await Promise.all([waitOpen(requester), waitOpen(responder)]);
+    responder.subscribe("corr:request", (message) => {
+      responder.publish("corr:reply", { seen: message.correlationId ?? null }, { correlationId: message.correlationId });
+    });
+    const replies = [];
+    requester.subscribe("corr:reply", (message) => replies.push(message));
+    await sleep(50);
+
+    requester.publish("corr:request", { hop: 1 }, { correlationId: "corr-42" });
+    requester.publish("corr:request", { hop: 2 });
+    for (let i = 0; i < 20 && replies.length < 2; i++) await sleep(25);
+
+    assertEqual(replies.length, 2, "both requests receive replies");
+    const tagged = replies.find((message) => message.correlationId === "corr-42");
+    const untagged = replies.find((message) => !message.correlationId);
+    assert(!!tagged, "reply carries the echoed correlationId");
+    assertEqual(tagged?.payload?.seen, "corr-42", "responder observes the request correlationId");
+    assert(!!untagged, "publishes without correlationId stay untagged end to end");
+  } finally {
+    requester.close();
+    responder.close();
+    stopBackend(backend);
+  }
+});
+
 await runTest("custom execution is gated by connection and can query backend and simulated UI data", async () => {
   const disconnected = createProcmClient({
     url: "ws://127.0.0.1:1/room",
@@ -138,7 +170,7 @@ await runTest("custom execution is gated by connection and can query backend and
         }
       }
       assertEqual(pageResponse?.status, 200, "backend demo serves the static HTML page");
-      assert((await pageResponse.text()).includes("async function loadElectronData()"), "HTML contains the Electron request method");
+      assert((await pageResponse.text()).includes('id="load-electron"'), "HTML contains the Electron data trigger button");
       const electronResponse = await fetch(`http://127.0.0.1:${demoPort}/api/electron-data`);
       const electronResult = await electronResponse.json();
       assertEqual(electronResponse.status, 200, "backend HTTP API queries the Electron execution target");

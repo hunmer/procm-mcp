@@ -19,6 +19,7 @@ export interface SubscribeOptions {
 }
 export interface PublishOptions {
     retain?: boolean;
+    correlationId?: string;
 }
 export interface WaitForOptions<T = JsonValue> {
     prefix?: boolean;
@@ -45,6 +46,10 @@ export declare class ProcmClient {
     constructor(options?: ProcmClientOptions);
     get connectionState(): ConnectionState;
     get pendingTraceRequestCount(): number;
+    get connectionTarget(): {
+        url: string;
+        token?: string;
+    };
     connect(): void;
     subscribe(topic: string, handler: MessageHandler, options?: SubscribeOptions): () => void;
     publish(topic: string, payload: JsonValue, options?: PublishOptions): string;

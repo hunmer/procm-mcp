@@ -19,4 +19,9 @@ export interface TraceEnvelope<T extends JsonValue = JsonValue> {
     data: T;
 }
 export declare function saveTrace<T extends JsonValue>(client: ProcmClient, data: T, options?: SaveTraceOptions): Promise<string>;
+export interface GetTraceOptions {
+    timeout?: number;
+    signal?: AbortSignal;
+}
+export declare function getTrace(client: ProcmClient, id: string, options?: GetTraceOptions): Promise<TraceEnvelope>;
 //# sourceMappingURL=trace.d.ts.map

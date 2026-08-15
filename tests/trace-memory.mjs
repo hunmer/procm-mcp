@@ -1,5 +1,5 @@
 import { WebSocket } from "ws";
-import { createHook, createProcmClient, saveTrace } from "@procm-mcp/sdk";
+import { createHook, createProcmClient, getTrace, saveTrace } from "@procm-mcp/sdk";
 import {
   assert,
   assertEqual,
@@ -37,7 +37,7 @@ function waitOpen(target, timeout = 5_000) {
   });
 }
 
-async function getTrace(id) {
+async function getTraceViaMcp(id) {
   const response = await mcpHttp(port, `trace-${Date.now()}-${Math.random()}`, "tools/call", {
     name: "trace-get",
     arguments: { id },
@@ -48,7 +48,7 @@ async function getTrace(id) {
 async function waitForTrace(id, timeout = 3_000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
-    const result = await getTrace(id);
+    const result = await getTraceViaMcp(id);
     if (result.ok) return result.trace;
     await sleep(25);
   }
@@ -85,7 +85,7 @@ function rawTraceFrame(frame) {
 await runTest("SDK saves a versioned trace readable through HTTP Stream MCP", async () => {
   await waitOpen(client);
   const id = await saveTrace(client, { case: "basic", value: 42 });
-  const result = await getTrace(id);
+  const result = await getTraceViaMcp(id);
   assertEqual(result.ok, true, "trace-get succeeds in the same procm-mcp instance");
   assertEqual(result.trace.version, 1, "stored envelope is versioned");
   assertEqual(result.trace.traceId, id, "resolved ID matches stored trace ID");
@@ -95,10 +95,25 @@ await runTest("SDK saves a versioned trace readable through HTTP Stream MCP", as
   assertEqual(result.trace.data.value, 42, "payload is preserved");
 });
 
+await runTest("SDK getTrace reads and rejects traces over HTTP Stream MCP", async () => {
+  const id = await saveTrace(client, { case: "sdk-get", value: 7 });
+  const envelope = await getTrace(client, id);
+  assertEqual(envelope.traceId, id, "SDK getTrace resolves the stored trace ID");
+  assertEqual(envelope.roomId, "trace-room", "SDK getTrace returns the stored envelope");
+  assertEqual(envelope.data.value, 7, "SDK getTrace preserves the payload");
+  let missing;
+  try {
+    await getTrace(client, "does-not-exist");
+  } catch (error) {
+    missing = error;
+  }
+  assert(missing instanceof Error, "SDK getTrace throws for missing traces");
+});
+
 await runTest("concurrent saves remain correlated without pending leaks", async () => {
   const values = Array.from({ length: 20 }, (_, index) => index);
   const ids = await Promise.all(values.map((index) => saveTrace(client, { index })));
-  const rows = await Promise.all(ids.map((id) => getTrace(id)));
+  const rows = await Promise.all(ids.map((id) => getTraceViaMcp(id)));
   assertEqual(new Set(ids).size, 20, "20 concurrent saves return unique IDs");
   assert(rows.every((row, index) => row.trace.data.index === index), "concurrent responses remain correlated");
   assertEqual(client.pendingTraceRequestCount, 0, "no pending request remains after concurrency");
@@ -110,13 +125,13 @@ await runTest("conflict, TTL, size, and server validation are enforced", async (
   let conflictCode;
   try { await saveTrace(client, { version: 2 }, { id: conflictId }); } catch (error) { conflictCode = error.code; }
   assertEqual(conflictCode, "TRACE_STORE_CONFLICT", "explicit duplicate ID returns stable conflict code");
-  assertEqual((await getTrace(conflictId)).trace.data.version, 1, "duplicate does not overwrite original data");
+  assertEqual((await getTraceViaMcp(conflictId)).trace.data.version, 1, "duplicate does not overwrite original data");
 
   const expiryId = await saveTrace(client, { expires: true }, { ttlSeconds: 1 });
   const deadline = Date.now() + 3_000;
   let expired;
   while (Date.now() < deadline) {
-    expired = await getTrace(expiryId);
+    expired = await getTraceViaMcp(expiryId);
     if (!expired.ok) break;
     await sleep(25);
   }
@@ -138,7 +153,7 @@ await runTest("conflict, TTL, size, and server validation are enforced", async (
     payload: { text: "x".repeat(262_144) },
   });
   assertEqual(raw.code, "TRACE_INVALID_PAYLOAD", "server independently rejects oversized payload");
-  assertEqual((await getTrace(rawId)).error.code, "TRACE_NOT_FOUND", "server rejection leaves no cache entry");
+  assertEqual((await getTraceViaMcp(rawId)).error.code, "TRACE_NOT_FOUND", "server rejection leaves no cache entry");
 
   const rawTtl = await rawTraceFrame({
     version: 1,
@@ -152,8 +167,8 @@ await runTest("conflict, TTL, size, and server validation are enforced", async (
 });
 
 await runTest("trace-get returns stable missing and invalid ID errors", async () => {
-  assertEqual((await getTrace(`missing_${Date.now()}`)).error.code, "TRACE_NOT_FOUND", "missing ID returns stable code");
-  assertEqual((await getTrace("bad id!")).error.code, "TRACE_INVALID_ID", "invalid ID returns stable code");
+  assertEqual((await getTraceViaMcp(`missing_${Date.now()}`)).error.code, "TRACE_NOT_FOUND", "missing ID returns stable code");
+  assertEqual((await getTraceViaMcp("bad id!")).error.code, "TRACE_INVALID_ID", "invalid ID returns stable code");
 });
 
 await runTest("function hooks store returned, resolved, and rejected traces", async () => {

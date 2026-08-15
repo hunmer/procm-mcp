@@ -37,6 +37,7 @@ export interface SubscribeOptions {
 
 export interface PublishOptions {
   retain?: boolean;
+  correlationId?: string;
 }
 
 export interface WaitForOptions<T = JsonValue> {
@@ -97,6 +98,16 @@ export class ProcmClient {
     return this.pendingTraceRequests.size;
   }
 
+  // Resolved WebSocket connection target (raw URL + optional auth token) as
+  // used by connect(). Exposed so companion transports, e.g. the MCP HTTP
+  // endpoint derived in trace.ts, can reach the same backend.
+  get connectionTarget(): { url: string; token?: string } {
+    return {
+      url: this.options.url ?? env("PROCM_WS_URL") ?? "",
+      token: this.options.token ?? env("PROCM_HTTP_TOKEN"),
+    };
+  }
+
   connect(): void {
     if (this.disposed || this.socket?.readyState === WebSocket.OPEN || this.socket?.readyState === WebSocket.CONNECTING) return;
     const rawUrl = this.options.url ?? env("PROCM_WS_URL");
@@ -150,6 +161,7 @@ export class ProcmClient {
       timestamp: Date.now(),
       payload,
       retain: options.retain,
+      correlationId: options.correlationId,
     });
     return messageId;
   }

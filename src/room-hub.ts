@@ -166,6 +166,7 @@ export function attachRoomSocket(socket: WebSocket): void {
         timestamp: Date.now(),
         payload: frame.payload as JsonValue,
         retain: frame.retain,
+        correlationId: frame.correlationId,
       };
       if (frame.retain) {
         let retained = retainedByRoom.get(session.roomId);
