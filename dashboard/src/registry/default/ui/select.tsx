@@ -81,12 +81,18 @@ export function SelectBackdrop({
 // Base UI requires Select.Popup to live inside a Select.Positioner. To keep
 // call sites simple, SelectPopup wraps the popup in a Positioner automatically
 // (and through a Portal so it escapes any overflow-hidden ancestors).
+// `portalProps` forwards to the Portal (e.g. container to keep the popup
+// inside a dialog's DOM — otherwise it portals to <body> and modal dialogs
+// don't recognize it as part of their subtree).
 export function SelectPopup({
   className,
+  portalProps,
   ...props
-}: SelectPrimitive.Popup.Props): React.ReactElement {
+}: SelectPrimitive.Popup.Props & {
+  portalProps?: SelectPrimitive.Portal.Props;
+}): React.ReactElement {
   return (
-    <SelectPrimitive.Portal>
+    <SelectPrimitive.Portal {...portalProps}>
       <SelectPrimitive.Positioner
         align="start"
         sideOffset={4}

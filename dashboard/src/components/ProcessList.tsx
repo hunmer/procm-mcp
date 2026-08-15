@@ -150,6 +150,7 @@ function GroupSection({
   onClearUngrouped,
 }: GroupSectionProps) {
   const { t } = useTranslation();
+  const runningCount = g.processes.filter(canStopProcess).length;
   return (
     <Frame className="w-full">
       <Collapsible defaultOpen={defaultOpen} onOpenChange={onOpenChange}>
@@ -169,6 +170,15 @@ function GroupSection({
             </Badge>
           </CollapsibleTrigger>
           <div className="flex items-center gap-0.5">
+            {runningCount > 0 && (
+              <Badge
+                variant="success"
+                className="mr-1 tabular-nums"
+                title={t("processes.runningCountTitle", { count: runningCount })}
+              >
+                {runningCount}
+              </Badge>
+            )}
             {looksLikePath(g.label) && (
               <Button
                 size="icon-sm"

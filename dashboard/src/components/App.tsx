@@ -12,11 +12,8 @@ import {
   ActivityIcon,
   FlaskConicalIcon,
   HistoryIcon,
-  LanguagesIcon,
   ListIcon,
-  MoonIcon,
   PanelLeftOpenIcon,
-  SunIcon,
   TrashIcon,
 } from "lucide-react";
 import {
@@ -31,12 +28,11 @@ import { Playground } from "./playground/Playground";
 import { Toast } from "./Toast";
 import { DevInspector } from "./DevInspector";
 import { ImportGroupDialog } from "./ImportGroupDialog";
-import { useTheme } from "@/lib/useTheme";
-import { useLanguage } from "@/lib/useLanguage";
-import { LANGUAGES } from "@/i18n";
+import { SettingsDialog } from "./SettingsDialog";
 import { useDashboardSocket } from "@/lib/ws";
 import {
   clearAllProcesses,
+  clearLogFiles,
   listProcesses,
   openFolder,
   setProcessFavorite,
@@ -85,12 +81,15 @@ export function App() {
   const [activeTab, setActiveTab] = useState<
     "processes" | "system" | "history" | "playground"
   >("processes");
-  const { theme, toggle } = useTheme();
-  const { language, changeLanguage } = useLanguage();
   const { t } = useTranslation();
 
   // "Clear all" confirmation dialog — stop + delete every process at once.
   const [clearAllOpen, setClearAllOpen] = useState(false);
+  // "Clear logs" confirmation dialog (history tab) — delete every history log
+  // file except those of running processes.
+  const [clearLogsOpen, setClearLogsOpen] = useState(false);
+  // Bumped after a bulk log clear so the mounted LogFilesView re-lists.
+  const [logFilesReloadKey, setLogFilesReloadKey] = useState(0);
 
   const { status, reconnectInMs, onLogMessage } = useDashboardSocket();
 
@@ -267,6 +266,32 @@ export function App() {
   }
 
   const processes = data?.processes ?? [];
+
+  // Delete every history log file except those of running processes (skipped
+  // server-side because they're still being written). Bump the reload key so
+  // the mounted LogFilesView re-lists its files.
+  async function handleClearLogs() {
+    setClearLogsOpen(false);
+    try {
+      const { deleted, skipped } = await clearLogFiles();
+      setLogFilesReloadKey((k) => k + 1);
+      if (deleted.length === 0 && skipped.length === 0) {
+        showToast(t("toasts.noLogFilesCleared"));
+      } else if (skipped.length > 0) {
+        showToast(
+          t("toasts.logFilesClearedPartial", {
+            deleted: deleted.length,
+            skipped: skipped.length,
+          }),
+        );
+      } else {
+        showToast(t("toasts.logFilesCleared", { count: deleted.length }));
+      }
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : String(err), true);
+    }
+  }
+
   // Live (non-stopped, running) processes — shown as a badge in the header.
   const runningCount = processes.filter(
     (p) => p.stoppedAt == null && p.status === "running",
@@ -282,64 +307,30 @@ export function App() {
           : t("header.statusReconnecting");
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="bg-card sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3.5">
-        {/* Left: live WS connection indicator + server uptime. */}
-        <div className="flex items-center gap-3">
-          <span
-            className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs text-muted-foreground"
-            title={statusMeta}
-          >
-            <span
-              className={
-                "inline-block size-2 rounded-full " +
-                (status === "open"
-                  ? "bg-green-500"
-                  : status === "connecting"
-                    ? "bg-yellow-500"
-                    : "bg-red-500")
-              }
-            />
-            {statusMeta}
-          </span>
-          {uptime && (
-            <span
-              className="text-muted-foreground font-mono text-xs tabular-nums"
-              title={t("header.serverUptime")}
-            >
-              {uptime}
-            </span>
-          )}
-        </div>
-        {/* Right: actions. */}
-        <div className="flex items-center gap-2">
+    <div className="flex h-full">
+      {/* Left rail: WS status dot on top, icon-only actions pinned to the
+          bottom. The text details (connection state, uptime) live in the dot's
+          title. */}
+      <header className="bg-card z-10 flex w-[60px] shrink-0 flex-col items-center border-r py-3">
+        <span
+          className={
+            "mt-1 inline-block size-2.5 shrink-0 rounded-full " +
+            (status === "open"
+              ? "bg-green-500"
+              : status === "connecting"
+                ? "bg-yellow-500"
+                : "bg-red-500")
+          }
+          title={`${statusMeta}${uptime ? ` · ${uptime}` : ""}`}
+          aria-label={statusMeta}
+        />
+        <div className="mt-auto flex flex-col items-center gap-2">
           <ImportGroupDialog onToast={showToast} />
           <NewProcessDialog
             onStarted={(id) => showToast(t("toasts.started", { id }))}
             onError={(m) => showToast(m, true)}
           />
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label={t("header.switchLanguage")}
-            title={t("header.switchLanguage")}
-            onClick={() => {
-              const idx = LANGUAGES.indexOf(language);
-              changeLanguage(LANGUAGES[(idx + 1) % LANGUAGES.length]);
-            }}
-          >
-            <LanguagesIcon />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label={t("header.switchToTheme", {
-              theme: theme === "dark" ? t("common.lightTheme") : t("common.darkTheme"),
-            })}
-            onClick={toggle}
-          >
-            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-          </Button>
+          <SettingsDialog processes={processes} onToast={showToast} />
         </div>
       </header>
 
@@ -408,6 +399,17 @@ export function App() {
                     <TrashIcon />
                   </Button>
                 )}
+                {activeTab === "history" && (
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    aria-label={t("header.clearLogsTitle")}
+                    title={t("header.clearLogsTitle")}
+                    onClick={() => setClearLogsOpen(true)}
+                  >
+                    <TrashIcon />
+                  </Button>
+                )}
               </div>
             </div>
             {activeTab === "processes" ? (
@@ -445,7 +447,7 @@ export function App() {
             ) : activeTab === "playground" ? (
               <Playground />
             ) : (
-              <LogFilesView />
+              <LogFilesView reloadKey={logFilesReloadKey} />
             )}
           </div>
         </main>
@@ -479,6 +481,7 @@ export function App() {
         open={detailsOpen}
         onOpenChange={setDetailsOpen}
         viewProcess={viewing}
+        onToast={showToast}
       />
 
       {/* Clear-all confirmation: stop + delete every process at once. The
@@ -500,6 +503,30 @@ export function App() {
               onClick={handleClearAll}
             >
               {t("header.clearAll")}
+            </AlertDialogClose>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+
+      {/* Clear-logs confirmation (history tab): delete every on-disk log file
+          except those of running processes — the backend skips those. */}
+      <AlertDialog open={clearLogsOpen} onOpenChange={setClearLogsOpen}>
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("header.clearLogsQuestion")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("header.clearLogsDescription")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="ghost" />}>
+              {t("common.cancel")}
+            </AlertDialogClose>
+            <AlertDialogClose
+              render={<Button variant="destructive" />}
+              onClick={handleClearLogs}
+            >
+              {t("header.clearLogs")}
             </AlertDialogClose>
           </AlertDialogFooter>
         </AlertDialogPopup>

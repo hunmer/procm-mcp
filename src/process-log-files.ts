@@ -1,5 +1,5 @@
 import path from "path";
-import { readdir, stat } from "fs/promises";
+import { readdir, stat, unlink } from "fs/promises";
 import { getProcess, getProcessRecord, listProcessRecords } from "./process-manager.js";
 import { logServerId } from "./server-log.js";
 import { ServerDir } from "./server-dir.js";
@@ -81,4 +81,29 @@ export async function listProcessLogFiles(): Promise<ProcessLogFile[]> {
 
   return files.filter((file): file is ProcessLogFile => file !== null)
     .sort((a, b) => b.modifiedAt - a.modifiedAt);
+}
+
+// Bulk-delete the on-disk log files listed by listProcessLogFiles, skipping
+// files still owned by a live running/spawning process (their writers stay
+// open, so the files must not be removed mid-write). A file that can't be
+// unlinked (locked, already gone) is reported as skipped instead of failing
+// the whole batch.
+export async function deleteProcessLogFiles(): Promise<{
+  deleted: string[];
+  skipped: string[];
+}> {
+  const deleted: string[] = [];
+  const skipped: string[] = [];
+  for (const file of await listProcessLogFiles()) {
+    const live = getProcess(file.processId);
+    if (live && (live.status === "running" || live.status === "spawning")) {
+      skipped.push(file.name);
+      continue;
+    }
+    await unlink(file.path).then(
+      () => deleted.push(file.name),
+      () => skipped.push(file.name),
+    );
+  }
+  return { deleted, skipped };
 }

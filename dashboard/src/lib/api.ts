@@ -57,6 +57,30 @@ export function setProcessFavorite(id: string, favorite: boolean): Promise<Proce
   return api<ProcessView>("PATCH", `/api/processes/${encodeURIComponent(id)}`, { favorite });
 }
 
+// Editable fields of a process record. Only the provided keys are merged
+// server-side; undefined keys keep their current value. Editing a running
+// process doesn't restart it — new launch fields apply on the next restart.
+export interface UpdateProcessBody {
+  name?: string;
+  script?: string;
+  args?: string[];
+  cwd?: string;
+  desc?: string | null;
+  port?: number | null;
+  envs?: Record<string, string>;
+}
+
+export function updateProcess(
+  id: string,
+  body: UpdateProcessBody,
+): Promise<ProcessView> {
+  return api<ProcessView>(
+    "PATCH",
+    `/api/processes/${encodeURIComponent(id)}`,
+    body,
+  );
+}
+
 export function getLogs(
   id: string,
   stream: "stdout" | "stderr",
@@ -160,6 +184,19 @@ export function readLogFileContent(
   return api<{ path: string; text: string; truncated: boolean }>(
     "GET",
     `/api/log-files/content?path=${encodeURIComponent(path)}`,
+  );
+}
+
+// Bulk-delete every on-disk process log file whose owning process is not
+// currently running (running processes' files are still being written, so the
+// backend skips them). Returns the deleted and skipped file names.
+export function clearLogFiles(): Promise<{
+  deleted: string[];
+  skipped: string[];
+}> {
+  return api<{ deleted: string[]; skipped: string[] }>(
+    "DELETE",
+    "/api/log-files",
   );
 }
 

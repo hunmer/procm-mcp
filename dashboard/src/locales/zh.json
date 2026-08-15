@@ -32,6 +32,10 @@
     "clearAllQuestion": "要清除全部进程吗？",
     "clearAllDescription": "这将停止并删除全部 {{count}} 个进程。此操作无法撤销。",
     "clearAllDescription_other": "这将停止并删除全部 {{count}} 个进程。此操作无法撤销。",
+    "clearLogs": "清空日志",
+    "clearLogsTitle": "清空日志列表",
+    "clearLogsQuestion": "要清空日志列表吗？",
+    "clearLogsDescription": "将删除所有已停止进程的日志文件，运行中进程的日志会被保留。此操作无法撤销。",
     "serverUptime": "服务运行时长",
     "newProcess": "新建进程",
     "switchToTheme": "切换到{{theme}}主题",
@@ -105,6 +109,7 @@
     "openPortAria": "在新标签页打开 http://localhost:{{port}}",
     "openPortTitle": "打开 http://localhost:{{port}}",
     "clearUngroupedAria": "清空未分组",
+    "runningCountTitle": "{{count}} 个运行中",
     "clearUngroupedTitle": "清空（结束运行中的进程并从列表移除）",
     "clearUngroupedQuestion": "要清空未分组吗？",
     "clearUngroupedDescription": "将结束 {{running}} 个运行中的进程，并从列表移除全部 {{processes}} 条进程记录和 {{favorites}} 个收藏。此操作无法撤销。"
@@ -288,7 +293,7 @@
       "submit": "启动进程"
     },
     "details": {
-      "title": "进程详情",
+      "title": "编辑进程",
       "description": "{{name}} · {{id}}"
     },
     "favorite": {
@@ -394,7 +399,30 @@
     "started": "已启动：{{id}}",
     "cleared_one": "已清除 {{count}} 个进程",
     "cleared_other": "已清除 {{count}} 个进程",
-    "clearedPartial": "已清除 {{deleted}} 个，{{notFound}} 个未找到"
+    "clearedPartial": "已清除 {{deleted}} 个，{{notFound}} 个未找到",
+    "logFilesCleared_one": "已清空 {{count}} 个日志文件",
+    "logFilesCleared_other": "已清空 {{count}} 个日志文件",
+    "logFilesClearedPartial": "已清空 {{deleted}} 个日志文件，保留 {{skipped}} 个运行中",
+    "noLogFilesCleared": "没有可清空的日志文件"
+  },
+  "settings": {
+    "title": "设置",
+    "description": "管理控制台的偏好设置与数据。",
+    "tabGeneral": "常规",
+    "tabData": "数据",
+    "languageLabel": "语言",
+    "languageDesc": "界面显示语言，更改后立即生效。",
+    "themeLabel": "主题",
+    "themeDesc": "浅色或深色外观。",
+    "dataDesc": "导入/导出进程列表 JSON 文件。",
+    "processCount": "当前进程：{{count}} 个。",
+    "export": "导出进程列表",
+    "import": "导入进程列表",
+    "importHelp": "导入的进程将保存为收藏记录，不会自动启动。",
+    "badFile": "文件格式不正确：需要进程数组或 { \"processes\": [...] } 结构",
+    "exportDone": "已导出 {{count}} 个进程",
+    "importDone_one": "已导入 {{count}} 个进程",
+    "importDone_other": "已导入 {{count}} 个进程"
   },
   "devInspector": {
     "title": "检查 React 组件源码 ({{hotkey}})"

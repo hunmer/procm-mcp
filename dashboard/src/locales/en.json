@@ -32,6 +32,10 @@
     "clearAllQuestion": "Clear all processes?",
     "clearAllDescription": "This will stop and delete all {{count}} process. This action cannot be undone.",
     "clearAllDescription_other": "This will stop and delete all {{count}} processes. This action cannot be undone.",
+    "clearLogs": "Clear logs",
+    "clearLogsTitle": "Clear the log list",
+    "clearLogsQuestion": "Clear the log list?",
+    "clearLogsDescription": "Deletes the log files of stopped processes; logs of running processes are kept. This action cannot be undone.",
     "serverUptime": "Server uptime",
     "newProcess": "New process",
     "switchToTheme": "Switch to {{theme}} theme",
@@ -105,6 +109,7 @@
     "openPortAria": "Open http://localhost:{{port}} in a new tab",
     "openPortTitle": "Open http://localhost:{{port}}",
     "clearUngroupedAria": "Clear ungrouped",
+    "runningCountTitle": "{{count}} running",
     "clearUngroupedTitle": "Clear (stop running processes and remove from list)",
     "clearUngroupedQuestion": "Clear the ungrouped list?",
     "clearUngroupedDescription": "Stops {{running}} running process(es) and removes all {{processes}} process records and {{favorites}} favorites from the list. This cannot be undone."
@@ -288,7 +293,7 @@
       "submit": "Start process"
     },
     "details": {
-      "title": "Process details",
+      "title": "Edit process",
       "description": "{{name}} · {{id}}"
     },
     "favorite": {
@@ -394,7 +399,28 @@
     "started": "Started: {{id}}",
     "cleared_one": "Cleared {{count}} process",
     "cleared_other": "Cleared {{count}} processes",
-    "clearedPartial": "Cleared {{deleted}}, {{notFound}} not found"
+    "clearedPartial": "Cleared {{deleted}}, {{notFound}} not found",
+    "logFilesCleared_one": "Cleared {{count}} log file",
+    "logFilesCleared_other": "Cleared {{count}} log files",
+    "logFilesClearedPartial": "Cleared {{deleted}} log files, kept {{skipped}} running",
+    "noLogFilesCleared": "No log files to clear"
+  },
+  "settings": {
+    "title": "Settings",
+    "description": "Manage dashboard preferences and data.",
+    "tabGeneral": "General",
+    "tabData": "Data",
+    "languageLabel": "Language",
+    "themeLabel": "Theme",
+    "dataDesc": "Import/export the process list as a JSON file.",
+    "processCount": "Current processes: {{count}}.",
+    "export": "Export process list",
+    "import": "Import process list",
+    "importHelp": "Imported processes are saved as favorite records and are not started automatically.",
+    "badFile": "Invalid file: expected an array of processes or a { \"processes\": [...] } object",
+    "exportDone": "Exported {{count}} processes",
+    "importDone_one": "Imported {{count}} process",
+    "importDone_other": "Imported {{count}} processes"
   },
   "devInspector": {
     "title": "Inspect React component source ({{hotkey}})"

@@ -204,6 +204,45 @@ export async function setProcessFavorite(id: string, favorite: boolean): Promise
   return true;
 }
 
+// Merge user-edited fields into a live process and/or its durable record. Only
+// the provided keys are applied; everything else keeps its current value.
+// Editing a running process never restarts it — the new script/args/cwd/envs
+// simply take effect the next time it is (re)started.
+export type ProcessFieldUpdates = {
+  name?: string;
+  script?: string;
+  args?: string[];
+  cwd?: string;
+  desc?: string | null;
+  port?: number | null;
+  envs?: Record<string, string>;
+};
+
+export async function updateProcessFields(
+  id: string,
+  updates: ProcessFieldUpdates,
+): Promise<boolean> {
+  const live = getProcess(id);
+  if (live) {
+    if (updates.name !== undefined) live.name = updates.name;
+    if (updates.script !== undefined) live.script = updates.script;
+    if (updates.args !== undefined) live.args = updates.args;
+    if (updates.cwd !== undefined) live.cwd = updates.cwd;
+    if (updates.desc !== undefined) live.desc = updates.desc;
+    if (updates.port !== undefined) live.port = updates.port;
+    if (updates.envs !== undefined) live.envs = updates.envs;
+    await persist(live);
+    dashboardEvents.emitProcessChange();
+    return true;
+  }
+  const repo = await ensureRepository();
+  const record = await repo.getById(id);
+  if (!record) return false;
+  await repo.upsert({ ...record, ...updates });
+  dashboardEvents.emitProcessChange();
+  return true;
+}
+
 export async function saveProcessRecord(input: {
   name?: string;
   script: string;

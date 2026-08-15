@@ -23,6 +23,8 @@ import {
   pushProcess,
   sendProcessInput,
   setProcessFavorite,
+  updateProcessFields,
+  type ProcessFieldUpdates,
   saveProcessRecord,
 } from "./process-manager.js";
 import type { ProcessRecord } from "./processes-repository.js";
@@ -36,7 +38,7 @@ import { queryRoomLogs } from "./room-logs.js";
 import { scanProjectCommands } from "./project-scanner.js";
 import { listSystemProcesses, killProcessTree, findProcessByPort } from "./system-processes.js";
 import { ProcmMcpDir } from "./procm-mcp-dir.js";
-import { listProcessLogFiles } from "./process-log-files.js";
+import { listProcessLogFiles, deleteProcessLogFiles } from "./process-log-files.js";
 
 const HOST = "127.0.0.1";
 
@@ -577,6 +579,15 @@ function createRequestHandler(token: string | undefined) {
       // Powers the dashboard's history-log tab.
       if (method === "GET" && pathname === "/api/log-files") {
         json(res, 200, { files: await listProcessLogFiles() });
+        return;
+      }
+
+      // DELETE /api/log-files -> bulk-delete the on-disk process log files
+      // whose owning process is not currently running (live running/spawning
+      // processes keep their files — they are still being written). Returns
+      // { deleted, skipped } file-name lists.
+      if (method === "DELETE" && pathname === "/api/log-files") {
+        json(res, 200, await deleteProcessLogFiles());
         return;
       }
 
@@ -1129,14 +1140,35 @@ function createRequestHandler(token: string | undefined) {
           return;
         }
 
-        // PATCH /api/processes/:id -> update persisted UI metadata.
+        // PATCH /api/processes/:id -> merge user-edited fields (and/or the
+        // persisted UI favorite flag) into the live process and its record.
         if (method === "PATCH" && !action) {
           const body = JSON.parse((await readBody(req)) || "{}");
-          if (typeof body.favorite !== "boolean") {
-            json(res, 400, { error: "favorite must be a boolean" });
+          const updates: ProcessFieldUpdates & { favorite?: boolean } = {};
+          if (typeof body.name === "string" && body.name.trim())
+            updates.name = body.name.trim();
+          if (typeof body.script === "string" && body.script.trim())
+            updates.script = body.script.trim();
+          if (Array.isArray(body.args) && body.args.every((a: unknown) => typeof a === "string"))
+            updates.args = body.args as string[];
+          if (typeof body.cwd === "string" && body.cwd.trim())
+            updates.cwd = body.cwd.trim();
+          if (typeof body.desc === "string")
+            updates.desc = body.desc.trim() || null;
+          if (body.port === null) updates.port = null;
+          else if (typeof body.port === "number" && Number.isInteger(body.port) && body.port >= 1 && body.port <= 65535)
+            updates.port = body.port;
+          if (body.envs && typeof body.envs === "object" && !Array.isArray(body.envs))
+            updates.envs = body.envs as Record<string, string>;
+          if (typeof body.favorite === "boolean") updates.favorite = body.favorite;
+          if (Object.keys(updates).length === 0) {
+            json(res, 400, { error: "No valid fields to update" });
             return;
           }
-          const updated = await setProcessFavorite(idParam, body.favorite);
+          if (updates.favorite !== undefined) {
+            await setProcessFavorite(idParam, updates.favorite);
+          }
+          const updated = await updateProcessFields(idParam, updates);
           if (!updated) {
             json(res, 404, { error: "Process not found" });
             return;

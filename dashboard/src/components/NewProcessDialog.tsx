@@ -20,7 +20,7 @@ import {
   FieldLabel,
 } from "@/registry/default/ui/field";
 import { PlusIcon, ZapIcon } from "lucide-react";
-import { parseEnvs, startProcess } from "@/lib/api";
+import { parseEnvs, startProcess, updateProcess } from "@/lib/api";
 import { applyPreset, useProcessPresets } from "@/lib/presets";
 import type { ProcessView } from "@/lib/types";
 
@@ -29,13 +29,15 @@ interface NewProcessDialogProps {
   onError: (message: string) => void;
 }
 
-// Optional controlled "view details" mode. When `viewProcess` is provided the
-// dialog opens read-only, pre-filled with that process's fields — reused from
-// the new-process form so the two share one layout.
+// Optional controlled "edit" mode. When `viewProcess` is provided the dialog
+// opens pre-filled with that process's fields; saving merges the edited fields
+// back into the process record (a running process isn't restarted — the new
+// launch fields apply on the next restart).
 export interface ProcessDetailsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   viewProcess: ProcessView | null;
+  onToast: (message: string, isError?: boolean) => void;
 }
 
 // coss form-in-dialog invariant: DialogHeader stays OUTSIDE the form;
@@ -103,9 +105,12 @@ export function NewProcessDialog({ onStarted, onError }: NewProcessDialogProps) 
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button />}>
+      <DialogTrigger
+        render={<Button variant="outline" size="icon" />}
+        aria-label={t("header.newProcess")}
+        title={t("header.newProcess")}
+      >
         <PlusIcon />
-        {t("header.newProcess")}
       </DialogTrigger>
       <DialogPopup>
         <DialogHeader>
@@ -132,14 +137,16 @@ export function NewProcessDialog({ onStarted, onError }: NewProcessDialogProps) 
   );
 }
 
-// Read-only details dialog. Reuses the same form layout but pre-fills from a
-// process and disables submission.
+// Edit-process dialog. Reuses the same form layout as the new-process dialog,
+// pre-filled from the process; submit merges the edits into its record.
 export function ProcessDetailsDialog({
   open,
   onOpenChange,
   viewProcess,
+  onToast,
 }: ProcessDetailsDialogProps) {
   const { t } = useTranslation();
+  const [submitting, setSubmitting] = useState(false);
   const [fields, setFields] = useState({
     name: "",
     script: "",
@@ -150,6 +157,10 @@ export function ProcessDetailsDialog({
     port: "",
   });
 
+  function set<K extends keyof typeof fields>(key: K, v: string) {
+    setFields((f) => ({ ...f, [key]: v }));
+  }
+
   // Sync the form from the process whenever the dialog is opened to a new one.
   useEffect(() => {
     if (open && viewProcess) {
@@ -159,11 +170,48 @@ export function ProcessDetailsDialog({
         args: viewProcess.args.join(" "),
         cwd: viewProcess.cwd,
         desc: viewProcess.desc ?? "",
-        envs: "", // envs are not exposed in the public view by design
+        envs: "", // envs are not exposed in the public view by design; empty = keep current
         port: viewProcess.port ? String(viewProcess.port) : "",
       });
     }
   }, [open, viewProcess]);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const script = fields.script.trim();
+    const cwd = fields.cwd.trim();
+    if (!viewProcess || !script || !cwd) {
+      onToast(t("dialogs.newProcess.validationError"), true);
+      return;
+    }
+    const portTrimmed = fields.port.trim();
+    const portNum = portTrimmed === "" ? null : Number(portTrimmed);
+    if (
+      portNum !== null &&
+      (!Number.isInteger(portNum) || portNum < 1 || portNum > 65535)
+    ) {
+      onToast(t("dialogs.newProcess.portValidationError"), true);
+      return;
+    }
+    const envsText = fields.envs.trim();
+    setSubmitting(true);
+    try {
+      await updateProcess(viewProcess.id, {
+        name: fields.name.trim() || undefined,
+        script,
+        args: fields.args.trim() ? fields.args.trim().split(/\s+/) : [],
+        cwd,
+        desc: fields.desc.trim() || null,
+        port: portNum,
+        envs: envsText ? parseEnvs(envsText) : undefined,
+      });
+      onOpenChange(false);
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : String(err), true);
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -185,18 +233,18 @@ export function ProcessDetailsDialog({
           envs={fields.envs}
           port={fields.port}
           setters={{
-            setName: () => {},
-            setScript: () => {},
-            setArgs: () => {},
-            setCwd: () => {},
-            setDesc: () => {},
-            setEnvs: () => {},
-            setPort: () => {},
+            setName: (v) => set("name", v),
+            setScript: (v) => set("script", v),
+            setArgs: (v) => set("args", v),
+            setCwd: (v) => set("cwd", v),
+            setDesc: (v) => set("desc", v),
+            setEnvs: (v) => set("envs", v),
+            setPort: (v) => set("port", v),
           }}
           presets={[]}
-          readOnly
-          submitting={false}
-          onSubmit={(e) => e.preventDefault()}
+          submitting={submitting}
+          submitLabel={t("common.save")}
+          onSubmit={handleSubmit}
         />
       </DialogPopup>
     </Dialog>

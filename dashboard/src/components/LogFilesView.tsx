@@ -45,7 +45,9 @@ function formatTime(ts: number): string {
 }
 
 // One row in the left-hand file list: process name (or id), a stdout/stderr
-// badge, and the file's size + last-modified time.
+// badge, and the file's size + last-modified time. When the owning process is
+// live and running (its record status says so), a green badge marks the file
+// as still being written to.
 function LogFileRow({
   file,
   active,
@@ -55,6 +57,8 @@ function LogFileRow({
   active: boolean;
   onSelect: () => void;
 }) {
+  const { t } = useTranslation();
+  const running = file.status === "running" || file.status === "spawning";
   return (
     <button
       type="button"
@@ -68,6 +72,12 @@ function LogFileRow({
         <span className="min-w-0 flex-1 truncate font-mono text-xs font-medium">
           {file.processName ?? file.processId}
         </span>
+        {running && (
+          <Badge variant="success" className="gap-1 px-1 text-[10px]">
+            <span className="inline-block size-1.5 rounded-full bg-current" />
+            {t("status.running")}
+          </Badge>
+        )}
         <Badge
           variant={file.stream === "stderr" ? "warning" : "secondary"}
           className="shrink-0 px-1 text-[10px]"
@@ -95,10 +105,14 @@ function LogFileRow({
 export function LogFilesView({
   processId,
   className,
+  reloadKey = 0,
 }: {
   // Restrict the list to one process's files; null/undefined shows everything.
   processId?: string | null;
   className?: string;
+  // Bump to re-run loadList while mounted (e.g. after the parent cleared
+  // log files through the bulk-delete API).
+  reloadKey?: number;
 }) {
   const { t } = useTranslation();
   const [files, setFiles] = useState<LogFileSummary[]>([]);
@@ -135,7 +149,7 @@ export function LogFilesView({
 
   useEffect(() => {
     void loadList();
-  }, [loadList]);
+  }, [loadList, reloadKey]);
 
   // Load the selected file's content whenever the selection (or a refresh)
   // changes it. Cancelled flips on cleanup so a stale response can't land.
