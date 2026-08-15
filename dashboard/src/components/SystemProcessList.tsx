@@ -281,7 +281,7 @@ export function SystemProcessList({
         cell: ({ row }) => {
           const r = row.original;
           return (
-            <div className="flex items-baseline gap-1.5">
+            <div className="flex flex-wrap items-baseline gap-1.5">
               <span
                 className="font-medium min-w-0 flex-1 break-words"
                 title={r.cmd ?? r.name}

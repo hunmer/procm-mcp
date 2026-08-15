@@ -511,10 +511,6 @@ export function App() {
                       </span>
                     )}
                   </TabsTab>
-                  <TabsTab value="system">
-                    <ActivityIcon className="size-3.5" />
-                    {t("header.tabSystem")}
-                  </TabsTab>
                   <TabsTab value="favorites">
                     <StarIcon className="size-3.5" />
                     {t("header.tabFavorites")}
@@ -524,6 +520,11 @@ export function App() {
                       </span>
                     )}
                   </TabsTab>
+                  <TabsTab value="system">
+                    <ActivityIcon className="size-3.5" />
+                    {t("header.tabSystem")}
+                  </TabsTab>
+
                   <TabsIndicator />
                 </TabsList>
               </Tabs>

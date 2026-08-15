@@ -23,7 +23,7 @@ packages:
 
   '@procm-mcp/sdk@file:../../packages/procm-sdk':
     resolution: {directory: ../../packages/procm-sdk, type: directory}
-    engines: {node: '>=20'}
+    engines: {node: '>=22'}
 
   '@sindresorhus/is@4.6.0':
     resolution: {integrity: sha512-t09vSN3MdfsyCHoFcTRCH/iUtG7OJ0CsjzB8cjAmKc/va/kIgeDI/TxsigdncE/4be734m0cvIYwNaV4i2XqAw==}
@@ -65,6 +65,10 @@ packages:
   cacheable-request@7.0.4:
     resolution: {integrity: sha512-v+p6ongsrp0yTGbJXjgxPow2+DL93DASP4kXCDKb8/bwRtt9OEF3whggkkDkGNzgcWy2XaF4a8nZglC7uElscg==}
     engines: {node: '>=8'}
+
+  callsites@4.2.0:
+    resolution: {integrity: sha512-kfzR4zzQtAE9PC7CzZsjl3aBNbXWuXiSeOCdLcPpBfGW8YuCqQHcRPFDbr/BPVmd3EEPVpuFzLyuT/cUhPr4OQ==}
+    engines: {node: '>=12.20'}
 
   clone-response@1.0.3:
     resolution: {integrity: sha512-ROoL94jJH2dUVML2Y/5PEDNaSHgeOdSDicUyS7izcF63G6sTc/FTjLub4b8Il9S8S0beOfYt0TaA5qvFK+w0wA==}
@@ -295,7 +299,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@procm-mcp/sdk@file:../../packages/procm-sdk': {}
+  '@procm-mcp/sdk@file:../../packages/procm-sdk':
+    dependencies:
+      callsites: 4.2.0
 
   '@sindresorhus/is@4.6.0': {}
 
@@ -345,6 +351,8 @@ snapshots:
       lowercase-keys: 2.0.0
       normalize-url: 6.1.0
       responselike: 2.0.1
+
+  callsites@4.2.0: {}
 
   clone-response@1.0.3:
     dependencies:
