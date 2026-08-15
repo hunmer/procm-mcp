@@ -81,8 +81,30 @@ export const PLAY_ENDPOINTS: PlayEndpoint[] = [
     path: "/api/processes",
     group: "processes",
     label: "List processes",
-    desc: "All processes (live + historical records).",
-    ...none,
+    desc: "All processes (live + historical records), with optional filters.",
+    pathParams: [],
+    queryParams: [
+      {
+        name: "group",
+        label: "Group",
+        type: "text",
+        help: "Exact group match.",
+      },
+      {
+        name: "status",
+        label: "Status",
+        type: "select",
+        options: ["spawning", "running", "exited", "error"],
+      },
+      { name: "roomId", label: "Room id", type: "text", help: "Exact room match." },
+      {
+        name: "search",
+        label: "Search",
+        type: "text",
+        help: "Case-insensitive substring over name / script / cwd.",
+      },
+    ],
+    bodyFields: [],
   },
   {
     id: "processes.start",
@@ -123,6 +145,7 @@ export const PLAY_ENDPOINTS: PlayEndpoint[] = [
         help: "One KEY=VALUE per line.",
       },
       { name: "desc", label: "Description", type: "text" },
+      { name: "group", label: "Group", type: "text", placeholder: "backend" },
       {
         name: "port",
         label: "Port",

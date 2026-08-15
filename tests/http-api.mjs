@@ -44,6 +44,47 @@ await runTest("GET /api/processes returns serverId/pid/[]", async () => {
   assert(Array.isArray(data.processes), "processes is array");
 });
 
+await runTest("GET /api/processes filters by group/status/search", async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const body = (name, group, args) => ({
+    script: "node",
+    args,
+    cwd: projectRoot,
+    name,
+    group,
+  });
+  // One long-running process in group "alpha", one quickly-exiting in "beta".
+  const keep = await http(port, "POST", "/api/processes", body(
+    "filter-keep", "alpha", ["-e", "setInterval(()=>{},1000)"],
+  ));
+  const gone = await http(port, "POST", "/api/processes", body(
+    "filter-gone", "beta", ["-e", ""],
+  ));
+  assertEqual(keep.status, 201, "start alpha");
+  assertEqual(gone.status, 201, "start beta");
+  // Give the empty-script process time to be recorded as exited.
+  await sleep(600);
+
+  const byGroup = await http(port, "GET", "/api/processes?group=alpha");
+  assert(byGroup.data.processes.length > 0, "group filter non-empty");
+  assert(byGroup.data.processes.every((p) => p.group === "alpha"), "group filter");
+  assert(byGroup.data.processes.some((p) => p.id === keep.data.id), "group contains keep");
+
+  const byStatus = await http(port, "GET", "/api/processes?status=exited");
+  assert(byStatus.data.processes.every((p) => p.status === "exited"), "status filter");
+  assert(byStatus.data.processes.some((p) => p.id === gone.data.id), "status contains gone");
+
+  const bySearch = await http(port, "GET", "/api/processes?search=FILTER-KEEP");
+  assert(bySearch.data.processes.some((p) => p.id === keep.data.id), "search matches name");
+  assert(!bySearch.data.processes.some((p) => p.id === gone.data.id), "search excludes other");
+
+  const combined = await http(port, "GET", "/api/processes?group=alpha&status=running");
+  assert(combined.data.processes.some((p) => p.id === keep.data.id), "combined keeps");
+  assert(!combined.data.processes.some((p) => p.id === gone.data.id), "combined drops");
+
+  await http(port, "DELETE", "/api/processes", { ids: [keep.data.id, gone.data.id] });
+});
+
 await runTest("unknown route → 404", async () => {
   const { status } = await http(port, "GET", "/api/nope");
   assertEqual(status, 404, "404 for unknown");

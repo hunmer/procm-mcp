@@ -332,7 +332,7 @@ export function Playground() {
             <JsonViewer
               data={response.data as never}
               rootName="response"
-              defaultExpanded={2}
+              defaultExpanded={true}
               className="max-h-[40vh] overflow-y-auto"
             />
           </div>

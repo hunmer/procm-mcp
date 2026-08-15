@@ -25,7 +25,7 @@
 
 | 方法 | 路径 | 用途 |
 |---|---|---|
-| GET | `/api/processes` | 合并内存+历史记录，按 `startedAt` 倒序 |
+| GET | `/api/processes?group=&status=&roomId=&search=` | 合并内存+历史记录，按 `startedAt` 倒序；可选过滤（AND 组合，空即跳过）：`group`/`roomId` 精确匹配、`status`（spawning/running/exited/error）、`search` 对 name/script/cwd 不区分大小写子串 |
 | POST | `/api/processes` | 启动（body `{script,name?,args?[],cwd,envs?,desc?,port?,roomId?,group?}`）→ `{id,name}` |
 | DELETE | `/api/processes` | 批量删除（body `{ids?}`，空即全部） |
 | GET | `/api/processes/:id` | 单进程详情（活进程视图） |

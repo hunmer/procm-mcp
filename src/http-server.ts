@@ -758,12 +758,27 @@ function createRequestHandler(token: string | undefined) {
         // GET /api/processes
         if (method === "GET" && !idParam) {
           // Merge live + historical (stopped/exited) records so expired
-          // processes remain visible across restarts.
+          // processes remain visible across restarts. Optional query filters
+          // (group/status/roomId/search) combine with AND; each is skipped
+          // when empty. `search` is a case-insensitive substring over
+          // name/script/cwd, mirroring the dashboard's list filter.
           const records = await listProcessRecords();
+          const group = url.searchParams.get("group")?.trim() || null;
+          const status = url.searchParams.get("status")?.trim() || null;
+          const roomId = url.searchParams.get("roomId")?.trim() || null;
+          const search = url.searchParams.get("search")?.trim().toLowerCase() || null;
+          const filtered = records.filter(
+            (r) =>
+              (!group || (r.group ?? null) === group) &&
+              (!status || r.status === status) &&
+              (!roomId || (r.roomId ?? null) === roomId) &&
+              (!search ||
+                `${r.name}\n${r.script}\n${r.cwd}`.toLowerCase().includes(search)),
+          );
           json(res, 200, {
             serverId,
             pid: process.pid,
-            processes: records.map(toPublicRecord),
+            processes: filtered.map(toPublicRecord),
           });
           return;
         }

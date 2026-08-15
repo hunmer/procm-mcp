@@ -5,8 +5,10 @@ import {
   FolderIcon,
   FolderOpenIcon,
   InboxIcon,
+  ListXIcon,
   TrashIcon,
 } from "lucide-react";
+import { clearAllProcesses } from "@/lib/api";
 import { Badge } from "@/registry/default/ui/badge";
 import { Button } from "@/registry/default/ui/button";
 import {
@@ -35,6 +37,7 @@ import {
   type StatusFilter,
 } from "./process-list/types";
 import { useProcessActions } from "./process-list/useProcessActions";
+import { canStopProcess } from "./process-list/utils";
 import { ProcessFilterBar } from "./process-list/ProcessFilterBar";
 import { ProcessCard } from "./process-list/ProcessCard";
 import { FavoriteCard } from "./process-list/FavoriteCard";
