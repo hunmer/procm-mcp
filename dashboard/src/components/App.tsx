@@ -16,10 +16,7 @@ import {
   PanelLeftOpenIcon,
   TrashIcon,
 } from "lucide-react";
-import {
-  NewProcessDialog,
-  ProcessDetailsDialog,
-} from "./NewProcessDialog";
+import { ProcessDetailsDialog } from "./NewProcessDialog";
 import { ProcessList } from "./ProcessList";
 import { SystemProcessList } from "./SystemProcessList";
 import { LogPanel } from "./LogPanel";
@@ -27,7 +24,7 @@ import { LogFilesView } from "./LogFilesView";
 import { Playground } from "./playground/Playground";
 import { Toast } from "./Toast";
 import { DevInspector } from "./DevInspector";
-import { ImportGroupDialog } from "./ImportGroupDialog";
+import { CreateDropdown } from "./CreateDropdown";
 import { SettingsDialog } from "./SettingsDialog";
 import { useDashboardSocket } from "@/lib/ws";
 import {
@@ -311,7 +308,7 @@ export function App() {
       {/* Left rail: WS status dot on top, icon-only actions pinned to the
           bottom. The text details (connection state, uptime) live in the dot's
           title. */}
-      <header className="bg-card z-10 flex w-[60px] shrink-0 flex-col items-center border-r py-3">
+      <div className="bg-card flex w-[60px] shrink-0 flex-col items-center border-r py-3">
         <span
           className={
             "mt-1 inline-block size-2.5 shrink-0 rounded-full " +
@@ -325,14 +322,14 @@ export function App() {
           aria-label={statusMeta}
         />
         <div className="mt-auto flex flex-col items-center gap-2">
-          <ImportGroupDialog onToast={showToast} />
-          <NewProcessDialog
+          <CreateDropdown
             onStarted={(id) => showToast(t("toasts.started", { id }))}
             onError={(m) => showToast(m, true)}
+            onToast={showToast}
           />
           <SettingsDialog processes={processes} onToast={showToast} />
         </div>
-      </header>
+      </div>
 
       {/* The log panel lives inside the 进程 (Processes) tab as a right column
           next to the process list, so it only takes up space on that tab. */}

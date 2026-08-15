@@ -1,5 +1,5 @@
 import path from "node:path";
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { inspectorServer } from "@react-dev-inspector/vite-plugin";
@@ -10,11 +10,16 @@ import { inspectorServer } from "@react-dev-inspector/vite-plugin";
 // relative URLs. Override the target with PROCM_DEV_BACKEND
 // (e.g. http://127.0.0.1:7331). In production the backend serves everything
 // itself and this proxy is unused.
-const devBackend =
-  process.env.PROCM_DEV_BACKEND || "http://127.0.0.1:7331";
 
-export default defineConfig(({ mode }) => ({
-  plugins: [
+export default defineConfig(({ mode }) => {
+  // Read PROCM_DEV_BACKEND from Vite's .env files as well as the process
+  // environment. The latter wins, which keeps procm-commands.json and shell
+  // startup configuration authoritative.
+  const env = loadEnv(mode, process.cwd(), "");
+  const devBackend = env.PROCM_DEV_BACKEND || "http://127.0.0.1:7331";
+
+  return {
+    plugins: [
     // The babel plugin injects data-inspector-relative-path/-line/-column
     // attributes onto JSX nodes in dev, so clicking an element in the browser
     // can resolve back to its source file. It must run only in dev — otherwise
@@ -30,26 +35,27 @@ export default defineConfig(({ mode }) => ({
     }),
     tailwindcss(),
     inspectorServer(),
-  ],
-  base: "./",
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
-  },
-  server: {
-    proxy: {
-      "/api": devBackend,
-      "/mcp": devBackend,
-      "/assets": devBackend,
-      "/ws": {
-        target: devBackend,
-        ws: true,
+    ],
+    base: "./",
+    resolve: {
+      alias: {
+        "@": path.resolve(__dirname, "./src"),
       },
     },
-  },
-  build: {
-    outDir: "dist",
-    emptyOutDir: true,
-  },
-}));
+    server: {
+      proxy: {
+        "/api": devBackend,
+        "/mcp": devBackend,
+        "/assets": devBackend,
+        "/ws": {
+          target: devBackend,
+          ws: true,
+        },
+      },
+    },
+    build: {
+      outDir: "dist",
+      emptyOutDir: true,
+    },
+  };
+});

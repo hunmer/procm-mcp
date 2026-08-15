@@ -68,14 +68,25 @@ export async function createProcessesRepository(
     processes: [],
   });
 
+  // Serialize every read-modify-write cycle. lowdb has no built-in locking:
+  // concurrent writers (e.g. the dashboard's parallel imports) each read the
+  // same snapshot and the last write() wins, silently dropping the others.
+  // Chaining through one promise queue makes each cycle see the previous one.
+  let queue: Promise<unknown> = Promise.resolve();
+  function withLock<T>(task: () => Promise<T>): Promise<T> {
+    const run = queue.then(task, task);
+    queue = run.catch(() => {});
+    return run;
+  }
+
   return {
-    initialize: () => initialize(db),
-    upsert: (record) => upsert(db, record),
-    getAll: () => getAll(db),
-    getById: (id) => getById(db, id),
-    remove: (id) => remove(db, id),
-    removeMany: (ids) => removeMany(db, ids),
-    close: () => close(db),
+    initialize: () => withLock(() => initialize(db)),
+    upsert: (record) => withLock(() => upsert(db, record)),
+    getAll: () => withLock(() => getAll(db)),
+    getById: (id) => withLock(() => getById(db, id)),
+    remove: (id) => withLock(() => remove(db, id)),
+    removeMany: (ids) => withLock(() => removeMany(db, ids)),
+    close: () => withLock(() => close(db)),
   };
 }
 

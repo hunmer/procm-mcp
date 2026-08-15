@@ -36,6 +36,7 @@ import { setConnectionConfig } from "./connection-config.js";
 import { getRoom, listRooms, patchRoom } from "./room-hub.js";
 import { queryRoomLogs } from "./room-logs.js";
 import { scanProjectCommands } from "./project-scanner.js";
+import { openDirectory } from "popups-file-dialog";
 import { listSystemProcesses, killProcessTree, findProcessByPort } from "./system-processes.js";
 import { ProcmMcpDir } from "./procm-mcp-dir.js";
 import { listProcessLogFiles, deleteProcessLogFiles } from "./process-log-files.js";
@@ -654,6 +655,35 @@ function createRequestHandler(token: string | undefined) {
         }
       }
 
+      // POST /api/select-directory -> open the OS-native directory picker
+      // (popups-file-dialog on top of tinyfiledialogs; Windows/Linux, macOS
+      // build pending upstream). The browser can't do this, so the dashboard
+      // asks the backend. Resolves { canceled: true } when the user dismisses
+      // the picker without choosing anything.
+      if (method === "POST" && pathname === "/api/select-directory") {
+        const body = JSON.parse((await readBody(req)) || "{}");
+        try {
+          const dir = (
+            await openDirectory({
+              title: body.title ? String(body.title) : undefined,
+            })
+          ).trim();
+          if (!dir) {
+            json(res, 200, { canceled: true, path: null });
+            return;
+          }
+          json(res, 200, { canceled: false, path: dir });
+        } catch (e) {
+          // The picker rejects with NoSelectedDirectoryError on cancel.
+          if (e instanceof Error && e.name === "NoSelectedDirectoryError") {
+            json(res, 200, { canceled: true, path: null });
+            return;
+          }
+          json(res, 500, { error: toErrorMessage(e) });
+        }
+        return;
+      }
+
       // POST /api/favorites/scan -> scan a folder's top-level project manifests
       // (package.json / pyproject.toml / Cargo.toml) and return candidate
       // launch commands the dashboard can selectively import into process groups.
@@ -691,6 +721,43 @@ function createRequestHandler(token: string | undefined) {
           favorite: true,
         });
         json(res, 201, { id: saved.id, name: saved.name, favorite: true });
+        return;
+      }
+
+      // POST /api/processes/import-batch -> import several stopped favorite
+      // records in one request (the dashboard's directory import). `group`
+      // applies to every item; items are validated up front so a bad batch
+      // fails without writing anything.
+      if (method === "POST" && pathname === "/api/processes/import-batch") {
+        const body = JSON.parse((await readBody(req)) || "{}");
+        const items = Array.isArray(body.items) ? body.items : [];
+        if (items.length === 0) {
+          json(res, 400, { error: "items must be a non-empty array" });
+          return;
+        }
+        const group = body.group ? String(body.group).trim() : null;
+        for (const item of items) {
+          const script = String(item?.script || "").trim();
+          const cwd = String(item?.cwd || "").trim();
+          if (!script || !cwd || !Array.isArray(item?.args)) {
+            json(res, 400, { error: "each item requires script, cwd and args" });
+            return;
+          }
+        }
+        const imported: { id: string; name: string; favorite: boolean }[] = [];
+        for (const item of items) {
+          const saved = await saveProcessRecord({
+            name: item.name ? String(item.name) : undefined,
+            script: String(item.script).trim(),
+            args: item.args.map(String),
+            cwd: String(item.cwd).trim(),
+            desc: item.desc ? String(item.desc) : undefined,
+            group,
+            favorite: true,
+          });
+          imported.push({ id: saved.id, name: saved.name, favorite: true });
+        }
+        json(res, 201, { imported });
         return;
       }
 

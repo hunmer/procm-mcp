@@ -1,3 +1,60 @@
 {
-  "processes": []
+  "processes": [
+    {
+      "id": "8t2eCCVe",
+      "name": "procm-mcp",
+      "script": "node",
+      "args": [
+        "build/index.js",
+        "--server",
+        "--port",
+        "7332",
+        "--data-path",
+        ".procm-mcp-data"
+      ],
+      "cwd": "G:\\procm-mcp",
+      "status": "exited",
+      "pid": 3536,
+      "exitCode": 1,
+      "error": null,
+      "desc": "Start the current project's procm-mcp backend on port 7332",
+      "group": null,
+      "port": null,
+      "roomId": null,
+      "favorite": false,
+      "startedAt": 1786791435098,
+      "lastStartedAt": 1786791435098,
+      "stoppedAt": null,
+      "stdoutLogPath": "G:\\procm-mcp\\piHqvc(26496)\\processes\\8t2eCCVe-stdout.log",
+      "stderrLogPath": "G:\\procm-mcp\\piHqvc(26496)\\processes\\8t2eCCVe-stderr.log",
+      "envs": {}
+    },
+    {
+      "id": "g5J3Ss_w",
+      "name": "dashboard",
+      "script": "npm",
+      "args": [
+        "run",
+        "dev"
+      ],
+      "cwd": "G:\\procm-mcp\\dashboard",
+      "status": "running",
+      "pid": 9724,
+      "exitCode": null,
+      "error": null,
+      "desc": "Start the dashboard development server",
+      "group": null,
+      "port": null,
+      "roomId": null,
+      "favorite": false,
+      "startedAt": 1786791438836,
+      "lastStartedAt": 1786791438836,
+      "stoppedAt": null,
+      "stdoutLogPath": "G:\\procm-mcp\\piHqvc(26496)\\processes\\g5J3Ss_w-stdout.log",
+      "stderrLogPath": "G:\\procm-mcp\\piHqvc(26496)\\processes\\g5J3Ss_w-stderr.log",
+      "envs": {
+        "PROCM_DEV_BACKEND": "http://127.0.0.1:7332"
+      }
+    }
+  ]
 }

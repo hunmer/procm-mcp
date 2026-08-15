@@ -27,6 +27,11 @@ import type { ProcessView } from "@/lib/types";
 interface NewProcessDialogProps {
   onStarted: (id: string) => void;
   onError: (message: string) => void;
+  // Controlled mode: when open/onOpenChange are provided the dialog is driven
+  // from outside (e.g. the header "+" menu) and the built-in trigger button
+  // is not rendered.
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 // Optional controlled "edit" mode. When `viewProcess` is provided the dialog
@@ -43,9 +48,16 @@ export interface ProcessDetailsDialogProps {
 // coss form-in-dialog invariant: DialogHeader stays OUTSIDE the form;
 // <form className="contents"> wraps DialogPanel + DialogFooter so the popup's
 // flex column still treats them as direct layout sections.
-export function NewProcessDialog({ onStarted, onError }: NewProcessDialogProps) {
+export function NewProcessDialog({
+  onStarted,
+  onError,
+  open: openProp,
+  onOpenChange,
+}: NewProcessDialogProps) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = openProp ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
   const [submitting, setSubmitting] = useState(false);
   const [name, setName] = useState("");
   const [script, setScript] = useState("");
@@ -105,13 +117,15 @@ export function NewProcessDialog({ onStarted, onError }: NewProcessDialogProps) 
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={<Button variant="outline" size="icon" />}
-        aria-label={t("header.newProcess")}
-        title={t("header.newProcess")}
-      >
-        <PlusIcon />
-      </DialogTrigger>
+      {openProp === undefined && (
+        <DialogTrigger
+          render={<Button variant="outline" size="icon" />}
+          aria-label={t("header.newProcess")}
+          title={t("header.newProcess")}
+        >
+          <PlusIcon />
+        </DialogTrigger>
+      )}
       <DialogPopup>
         <DialogHeader>
           <DialogTitle>{t("dialogs.newProcess.title")}</DialogTitle>

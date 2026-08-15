@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { DownloadIcon, SearchIcon } from "lucide-react";
-import { saveImportedProcess, scanDirectory, type ScanCandidate } from "@/lib/api";
+import { DownloadIcon, FolderOpenIcon } from "lucide-react";
+import { batchImportProcesses, scanDirectory, selectDirectory, type ScanCandidate } from "@/lib/api";
 import { Button } from "@/registry/default/ui/button";
 import { Checkbox } from "@/registry/default/ui/checkbox";
 import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogPanel, DialogPopup, DialogTitle, DialogTrigger } from "@/registry/default/ui/dialog";
@@ -10,24 +10,55 @@ import { Input } from "@/registry/default/ui/input";
 
 export function ImportGroupDialog({
   onToast,
+  open: openProp,
+  onOpenChange,
 }: {
   onToast: (message: string, isError?: boolean) => void;
+  // Controlled mode: when open/onOpenChange are provided the dialog is driven
+  // from outside (e.g. the header "+" menu) and the built-in trigger button
+  // is not rendered.
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = openProp ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
   const [path, setPath] = useState("");
   const [group, setGroup] = useState("");
   const [candidates, setCandidates] = useState<ScanCandidate[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
 
-  async function scan() {
-    if (!path.trim()) return;
+  async function scan(dir = path) {
+    const target = dir.trim();
+    if (!target) return;
     setBusy(true);
     try {
-      const found = await scanDirectory(path.trim());
+      const found = await scanDirectory(target);
       setCandidates(found);
       setSelected(new Set());
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : String(err), true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Native OS directory picker, relayed by the backend (popups-file-dialog).
+  // Fills the path input and rescans in one go; cancelling is a no-op.
+  async function browse() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const dir = await selectDirectory();
+      if (dir) {
+        setPath(dir);
+        // Pre-fill the group with the picked folder's name (last path
+        // segment, Windows or POSIX separators).
+        setGroup(dir.split(/[\\/]+/).filter(Boolean).pop() ?? "");
+        await scan(dir);
+      }
     } catch (err) {
       onToast(err instanceof Error ? err.message : String(err), true);
     } finally {
@@ -40,13 +71,10 @@ export function ImportGroupDialog({
     if (!items.length || !group.trim()) return;
     setBusy(true);
     try {
-      await Promise.all(items.map((item) => saveImportedProcess({
-        ...item,
-        name: item.name,
-        cwd: item.cwd,
-        group: group.trim(),
-      })));
-      onToast(t("toasts.importedAll", { count: items.length }));
+      // One batch request instead of N parallel ones — the backend writes
+      // them in a single serialized pass.
+      const r = await batchImportProcesses(items, group.trim());
+      onToast(t("toasts.importedAll", { count: r.imported.length }));
       setOpen(false);
     } catch (err) {
       onToast(err instanceof Error ? err.message : String(err), true);
@@ -57,10 +85,12 @@ export function ImportGroupDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="outline" size="icon" />}>
-        <DownloadIcon />
-        <span className="sr-only">{t("favorites.importTitle")}</span>
-      </DialogTrigger>
+      {openProp === undefined && (
+        <DialogTrigger render={<Button variant="outline" size="icon" />}>
+          <DownloadIcon />
+          <span className="sr-only">{t("favorites.importTitle")}</span>
+        </DialogTrigger>
+      )}
       <DialogPopup>
         <DialogHeader>
           <DialogTitle>{t("favorites.importTitle")}</DialogTitle>
@@ -70,8 +100,15 @@ export function ImportGroupDialog({
           <Field>
             <FieldLabel>{t("importDialog.folderLabel")}</FieldLabel>
             <div className="flex gap-2">
-              <Input value={path} onChange={(e) => setPath(e.target.value)} placeholder="C:\\project" />
-              <Button type="button" size="icon" onClick={scan} loading={busy} aria-label={t("importDialog.scan")} title={t("importDialog.scan")}><SearchIcon /></Button>
+              {/* Auto-scan on blur: typed paths scan as soon as the field
+                  loses focus, picked paths scan right after browse(). */}
+              <Input
+                value={path}
+                onChange={(e) => setPath(e.target.value)}
+                onBlur={() => scan()}
+                placeholder="C:\\project"
+              />
+              <Button type="button" size="icon" onClick={browse} loading={busy} aria-label={t("importDialog.browse")} title={t("importDialog.browse")}><FolderOpenIcon /></Button>
             </div>
           </Field>
           <Field>

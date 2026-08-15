@@ -10,6 +10,14 @@
 - demo Node server：监听 `4444`，连接当前项目后端的 room WebSocket。
 - demo Electron client：连接当前项目后端的 room WebSocket。
 
+### 端口与 dashboard 归属（重要）
+
+- `7331` 是全局 `procm-mcp` 管理器；`http://127.0.0.1:7331/` 展示的是全局实例自己的进程列表。
+- `7332` 是由全局管理器启动的当前项目 dev `procm-mcp`；`http://127.0.0.1:7332/` 展示的是 dev 实例自己的进程列表。
+- dashboard 开发服务器默认监听 `5173`，通过 `PROCM_DEV_BACKEND` 选择它代理的后端。本项目应设置为 `http://127.0.0.1:7332`，所以查看项目进程应打开 `http://localhost:5173/`（或 `7332/`），而不是 `7331/`。
+- 必须确认进程管理工具连接的就是用户的 `7331` 实例。若机器上存在多个 `procm-mcp`，工具启动的进程可能写入另一实例的数据目录；这类进程不会出现在 `7331/api/processes`。排查时同时核对端口、PID、`/api/meta.serverId` 和进程管理器返回的进程列表。
+- 配置了 `http://127.0.0.1:7331/mcp` 只说明客户端请求发送到该 HTTP MCP 端点；并不保证当前客户端暴露的 `procm-command` 工具就是由该实例提供。若工具列表与 `7331/api/processes` 不一致，应先修正 MCP 客户端的 server 绑定，再执行启动操作。
+
 禁止直接执行 `node build/index.js --server`、`npm run dev` 或 demo 启动脚本来创建常驻调试服务。禁止通过当前项目 `7332` 的 MCP/HTTP 接口管理或重启当前项目自身。
 
 ## 启动环境

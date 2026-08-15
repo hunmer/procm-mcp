@@ -1,3 +1,60 @@
 {
-  "processes": []
+  "processes": [
+    {
+      "id": "lRAYMXjN",
+      "name": "procm-mcp",
+      "script": "node",
+      "args": [
+        "build/index.js",
+        "--server",
+        "--port",
+        "7332",
+        "--data-path",
+        ".procm-mcp-data"
+      ],
+      "cwd": "G:/procm-mcp",
+      "status": "exited",
+      "pid": 15572,
+      "exitCode": 1,
+      "error": null,
+      "desc": "Start the current project's procm-mcp backend on port 7332",
+      "group": "procm-mcp",
+      "port": null,
+      "roomId": null,
+      "favorite": false,
+      "startedAt": 1786792513104,
+      "lastStartedAt": 1786792513104,
+      "stoppedAt": null,
+      "stdoutLogPath": "G:\\procm-mcp\\.procm-mcp\\B6OZWh(34100)\\processes\\lRAYMXjN-stdout.log",
+      "stderrLogPath": "G:\\procm-mcp\\.procm-mcp\\B6OZWh(34100)\\processes\\lRAYMXjN-stderr.log",
+      "envs": {}
+    },
+    {
+      "id": "vyPYs0N0",
+      "name": "dashboard",
+      "script": "npm",
+      "args": [
+        "run",
+        "dev"
+      ],
+      "cwd": "G:\\procm-mcp\\dashboard",
+      "status": "exited",
+      "pid": 35612,
+      "exitCode": null,
+      "error": null,
+      "desc": "Start the dashboard development server",
+      "group": "procm-mcp",
+      "port": null,
+      "roomId": null,
+      "favorite": false,
+      "startedAt": 1786792603706,
+      "lastStartedAt": 1786792603706,
+      "stoppedAt": 1786793073414,
+      "stdoutLogPath": "G:\\procm-mcp\\.procm-mcp\\B6OZWh(34100)\\processes\\vyPYs0N0-stdout.log",
+      "stderrLogPath": "G:\\procm-mcp\\.procm-mcp\\B6OZWh(34100)\\processes\\vyPYs0N0-stderr.log",
+      "envs": {
+        "PROCM_DEV_BACKEND": "http://127.0.0.1:7332"
+      }
+    }
+  ]
 }

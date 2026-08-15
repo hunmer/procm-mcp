@@ -266,6 +266,28 @@ export function saveImportedProcess(body: StartProcessBody): Promise<{ id: strin
   return api<{ id: string; name: string }>("POST", "/api/processes/import", body);
 }
 
+// One launchable command to import as part of a directory-import batch.
+export interface ImportBatchItem {
+  script: string;
+  args: string[];
+  cwd: string;
+  name?: string;
+  desc?: string;
+}
+
+// Import a whole batch of stopped favorite records in one request. `group`
+// is applied to every item. Returns the created records in input order.
+export function batchImportProcesses(
+  items: ImportBatchItem[],
+  group: string,
+): Promise<{ imported: { id: string; name: string }[] }> {
+  return api<{ imported: { id: string; name: string }[] }>(
+    "POST",
+    "/api/processes/import-batch",
+    { items, group },
+  );
+}
+
 // A launchable command the backend derived from a folder's project manifests
 // (package.json / pyproject.toml / Cargo.toml). Shape mirrors Favorite's
 // launch fields so it can be imported straight into the favorites store.
@@ -288,6 +310,18 @@ export async function scanDirectory(
     { path },
   );
   return r.candidates;
+}
+
+// Open the OS-native directory picker on the backend (popups-file-dialog /
+// tinyfiledialogs). Resolves null when the user cancels; throws with the
+// server's `error` message when the picker can't be shown.
+export async function selectDirectory(): Promise<string | null> {
+  const r = await api<{ canceled: boolean; path: string | null }>(
+    "POST",
+    "/api/select-directory",
+    {},
+  );
+  return r.canceled ? null : r.path;
 }
 
 // Open a folder in the OS file manager. The browser can't do this directly, so

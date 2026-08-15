@@ -201,7 +201,7 @@ export function SettingsDialog({
                     <SelectValue />
                     <SelectIcon />
                   </SelectTrigger>
-                  <SelectPopup>
+                  <SelectPopup portalProps={{ className: "relative z-[60]" }}>
                     {languageItems.map(({ label, value }) => (
                       <SelectItem key={value} value={value}>
                         <SelectItemText>{label}</SelectItemText>
@@ -222,7 +222,7 @@ export function SettingsDialog({
                     <SelectValue />
                     <SelectIcon />
                   </SelectTrigger>
-                  <SelectPopup>
+                  <SelectPopup portalProps={{ className: "relative z-[60]" }}>
                     {themeItems.map(({ label, value }) => (
                       <SelectItem key={value} value={value}>
                         <SelectItemText>{label}</SelectItemText>

@@ -3,6 +3,7 @@
     "procm-mcp": {
       "script": "node",
       "args": ["build/index.js", "--server", "--port", "7332", "--data-path", ".procm-mcp-data"],
+      "group": "procm-mcp",
       "desc": "Start the current project's procm-mcp backend on port 7332"
     },
     "dashboard": {
@@ -12,6 +13,7 @@
       "envs": {
         "PROCM_DEV_BACKEND": "http://127.0.0.1:7332"
       },
+      "group": "procm-mcp",
       "desc": "Start the dashboard development server"
     },
     "demo-node-server": {
