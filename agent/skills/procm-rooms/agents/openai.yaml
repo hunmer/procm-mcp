@@ -1,4 +1,0 @@
-interface:
-  display_name: "Procm Rooms"
-  short_description: "Build and debug apps with procm rooms"
-  default_prompt: "Use $procm-rooms to connect applications, coordinate readiness, and collect structured debugging output."

@@ -22,6 +22,7 @@ export type ProcmCommand = {
   cwd?: string;
   envs?: Record<string, string>;
   desc?: string;
+  roomId?: string;
   group?: string;
 };
 
@@ -173,7 +174,7 @@ export function registerProcmCommandsTools(server: McpServer) {
           envs,
           command.desc,
           undefined,
-          null,
+          command.roomId ?? null,
           command.group,
         );
         pushProcess(startedProcess);

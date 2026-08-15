@@ -2,6 +2,7 @@
 
 import { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu";
 import { mergeProps } from "@base-ui/react/merge-props";
+import { ChevronRightIcon } from "lucide-react";
 import type React from "react";
 import { cn } from "@/registry/default/lib/utils";
 
@@ -79,6 +80,55 @@ export function ContextMenuSeparator({
       className={cn("bg-border -mx-1 my-1 h-px", className)}
       {...props}
     />
+  );
+}
+
+// Nested submenu: ContextMenuSub wraps a SubmenuTrigger and its SubPopup. The
+// sub popup reuses the same portal + positioner wiring as ContextMenuPopup but
+// anchors to the right of the trigger.
+export const ContextMenuSub = ContextMenuPrimitive.SubmenuRoot;
+
+export function ContextMenuSubTrigger({
+  className,
+  children,
+  ...props
+}: ContextMenuPrimitive.SubmenuTrigger.Props): React.ReactElement {
+  return (
+    <ContextMenuPrimitive.SubmenuTrigger
+      data-slot="context-menu-sub-trigger"
+      className={cn(
+        "focus:bg-accent focus:text-accent-foreground data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[popup-open]:bg-accent data-[popup-open]:text-accent-foreground relative flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none select-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+        className,
+      )}
+      {...props}
+    >
+      {children}
+      <ChevronRightIcon className="ml-auto" aria-hidden="true" />
+    </ContextMenuPrimitive.SubmenuTrigger>
+  );
+}
+
+export function ContextMenuSubPopup({
+  className,
+  ...props
+}: ContextMenuPrimitive.Popup.Props): React.ReactElement {
+  return (
+    <ContextMenuPrimitive.Portal>
+      <ContextMenuPrimitive.Positioner
+        data-slot="context-menu-sub-positioner"
+        align="start"
+        side="right"
+      >
+        <ContextMenuPrimitive.Popup
+          data-slot="context-menu-sub-popup"
+          className={cn(
+            "bg-popover text-popover-foreground data-[starting-style]:scale-[0.96] data-[starting-style]:opacity-0 data-[ending-style]:scale-[0.96] data-[ending-style]:opacity-0 relative z-50 min-w-[160px] origin-(--transform-origin) overflow-hidden rounded-lg border p-1 shadow-md transition-[transform,scale,opacity] duration-100",
+            className,
+          )}
+          {...props}
+        />
+      </ContextMenuPrimitive.Positioner>
+    </ContextMenuPrimitive.Portal>
   );
 }
 

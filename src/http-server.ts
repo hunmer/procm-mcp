@@ -23,6 +23,7 @@ import {
   pushProcess,
   sendProcessInput,
   setProcessFavorite,
+  saveProcessRecord,
 } from "./process-manager.js";
 import type { ProcessRecord } from "./processes-repository.js";
 import { toErrorMessage } from "./error.js";
@@ -644,9 +645,7 @@ function createRequestHandler(token: string | undefined) {
 
       // POST /api/favorites/scan -> scan a folder's top-level project manifests
       // (package.json / pyproject.toml / Cargo.toml) and return candidate
-      // launch commands the dashboard can selectively import as favorites.
-      // Stateless: the dashboard persists the user's picks in localStorage; the
-      // backend never stores favorites.
+      // launch commands the dashboard can selectively import into process groups.
       if (method === "POST" && pathname === "/api/favorites/scan") {
         const body = JSON.parse((await readBody(req)) || "{}");
         const dir = String(body.path || "").trim();
@@ -660,6 +659,27 @@ function createRequestHandler(token: string | undefined) {
         } catch (e) {
           json(res, 400, { error: toErrorMessage(e) });
         }
+        return;
+      }
+
+      if (method === "POST" && pathname === "/api/processes/import") {
+        const body = JSON.parse((await readBody(req)) || "{}");
+        const script = String(body.script || "").trim();
+        const cwd = String(body.cwd || "").trim();
+        if (!script || !cwd || !Array.isArray(body.args)) {
+          json(res, 400, { error: "script, cwd and args are required" });
+          return;
+        }
+        const saved = await saveProcessRecord({
+          name: body.name ? String(body.name) : undefined,
+          script,
+          args: body.args.map(String),
+          cwd,
+          desc: body.desc ? String(body.desc) : undefined,
+          group: body.group ? String(body.group).trim() : null,
+          favorite: true,
+        });
+        json(res, 201, { id: saved.id, name: saved.name, favorite: true });
         return;
       }
 
@@ -781,6 +801,7 @@ function createRequestHandler(token: string | undefined) {
           json(res, 200, {
             serverId,
             pid: process.pid,
+            startedAt: serverStartedAt,
             processes: filtered.map(toPublicRecord),
           });
           return;
@@ -812,6 +833,7 @@ function createRequestHandler(token: string | undefined) {
               : {};
           const desc = body.desc ? String(body.desc) : undefined;
           const group = body.group ? String(body.group).trim() : null;
+          const favorite = body.favorite === true;
           const roomId = body.roomId ? String(body.roomId).trim() : null;
           // Optional port the process serves on. Coerced to an integer and
           // range-checked; anything invalid is rejected so the dashboard's
@@ -860,6 +882,7 @@ function createRequestHandler(token: string | undefined) {
             roomId,
             group,
           );
+          started.favorite = favorite;
           pushProcess(started);
           json(res, 201, { id: processId, name: started.name });
           return;
@@ -1203,13 +1226,9 @@ export function startHttpServer(port: number): Promise<http.Server> {
         `Dashboard HTTP server listening on http://${HOST}:${port}` +
           (token ? " (token protected)" : ""),
       );
-      // Attach the WebSocket endpoint on the same server/port so the dashboard
-      // can receive real-time process + log updates instead of polling.
-      attachWebsocketServer(server, token, {
-        serverId,
-        pid: process.pid,
-        startedAt: serverStartedAt,
-      });
+      // Attach the WebSocket endpoint for real-time log updates. Process list
+      // data is served by GET /api/processes and refreshed by the dashboard.
+      attachWebsocketServer(server, token);
       resolve(server);
     });
   });

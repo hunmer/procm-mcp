@@ -32,6 +32,7 @@ export interface ProcessView {
 export interface ProcessListResponse {
   serverId: string;
   pid: number;
+  startedAt?: number;
   processes: ProcessView[];
 }
 
@@ -99,6 +100,7 @@ export interface StartProcessBody {
   port?: number;
   roomId?: string;
   group?: string;
+  favorite?: boolean;
   overwrite?: boolean;
   restart?: boolean;
 }

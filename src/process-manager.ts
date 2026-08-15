@@ -204,6 +204,38 @@ export async function setProcessFavorite(id: string, favorite: boolean): Promise
   return true;
 }
 
+export async function saveProcessRecord(input: {
+  name?: string;
+  script: string;
+  args: string[];
+  cwd: string;
+  desc?: string;
+  group?: string | null;
+  favorite?: boolean;
+}): Promise<ProcessRecord> {
+  const record: ProcessRecord = {
+    id: generateProcessId(),
+    name: input.name || input.script,
+    script: input.script,
+    args: input.args,
+    cwd: input.cwd,
+    status: "exited",
+    pid: null,
+    exitCode: null,
+    error: null,
+    desc: input.desc ?? null,
+    group: input.group ?? null,
+    favorite: input.favorite ?? true,
+    startedAt: Date.now(),
+    lastStartedAt: null,
+    stoppedAt: null,
+  };
+  const repo = await ensureRepository();
+  await repo.upsert(record);
+  dashboardEvents.emitProcessChange();
+  return record;
+}
+
 // Fetch a persisted process record by id (used by the HTTP layer to serve
 // logs/paths for stopped/expired processes whose in-memory metadata is gone).
 export async function getProcessRecord(

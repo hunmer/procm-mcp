@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import {
   CopyIcon,
-  EyeIcon,
+  PencilIcon,
   PlayIcon,
   SquareIcon,
   SquareTerminalIcon,
@@ -10,14 +10,18 @@ import {
   ContextMenuItem,
   ContextMenuPopup,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubPopup,
+  ContextMenuSubTrigger,
 } from "@/registry/default/ui/context-menu";
 import type { ProcessView } from "@/lib/types";
 import { canStopProcess } from "./utils";
 import type { RowActions } from "./types";
 
 // The right-click menu shared by the table rows and the cards. Extracted so the
-// two views can't drift: Copy ID / Copy command / View, then Stop (when live)
-// or Restart (when stopped). Rendered as a sibling of the ContextMenuTrigger.
+// two views can't drift: Edit, then a Copy submenu (ID / command), then Stop
+// (when live) or Restart (when stopped). Rendered as a sibling of the
+// ContextMenuTrigger.
 export function ProcessContextMenu({
   p,
   actions,
@@ -29,18 +33,26 @@ export function ProcessContextMenu({
   const canStop = canStopProcess(p);
   return (
     <ContextMenuPopup>
-      <ContextMenuItem onClick={() => actions.onCopyId(p)}>
-        <CopyIcon aria-hidden="true" />
-        {t("processes.ctxCopyId")}
-      </ContextMenuItem>
-      <ContextMenuItem onClick={() => actions.onCopyCommand(p)}>
-        <SquareTerminalIcon aria-hidden="true" />
-        {t("processes.ctxCopyCommand")}
-      </ContextMenuItem>
       <ContextMenuItem onClick={() => actions.onView(p)}>
-        <EyeIcon aria-hidden="true" />
-        {t("processes.ctxView")}
+        <PencilIcon aria-hidden="true" />
+        {t("processes.ctxEdit")}
       </ContextMenuItem>
+      <ContextMenuSub>
+        <ContextMenuSubTrigger>
+          <CopyIcon aria-hidden="true" />
+          {t("processes.ctxCopy")}
+        </ContextMenuSubTrigger>
+        <ContextMenuSubPopup>
+          <ContextMenuItem onClick={() => actions.onCopyId(p)}>
+            <CopyIcon aria-hidden="true" />
+            {t("processes.ctxCopyId")}
+          </ContextMenuItem>
+          <ContextMenuItem onClick={() => actions.onCopyCommand(p)}>
+            <SquareTerminalIcon aria-hidden="true" />
+            {t("processes.ctxCopyCommand")}
+          </ContextMenuItem>
+        </ContextMenuSubPopup>
+      </ContextMenuSub>
       <ContextMenuSeparator />
       {canStop ? (
         <ContextMenuItem

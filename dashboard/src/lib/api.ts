@@ -225,6 +225,10 @@ export function startProcess(body: StartProcessBody): Promise<{ id: string }> {
   return api<{ id: string; name: string }>("POST", "/api/processes", body);
 }
 
+export function saveImportedProcess(body: StartProcessBody): Promise<{ id: string }> {
+  return api<{ id: string; name: string }>("POST", "/api/processes/import", body);
+}
+
 // A launchable command the backend derived from a folder's project manifests
 // (package.json / pyproject.toml / Cargo.toml). Shape mirrors Favorite's
 // launch fields so it can be imported straight into the favorites store.

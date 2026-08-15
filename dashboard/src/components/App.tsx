@@ -30,6 +30,7 @@ import { LogFilesView } from "./LogFilesView";
 import { Playground } from "./playground/Playground";
 import { Toast } from "./Toast";
 import { DevInspector } from "./DevInspector";
+import { ImportGroupDialog } from "./ImportGroupDialog";
 import { useTheme } from "@/lib/useTheme";
 import { useLanguage } from "@/lib/useLanguage";
 import { LANGUAGES } from "@/i18n";
@@ -58,7 +59,7 @@ import type {
 
 export function App() {
   const [data, setData] = useState<ProcessListResponse | null>(null);
-  // Backend start time (epoch ms) — received via WS, used to show uptime.
+  // Backend start time (epoch ms) — received via GET /api/processes.
   const [serverStartedAt, setServerStartedAt] = useState<number | null>(null);
   // Ticks every second so the uptime display stays current.
   const [now, setNow] = useState(() => Date.now());
@@ -91,8 +92,7 @@ export function App() {
   // "Clear all" confirmation dialog — stop + delete every process at once.
   const [clearAllOpen, setClearAllOpen] = useState(false);
 
-  const { status, reconnectInMs, onProcessesMessage, onLogMessage } =
-    useDashboardSocket();
+  const { status, reconnectInMs, onLogMessage } = useDashboardSocket();
 
   // Whether the log panel is currently open (visible + not collapsed) and
   // which process it shows — used to decide whether to count a live log line
@@ -102,45 +102,8 @@ export function App() {
   // Forwarder for live log lines to the active LogPanel. The panel registers
   // its callback here; everything else increments the unread counter.
   const liveLogForwardRef = useRef<((m: WsLogMessage) => void) | null>(null);
-  // A process id that should be auto-selected as soon as it appears in a WS
-  // push. The response can arrive before the WS delivers the row.
-  const pendingSelectRef = useRef<string | null>(null);
   // On first load, a `?proc=` from the URL waits for the WS row to arrive.
   const initialProcRef = useRef<string | null>(readUrlState().procId);
-
-  // Live updates from the backend: replace the process list and keep the
-  // selected log target in sync with the latest view.
-  onProcessesMessage((m) => {
-    setData({
-      serverId: m.serverId ?? data?.serverId ?? "",
-      pid: m.pid ?? data?.pid ?? 0,
-      processes: m.data,
-    });
-    if (m.startedAt != null) setServerStartedAt(m.startedAt);
-    // Open a process whose start response is waiting for its WS row.
-    const pending = pendingSelectRef.current;
-    if (pending && m.data.some((p) => p.id === pending)) {
-      const started = m.data.find((p) => p.id === pending) ?? null;
-      pendingSelectRef.current = null;
-      if (started) {
-        openLogFor(started);
-        return;
-      }
-    }
-    // First-load auto-select from a `?proc=` in the URL. Consumed once.
-    const initial = initialProcRef.current;
-    if (initial && m.data.some((p) => p.id === initial)) {
-      const found = m.data.find((p) => p.id === initial) ?? null;
-      initialProcRef.current = null;
-      if (found) {
-        openLogFor(found);
-        return;
-      }
-    }
-    setSelected((cur) =>
-      cur ? m.data.find((p) => p.id === cur.id) ?? null : null,
-    );
-  });
 
   // Dispatch every live log line: forward to the open panel if it matches,
   // otherwise bump that process's unread badge.
@@ -165,6 +128,7 @@ export function App() {
         const latest = await listProcesses();
         if (cancelled) return;
         setData(latest);
+        if (latest.startedAt != null) setServerStartedAt(latest.startedAt);
         setSelected((cur) =>
           cur ? latest.processes.find((p) => p.id === cur.id) ?? null : null,
         );
@@ -175,6 +139,7 @@ export function App() {
       }
     };
 
+    void refresh();
     const timer = setInterval(() => void refresh(), 3000);
     return () => {
       cancelled = true;
@@ -348,6 +313,7 @@ export function App() {
         </div>
         {/* Right: actions. */}
         <div className="flex items-center gap-2">
+          <ImportGroupDialog onToast={showToast} />
           <NewProcessDialog
             onStarted={(id) => showToast(t("toasts.started", { id }))}
             onError={(m) => showToast(m, true)}
