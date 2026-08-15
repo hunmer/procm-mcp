@@ -278,7 +278,7 @@ export function ProcessList({
     const q = nameFilter.trim().toLowerCase();
     if (!q) return favorites;
     return favorites.filter((f) =>
-      [f.name ?? "", f.script, f.args.join(" "), f.desc ?? "", groupKeyOf(f.category)]
+      [f.name ?? "", f.script, f.args.join(" "), f.desc ?? "", groupKeyOf(f.group)]
         .join(" ")
         .toLowerCase()
         .includes(q),
@@ -292,7 +292,7 @@ export function ProcessList({
     const m = new Map<string, string>();
     for (const f of favorites) {
       const sig = favoriteSignature(f);
-      if (!m.has(sig)) m.set(sig, groupKeyOf(f.category));
+      if (!m.has(sig)) m.set(sig, groupKeyOf(f.group));
     }
     return m;
   }, [favorites]);
@@ -310,10 +310,10 @@ export function ProcessList({
       return b;
     };
     for (const p of filteredProcesses) {
-      bucket(sigGroup.get(favoriteSignature(p)) ?? UNGROUPED).processes.push(p);
+      bucket(groupKeyOf(p.group ?? sigGroup.get(favoriteSignature(p)))).processes.push(p);
     }
     for (const f of filteredFavorites) {
-      bucket(groupKeyOf(f.category)).favorites.push(f);
+      bucket(groupKeyOf(f.group)).favorites.push(f);
     }
     return [...map.values()]
       .map((g) => ({

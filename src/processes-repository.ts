@@ -17,6 +17,7 @@ export type ProcessRecord = {
   error: string | null;
   // Optional human-readable description (persisted so it survives restarts).
   desc: string | null;
+  group?: string | null;
   // Optional port the process serves on. Persisted so the dashboard's one-click
   // open link survives restarts. Undefined on records written before this field
   // existed; null when explicitly absent.

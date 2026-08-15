@@ -17,6 +17,7 @@ export type ProcessMetadata = {
   // Optional human-readable description, carried through from the caller
   // (MCP tool arg / dashboard form) and persisted alongside the record.
   desc: string | null;
+  group: string | null;
   // Optional port the process serves on (e.g. a dev server). Pure metadata —
   // it does not affect spawning; the dashboard renders a one-click open link.
   port: number | null;

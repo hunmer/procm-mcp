@@ -300,9 +300,9 @@
       "portLabel": "Port (optional)",
       "portPlaceholder": "3000",
       "portHelp": "Adds a one-click link to open http://localhost:<port> on the card.",
-      "categoryLabel": "Category (optional)",
-      "categoryPlaceholder": "e.g. Dev servers",
-      "categoryHelp": "Groups this favorite in the process list. Leave blank for “Ungrouped”.",
+      "groupLabel": "Group (optional)",
+      "groupPlaceholder": "e.g. Dev servers",
+      "groupHelp": "Groups this favorite in the process list. Leave blank for “Ungrouped”.",
       "envsLabel": "Environment variables (KEY=VALUE per line)",
       "envsPlaceholder": "NODE_ENV=development\nPORT=3000",
       "envsHelp": "Optional. One variable per line, written as KEY=VALUE."

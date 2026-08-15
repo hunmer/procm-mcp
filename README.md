@@ -66,7 +66,7 @@ HTTP API (same origin):
 - `GET  /api/processes` → list of processes `{ serverId, pid, processes: [...] }`
 - `GET  /api/processes/:id` → single process detail
 - `GET  /api/processes/:id/logs?stream=stdout|stderr&count=200` → recent log lines
-- `POST /api/processes` → start a process (body: `{ script, name?, args?, cwd, envs?, roomId? }`)
+- `POST /api/processes` → start a process (body: `{ script, name?, args?, cwd, envs?, desc?, port?, roomId?, group? }`)
 - `POST /api/processes/:id/stop` → stop and retain its history
 - `POST /api/processes/:id/restart` → restart
 - `GET /api/rooms` → list room metadata and active members
@@ -237,6 +237,7 @@ For network-facing setups, optional `PROCM_HTTP_TOKEN` requires an `Authorizatio
   - `desc` (optional): A human-readable description
   - `port` (optional): Served port metadata
   - `roomId` (optional): Room to join; preserved across restart
+  - `group` (optional): Dashboard grouping label; preserved across restart
 - `batch-process` Start or restart up to 100 processes with bounded concurrency and per-item results
 - `process` Manage a process by ID, or list all processes
   - `action` (required): `get` | `delete` | `restart` | `list`

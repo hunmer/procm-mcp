@@ -106,6 +106,7 @@ async function main() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       name: "emitlog",
+      group: "test",
       script: process.platform === "win32" ? "cmd" : "sh",
       args: process.platform === "win32" ? ["/c", `echo ${marker} & ping -n 3 127.0.0.1 >nul`] : ["-c", `echo ${marker}; sleep 2`],
       cwd: process.cwd(),

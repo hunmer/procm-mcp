@@ -134,6 +134,7 @@ function toRecord(meta: ProcessMetadata, stoppedAt: number | null = null): Proce
     exitCode: meta.exitCode,
     error: meta.error,
     desc: meta.desc,
+    group: meta.group,
     port: meta.port,
     roomId: meta.roomId,
     startedAt: startedAtByMeta.get(meta.id) ?? Date.now(),
@@ -275,6 +276,7 @@ export async function startProcess(
   desc?: string | null,
   port?: number | null,
   roomId?: string | null,
+  group?: string | null,
 ): Promise<ProcessMetadata> {
   serverLog(
     `Starting process: ${name || script} with args: ${
@@ -417,6 +419,7 @@ export async function startProcess(
       error: processError,
       exitCode,
       desc: desc ? desc.trim() || null : null,
+      group: group?.trim() || null,
       port: port ?? null,
       roomId: roomId?.trim() || null,
       process: childProcess,
@@ -762,6 +765,7 @@ export async function restartProcess(id: string): Promise<ProcessMetadata | null
       processMetadata.desc,
       processMetadata.port,
       processMetadata.roomId,
+      processMetadata.group,
     );
     processes[processIndex] = newProcess;
     // This branch reassigns in place and bypasses pushProcess, so reset the
@@ -790,6 +794,7 @@ export async function restartProcess(id: string): Promise<ProcessMetadata | null
     record.desc,
     record.port ?? null,
     record.roomId ?? null,
+    record.group ?? null,
   );
   // Preserve the original start time so the revived process keeps its place
   // in the history-sorted list instead of jumping to the top.

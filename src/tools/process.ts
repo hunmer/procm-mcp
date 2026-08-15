@@ -24,6 +24,7 @@ type StartInput = {
   desc?: string;
   port?: number;
   roomId?: string;
+  group?: string;
 };
 
 async function startManagedProcess(input: StartInput) {
@@ -40,6 +41,7 @@ async function startManagedProcess(input: StartInput) {
     input.desc,
     input.port ?? null,
     input.roomId ?? null,
+    input.group ?? null,
   );
   pushProcess(started);
   return started;
@@ -72,8 +74,9 @@ Warning: Do not invoke background processes that will not exit automatically, an
       desc: z.string().optional(),
       port: z.number().int().min(1).max(65535).optional(),
       roomId: z.string().min(1).optional(),
+      group: z.string().min(1).optional(),
     },
-    async ({ script, name, args = [], cwd = process.cwd(), envs = {}, desc, port, roomId }) => {
+    async ({ script, name, args = [], cwd = process.cwd(), envs = {}, desc, port, roomId, group }) => {
       logToolStart("start-process", {
         script,
         name,
@@ -81,11 +84,11 @@ Warning: Do not invoke background processes that will not exit automatically, an
         cwd,
         desc,
         port,
-        roomId,
+        roomId, group,
       });
 
       try {
-        const startedProcess = await startManagedProcess({ script, name, args, cwd, envs, desc, port, roomId });
+        const startedProcess = await startManagedProcess({ script, name, args, cwd, envs, desc, port, roomId, group });
         const processId = startedProcess.id;
         const command = createCommand(script, args);
 
@@ -122,6 +125,7 @@ Warning: Do not invoke background processes that will not exit automatically, an
         desc: z.string().optional(),
         port: z.number().int().min(1).max(65535).optional(),
         roomId: z.string().min(1).optional(),
+        group: z.string().min(1).optional(),
       })).max(100).optional(),
       ids: z.array(z.string().min(1)).max(100).optional(),
       concurrency: z.number().int().min(1).max(10).optional(),
@@ -160,30 +164,38 @@ Warning: Do not invoke background processes that will not exit automatically, an
   server.tool(
     "process",
     `Manage a process by ID, or list all processes.
-- action "list": list all running processes (id ignored).
+- action "list": list processes, defaulting to running; optionally filter by status/group.
 - action "get": show details of a process (requires id).
 - action "delete": stop and remove a process by ID (requires id).
 - action "restart": restart a process by ID (requires id).`,
     {
       action: z.enum(["get", "delete", "restart", "list"]),
       id: z.string().optional(),
+      status: z.enum(["running", "spawning", "exited", "error", "all"]).optional(),
+      group: z.string().min(1).optional(),
     },
-    async ({ action, id }) => {
-      logToolStart("process", { action, id });
+    async ({ action, id, status = "running", group }) => {
+      logToolStart("process", { action, id, status, group });
 
       try {
         // --- list -------------------------------------------------------
         if (action === "list") {
-          const processes = listProcesses();
+          const processes = listProcesses().filter((p) =>
+            (status === "all" || p.status === status) &&
+            (!group || p.group === group.trim()),
+          );
           if (processes.length === 0) {
             logToolEnd("process", { action: "list", count: 0 });
             return textResult("No processes are currently running.");
           }
           const lines = processes.map(
-            (p) => `${p.id}: ${p.name} (${p.script} ${p.args.join(" ")})`,
+            (p) => `${p.id}: ${p.name} [${p.status}${p.group ? `, group=${p.group}` : ""}] (${p.script} ${p.args.join(" ")})`,
           );
           logToolEnd("process", { action: "list", count: processes.length });
-          return textResult(`Running processes:\n${lines.join("\n")}`);
+          const heading = status === "running" && !group
+            ? "Running processes"
+            : `Processes (status=${status}${group ? `, group=${group}` : ""})`;
+          return textResult(`${heading}:\n${lines.join("\n")}`);
         }
 
         // --- get / delete / restart all need an id ----------------------
@@ -203,6 +215,7 @@ Warning: Do not invoke background processes that will not exit automatically, an
             `Process ID: ${p.id}\n` +
               `Process PID: ${p.pid}\n` +
               `Name: ${p.name}\n` +
+              `Group: ${p.group ?? "N/A"}\n` +
               `Script: ${p.script}\n` +
               `Arguments: ${p.args.join(" ")}\n` +
               `CWD: ${p.cwd}\n` +

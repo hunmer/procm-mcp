@@ -60,6 +60,8 @@ await runTest("start via CLI then list shows it", async () => {
     "setInterval(()=>console.log('tick'),500)",
     "--name",
     "cli-probe",
+    "--group",
+    "test",
   );
   assertEqual(r.code, 0, "start exit 0");
   const m = r.stdout.match(/ID: ([^\s)]+)/);
@@ -129,6 +131,7 @@ await runTest("mcptool calls a tool with --args JSON and cleans up", async () =>
       args: ["-e", "setInterval(()=>console.log('mt'),500)"],
       cwd: projectRoot,
       name: "mcptool-probe",
+      group: "test",
     }),
   );
   assertEqual(r.code, 0, "start via mcptool exit 0");

@@ -240,7 +240,7 @@ export function FavoriteDialog({
     desc: "",
     envs: "",
     port: "",
-    category: "",
+    group: "",
   });
 
   // Seed the form whenever the dialog opens to a fresh target.
@@ -255,7 +255,7 @@ export function FavoriteDialog({
         desc: seedFavorite.desc ?? "",
         envs: stringifyEnvs(seedFavorite.envs),
         port: seedFavorite.port ? String(seedFavorite.port) : "",
-        category: seedFavorite.category ?? "",
+        group: seedFavorite.group ?? "",
       });
     } else if (seedProcess) {
       // Favoriting a process: envs aren't exposed by the public API, so they
@@ -268,7 +268,7 @@ export function FavoriteDialog({
         desc: seedProcess.desc ?? "",
         envs: "",
         port: seedProcess.port ? String(seedProcess.port) : "",
-        category: "",
+        group: "",
       });
     }
   }, [open, seedFavorite, seedProcess]);
@@ -299,7 +299,7 @@ export function FavoriteDialog({
         portNum <= 65535
           ? portNum
           : undefined,
-      category: fields.category.trim(),
+      group: fields.group.trim(),
       createdAt: seedFavorite?.createdAt ?? Date.now(),
     };
     if (isEdit) onEdit(fav);
@@ -328,7 +328,7 @@ export function FavoriteDialog({
           desc={fields.desc}
           envs={fields.envs}
           port={fields.port}
-          category={fields.category}
+          group={fields.group}
           setters={{
             setName: (v) => set("name", v),
             setScript: (v) => set("script", v),
@@ -337,7 +337,7 @@ export function FavoriteDialog({
             setDesc: (v) => set("desc", v),
             setEnvs: (v) => set("envs", v),
             setPort: (v) => set("port", v),
-            setCategory: (v) => set("category", v),
+            setGroup: (v) => set("group", v),
           }}
           presets={[]}
           submitting={false}
@@ -350,7 +350,7 @@ export function FavoriteDialog({
 }
 
 // Shared form body for both new-process and read-only detail views. When
-// `category` is provided it also renders the category input — used by the
+// `group` is provided it also renders the group input — used by the
 // favorite editor (see FavoriteDialog) which groups saved launches.
 interface ProcessFormProps {
   name: string;
@@ -360,7 +360,7 @@ interface ProcessFormProps {
   desc: string;
   envs: string;
   port: string;
-  category?: string;
+  group?: string;
   setters: {
     setName: (v: string) => void;
     setScript: (v: string) => void;
@@ -369,7 +369,7 @@ interface ProcessFormProps {
     setDesc: (v: string) => void;
     setEnvs: (v: string) => void;
     setPort: (v: string) => void;
-    setCategory?: (v: string) => void;
+    setGroup?: (v: string) => void;
   };
   presets: ReturnType<typeof useProcessPresets>;
   readOnly?: boolean;
@@ -389,7 +389,7 @@ function ProcessForm({
   desc,
   envs,
   port,
-  category,
+  group,
   setters,
   presets,
   readOnly,
@@ -506,18 +506,18 @@ function ProcessForm({
         </Field>
         {/* Category only renders for the favorite editor (setters.setCategory
             is wired only there). It's the grouping key for the favorites view. */}
-        {setters.setCategory && (
+        {setters.setGroup && (
           <Field className="mt-4">
-            <FieldLabel htmlFor="f-category">{t("dialogs.form.categoryLabel")}</FieldLabel>
+            <FieldLabel htmlFor="f-group">{t("dialogs.form.groupLabel")}</FieldLabel>
             <Input
-              id="f-category"
-              placeholder={t("dialogs.form.categoryPlaceholder")}
-              value={category ?? ""}
-              onChange={(e) => setters.setCategory!(e.target.value)}
+              id="f-group"
+              placeholder={t("dialogs.form.groupPlaceholder")}
+              value={group ?? ""}
+              onChange={(e) => setters.setGroup!(e.target.value)}
               readOnly={readOnly}
             />
             <FieldDescription>
-              {t("dialogs.form.categoryHelp")}
+              {t("dialogs.form.groupHelp")}
             </FieldDescription>
           </Field>
         )}

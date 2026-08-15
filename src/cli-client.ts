@@ -10,7 +10,7 @@
 //   info <id>                             Show details of a process
 //   logs <id> [--stream stdout|stderr] [-n <count>]   Tail recent logs
 //   grep <id> <pattern> [--stream s] [-n <count>] [--ignore-case|-i]
-//   start <script> [args...] [--cwd <dir>] [--name <n>] [--env KEY=VAL ...]
+//   start <script> [args...] [--cwd <dir>] [--name <n>] [--group <n>] [--env KEY=VAL ...]
 //   restart <id>                          Restart a process
 //   stop <id>                             Stop and delete a process
 //   ping                                  Check the backend is reachable
@@ -33,6 +33,7 @@ type ProcView = {
   pid: number | null;
   exitCode: number | null;
   error: string | null;
+  group?: string | null;
 };
 
 function fail(msg: string, code = 1): never {
@@ -229,13 +230,14 @@ async function cmdGrep(port: number, args: string[], token?: string) {
 }
 
 async function cmdStart(port: number, args: string[], token?: string) {
-  // procm-mcp start <script> [args...] [--cwd dir] [--name n] [--env K=V ...]
+  // procm-mcp start <script> [args...] [--cwd dir] [--name n] [--group g] [--env K=V ...]
   if (args.length === 0) {
-    fail("usage: procm-mcp start <script> [args...] [--cwd <dir>] [--name <n>] [--env KEY=VAL ...]");
+    fail("usage: procm-mcp start <script> [args...] [--cwd <dir>] [--name <n>] [--group <n>] [--env KEY=VAL ...]");
   }
   const passthrough: string[] = [];
   let cwd = process.cwd();
   let name: string | undefined;
+  let group: string | undefined;
   const envs: Record<string, string> = {};
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -243,6 +245,8 @@ async function cmdStart(port: number, args: string[], token?: string) {
     else if (a.startsWith("--cwd=")) cwd = a.slice("--cwd=".length);
     else if (a === "--name") name = args[++i];
     else if (a.startsWith("--name=")) name = a.slice("--name=".length);
+    else if (a === "--group") group = args[++i];
+    else if (a.startsWith("--group=")) group = a.slice("--group=".length);
     else if (a === "--env") {
       const kv = args[++i] || "";
       const eq = kv.indexOf("=");
@@ -259,7 +263,7 @@ async function cmdStart(port: number, args: string[], token?: string) {
     port,
     "POST",
     "/api/processes",
-    { script, args: scriptArgs, cwd, name, envs },
+    { script, args: scriptArgs, cwd, name, group, envs },
     token,
   );
   console.log(`Process started: ${data.name} (ID: ${data.id})`);
@@ -478,7 +482,7 @@ export function clientHelp(): string {
     "  info <id>                             Show details of a process",
     "  logs <id> [--stream stdout|stderr] [-n <count>]   Tail recent logs",
     "  grep <id> <pattern> [--stream s] [-n <count>] [-i]   Search logs with a regex",
-    "  start <script> [args...] [--cwd <dir>] [--name <n>] [--env KEY=VAL ...]",
+    "  start <script> [args...] [--cwd <dir>] [--name <n>] [--group <n>] [--env KEY=VAL ...]",
     "                                        Start a new process",
     "  restart <id>                          Restart a process",
     "  stop <id>                             Stop and delete a process",

@@ -62,6 +62,7 @@ await runTest("noisy persistent processes keep custom execution responses clean"
         cwd: projectRoot,
         name,
         roomId,
+        group: "test",
       });
       assertEqual(started.status, 201, `${name} starts`);
       processIds.push(started.data.id);

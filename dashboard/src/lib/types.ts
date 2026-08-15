@@ -14,6 +14,7 @@ export interface ProcessView {
   error: string | null;
   // Optional human-readable description, shown in the process list.
   desc?: string | null;
+  group?: string | null;
   // Optional port the process serves on; the card shows a one-click open link
   // to http://localhost:<port> when set. null/undefined when absent.
   port?: number | null;
@@ -96,6 +97,7 @@ export interface StartProcessBody {
   desc?: string;
   port?: number;
   roomId?: string;
+  group?: string;
 }
 
 // ---- WebSocket messages (mirrors src/websocket-server.ts envelope) ----

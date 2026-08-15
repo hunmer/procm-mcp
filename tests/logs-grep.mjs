@@ -26,6 +26,7 @@ await runTest("capture stdout and stderr", async () => {
     args: [exampleProcess],
     cwd: process.cwd(),
     name: "logger",
+    group: "test",
     envs: { PROCM_MCP_TEST_VAR1: MARKER },
   });
   id = data.id;

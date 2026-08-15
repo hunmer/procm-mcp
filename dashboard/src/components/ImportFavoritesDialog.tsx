@@ -43,7 +43,7 @@ interface ImportFavoritesDialogProps {
 
 // Convert a selected candidate into a Favorite. The category is the scanned
 // folder's absolute path, so every imported favorite lands under one group.
-function candidateToFavorite(c: ScanCandidate, category: string): Favorite {
+function candidateToFavorite(c: ScanCandidate, group: string): Favorite {
   return {
     id: makeFavoriteId(),
     script: c.script,
@@ -51,7 +51,7 @@ function candidateToFavorite(c: ScanCandidate, category: string): Favorite {
     cwd: c.cwd,
     name: c.name,
     desc: c.desc,
-    category,
+    group,
     createdAt: Date.now(),
   };
 }

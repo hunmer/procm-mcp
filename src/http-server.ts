@@ -87,6 +87,7 @@ function toPublicView(p: ProcessMetadata) {
     exitCode: p.exitCode,
     error: p.error,
     desc: p.desc,
+    group: p.group,
     port: p.port,
     roomId: p.roomId,
   };
@@ -106,6 +107,7 @@ function toPublicRecord(p: ProcessRecord) {
     exitCode: p.exitCode,
     error: p.error,
     desc: p.desc,
+    group: p.group ?? null,
     port: p.port ?? null,
     roomId: p.roomId ?? null,
     startedAt: p.startedAt,
@@ -789,6 +791,7 @@ function createRequestHandler(token: string | undefined) {
               ? body.envs
               : {};
           const desc = body.desc ? String(body.desc) : undefined;
+          const group = body.group ? String(body.group).trim() : null;
           const roomId = body.roomId ? String(body.roomId).trim() : null;
           // Optional port the process serves on. Coerced to an integer and
           // range-checked; anything invalid is rejected so the dashboard's
@@ -814,6 +817,7 @@ function createRequestHandler(token: string | undefined) {
             desc,
             port,
             roomId,
+            group,
           );
           pushProcess(started);
           json(res, 201, { id: processId, name: started.name });

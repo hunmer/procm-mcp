@@ -199,6 +199,7 @@ await runTest("process roomId survives restart and structured logs are queryable
       cwd: projectRoot,
       name: "room-log-fixture",
       roomId: "log-room",
+      group: "test",
     });
     assertEqual(started.status, 201, "room process starts");
     const id = started.data.id;
@@ -234,8 +235,8 @@ await runTest("batch-process returns ordered per-item results", async () => {
         action: "start",
         concurrency: 2,
         processes: [
-          { script: "node", args: ["-e", "setTimeout(()=>{},1000)"], cwd: projectRoot, name: "batch-ok", roomId: "batch-room" },
-          { script: "definitely-not-a-real-command", cwd: projectRoot, name: "batch-fail", roomId: "batch-room" },
+          { script: "node", args: ["-e", "setTimeout(()=>{},1000)"], cwd: projectRoot, name: "batch-ok", roomId: "batch-room", group: "test" },
+          { script: "definitely-not-a-real-command", cwd: projectRoot, name: "batch-fail", roomId: "batch-room", group: "test" },
         ],
       },
     },

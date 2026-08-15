@@ -22,8 +22,8 @@ export interface Favorite {
   // Optional port the process serves on, carried into the start call so a
   // relaunched favorite keeps its one-click open link.
   port?: number;
-  // Optional grouping key. Empty string means "Uncategorized".
-  category?: string;
+  // Optional grouping key. Empty string means "Ungrouped".
+  group?: string;
   // Epoch ms — newest first in the UI.
   createdAt: number;
 }
@@ -39,7 +39,7 @@ export function favoriteFromProcess(p: ProcessView): Favorite {
     args: p.args,
     cwd: p.cwd,
     port: typeof p.port === "number" ? p.port : undefined,
-    category: "",
+    group: p.group ?? "",
     createdAt: Date.now(),
   };
 }
@@ -55,6 +55,7 @@ export function favoriteToStartBody(f: Favorite): StartProcessBody {
     envs: f.envs,
     desc: f.desc?.trim() || undefined,
     port: f.port,
+    group: f.group?.trim() || undefined,
   };
 }
 
@@ -65,8 +66,8 @@ export function favoriteToStartBody(f: Favorite): StartProcessBody {
 export const UNGROUPED = "Ungrouped";
 
 // Normalized group label: blank/whitespace category collapses to "Ungrouped".
-export function groupKeyOf(category: string | undefined): string {
-  const v = (category ?? "").trim();
+export function groupKeyOf(group: string | undefined): string {
+  const v = (group ?? "").trim();
   return v.length ? v : UNGROUPED;
 }
 
@@ -128,7 +129,12 @@ function normalize(raw: Record<string, unknown>): Favorite | null {
     cwd,
     envs,
     port: typeof raw.port === "number" ? raw.port : undefined,
-    category: typeof raw.category === "string" ? raw.category : "",
+    // Migrate the former persisted `category` field to `group` on read.
+    group: typeof raw.group === "string"
+      ? raw.group
+      : typeof raw.category === "string"
+        ? raw.category
+        : "",
     createdAt: typeof raw.createdAt === "number" ? raw.createdAt : Date.now(),
   };
 }

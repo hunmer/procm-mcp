@@ -22,6 +22,7 @@ await runTest("failed starts do not poison later process cleanup", async () => {
       script: "__procm_missing_command__",
       cwd: projectRoot,
       name: `failed-start-${i}`,
+      group: "test",
     });
     assertEqual(failed.status, 500, `failed start ${i + 1} status`);
   }
@@ -40,6 +41,7 @@ await runTest("fast exits preserve final stderr diagnostics", async () => {
     args: ["-e", `console.error('${marker}'); process.exit(1)`],
     cwd: projectRoot,
     name: "fast-exit-diagnostic",
+    group: "test",
   });
   assertEqual(started.status, 201, "fast exit start status");
   await sleep(300);
@@ -58,6 +60,7 @@ await runTest("start a process and see it running", async () => {
     args: ["-e", "setInterval(()=>{}, 60000)"],
     cwd: projectRoot,
     name: "lifecycle-probe",
+    group: "test",
   });
   assertEqual(status, 201, "POST /api/processes status");
   assert(!!data.id, "got a process id");
@@ -94,6 +97,7 @@ await runTest("restart continues when the old pid is already gone", async () => 
     args: ["-e", "process.exit(0)"],
     cwd: projectRoot,
     name: "stale-pid-probe",
+    group: "test",
   });
   assertEqual(started.status, 201, "stale pid process start status");
   await sleep(300);

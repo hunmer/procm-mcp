@@ -7,9 +7,9 @@
 
 | 工具 | 参数 | 说明 |
 |---|---|---|
-| `start-process` | `script`(必) `cwd`(必) `name?` `args?[]` `envs?{}` `desc?` `port?` `roomId?` | 启动进程。仅 `validateScript`（拒绝含空格/`=` 的 script），**无白名单/审批**。`roomId` 让进程加入房间（重启保留）。Windows 上裸命令经 `resolveSpawnTarget` 解析 `.cmd`/`.bat`。 |
+| `start-process` | `script`(必) `cwd`(必) `name?` `args?[]` `envs?{}` `desc?` `port?` `roomId?` `group?` | 启动进程。仅 `validateScript`（拒绝含空格/`=` 的 script），**无白名单/审批**。`roomId` 让进程加入房间（重启保留）；`group` 为 Dashboard 分组标签（重启保留）。Windows 上裸命令经 `resolveSpawnTarget` 解析 `.cmd`/`.bat`。 |
 | `batch-process` | `action`(必) + `processes?[]`/`ids?[]` `concurrency?` | 批量 start 或 restart；≤100 项、有界并发（batch-process MCP 工具上限）、逐项 `{ok,...}` 结果。 |
-| `process` | `action`(必) `id?` | `action` ∈ `get`/`delete`/`restart`/`list`；get/delete/restart 需 `id`。delete 默认 SIGTERM，10s 未退出则 SIGKILL。 |
+| `process` | `action`(必) `id?` `status?` `group?` | `action` ∈ `get`/`delete`/`restart`/`list`；get/delete/restart 需 `id`。list 默认只返回 `running`，可按 `status`（含 `all`）和 `group` 过滤。delete 默认 SIGTERM，10s 未退出则 SIGKILL。 |
 | `process-logs` | `id`(必) `stream?` `pattern?` `count?` `ignoreCase?` | 无 pattern → tail（默认 stdout，count 10）；有 pattern → 正则 grep（默认 50，可搜双流）。 |
 | `process-log-files` | `id`(必) | 返回指定进程 stdout/stderr 日志文件绝对路径，支持历史进程。 |
 | `log-files` | `processId?` `stream?` `limit?` | 列出历史日志文件及绝对路径，按修改时间倒序，可按进程/流筛选。 |
@@ -26,7 +26,7 @@
 | 方法 | 路径 | 用途 |
 |---|---|---|
 | GET | `/api/processes` | 合并内存+历史记录，按 `startedAt` 倒序 |
-| POST | `/api/processes` | 启动（body `{script,name?,args?[],cwd,envs?,desc?,roomId?}`）→ `{id,name}` |
+| POST | `/api/processes` | 启动（body `{script,name?,args?[],cwd,envs?,desc?,port?,roomId?,group?}`）→ `{id,name}` |
 | DELETE | `/api/processes` | 批量删除（body `{ids?}`，空即全部） |
 | GET | `/api/processes/:id` | 单进程详情（活进程视图） |
 | GET | `/api/processes/:id/logs?stream=&count=&grep=&ignoreCase=&after=` | tail 或 grep（活 client 或磁盘 `.log`） |

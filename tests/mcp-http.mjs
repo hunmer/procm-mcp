@@ -73,7 +73,7 @@ await runTest("state shared with REST API", async () => {
   const args = ["-e", uniq, "ok"];
   const start = await mcpHttp(port, 4, "tools/call", {
     name: "start-process",
-    arguments: { script: "node", args, cwd: projectRoot, name: "shared-probe" },
+    arguments: { script: "node", args, cwd: projectRoot, name: "shared-probe", group: "test" },
   });
   assert(/Process started/.test(start.result.content[0].text), "started via MCP-HTTP");
   const id = (await http(port, "GET", "/api/processes")).data.processes[0].id;
