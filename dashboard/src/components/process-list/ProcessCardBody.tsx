@@ -3,20 +3,25 @@ import {
   CardAction,
   CardHeader,
 } from "@/registry/default/ui/card";
-import { ExternalLinkIcon } from "lucide-react";
+import { Button } from "@/registry/default/ui/button";
+import { ExternalLinkIcon, PinIcon, PinOffIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { StatusBadge } from "../StatusBadge";
 import type { ProcessView } from "@/lib/types";
 
-// Header of a process card: name + status badge + description, with an unread
-// log badge in the action slot. Rendered as the card's first child so the
-// ContextMenuTrigger (the Card itself) wraps both header and panel.
+// Header of a process card: name + status badge + description, with pin /
+// unread-log badges in the action slot. Rendered as the card's first child so
+// the ContextMenuTrigger (the Card itself) wraps both header and panel.
 export function ProcessCardBody({
   p,
   unreadCount,
+  pinned,
+  onTogglePin,
 }: {
   p: ProcessView;
   unreadCount: number;
+  pinned: boolean;
+  onTogglePin: () => void;
 }) {
   const { t } = useTranslation();
   const port = typeof p.port === "number" ? p.port : null;
@@ -43,6 +48,25 @@ export function ProcessCardBody({
       </div>
       <CardAction className="row-span-1 self-center">
         <div className="flex items-center gap-1.5">
+          {/* Pin floats the row to the top of its group, regardless of the
+              selected sort order. */}
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label={pinned ? t("processes.unpinAria", { name: p.name }) : t("processes.pinAria", { name: p.name })}
+            title={pinned ? t("processes.unpinTitle") : t("processes.pinTitle")}
+            onClick={(e) => {
+              e.stopPropagation();
+              onTogglePin();
+            }}
+            className={
+              pinned
+                ? "text-primary"
+                : "text-muted-foreground opacity-60 hover:opacity-100"
+            }
+          >
+            {pinned ? <PinIcon /> : <PinOffIcon />}
+          </Button>
           {/* One-click open of the process's served URL. stopPropagation keeps
               the click from also selecting the card / opening the context menu. */}
           {portHref && (

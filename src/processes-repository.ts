@@ -24,6 +24,7 @@ export type ProcessRecord = {
   port?: number | null;
   // Optional room association. Undefined on records created before room support.
   roomId?: string | null;
+  favorite?: boolean;
   // Epoch ms when the process was first started.
   startedAt: number;
   // Epoch ms of the most recent start; reset on every restart (distinct from

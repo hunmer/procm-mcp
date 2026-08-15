@@ -1,6 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { DownloadIcon, SearchIcon } from "lucide-react";
-import { Button } from "@/registry/default/ui/button";
+import { ArrowDownUpIcon, SearchIcon } from "lucide-react";
 import { Input } from "@/registry/default/ui/input";
 import {
   Select,
@@ -12,36 +11,41 @@ import {
   SelectValue,
 } from "@/registry/default/ui/select";
 import {
+  SORT_OPTIONS,
   STATUS_DOT,
   STATUS_OPTIONS,
+  type SortMode,
   type StatusFilter,
 } from "./types";
 
-// The filter bar above the merged list: status select (processes only) + name
-// search (processes and favorites) + result count, plus the folder-import
-// button for favorites. Stateless — all values/setters come in as props so the
-// orchestrator owns the state.
+// The filter bar above the merged list: status select (processes only) + sort
+// select + name search + result count. Stateless — all values/setters come in
+// as props so the orchestrator owns the state.
 export function ProcessFilterBar({
   statusFilter,
   onStatusFilterChange,
+  sortMode,
+  onSortModeChange,
   nameFilter,
   onNameFilterChange,
   shownCount,
   totalCount,
-  onImport,
 }: {
   statusFilter: StatusFilter;
   onStatusFilterChange: (v: StatusFilter) => void;
+  sortMode: SortMode;
+  onSortModeChange: (v: SortMode) => void;
   nameFilter: string;
   onNameFilterChange: (v: string) => void;
   shownCount: number;
   totalCount: number;
-  onImport: () => void;
 }) {
   const { t } = useTranslation();
   const current =
     STATUS_OPTIONS.find((o) => o.value === statusFilter) ??
     STATUS_OPTIONS[0];
+  const currentSort =
+    SORT_OPTIONS.find((o) => o.value === sortMode) ?? SORT_OPTIONS[0];
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-4 py-2.5">
       <Select
@@ -80,6 +84,32 @@ export function ProcessFilterBar({
           ))}
         </SelectPopup>
       </Select>
+      <Select
+        value={sortMode}
+        onValueChange={(v) => onSortModeChange((v as SortMode) ?? "none")}
+      >
+        <SelectTrigger
+          size="sm"
+          className="w-[130px]"
+          aria-label={t("processes.sortAria")}
+          title={t("processes.sortAria")}
+        >
+          <SelectValue>
+            <span className="flex items-center gap-2">
+              <ArrowDownUpIcon className="size-3.5 shrink-0" />
+              {t(currentSort.labelKey)}
+            </span>
+          </SelectValue>
+          <SelectIcon />
+        </SelectTrigger>
+        <SelectPopup>
+          {SORT_OPTIONS.map((o) => (
+            <SelectItem key={o.value} value={o.value}>
+              <SelectItemText>{t(o.labelKey)}</SelectItemText>
+            </SelectItem>
+          ))}
+        </SelectPopup>
+      </Select>
       <div className="relative min-w-[180px] flex-1">
         <SearchIcon className="text-foreground/50 pointer-events-none absolute top-1/2 left-2.5 z-10 size-3.5 -translate-y-1/2" />
         <Input
@@ -92,17 +122,6 @@ export function ProcessFilterBar({
       <span className="text-muted-foreground text-xs">
         {t("processes.countOfTotal", { shown: shownCount, total: totalCount })}
       </span>
-      <div className="ml-auto flex items-center gap-0.5">
-        <Button
-          size="icon-sm"
-          variant="outline"
-          aria-label={t("favorites.importAria")}
-          title={t("favorites.importTitle")}
-          onClick={onImport}
-        >
-          <DownloadIcon />
-        </Button>
-      </div>
     </div>
   );
 }

@@ -22,6 +22,7 @@ export type ProcessMetadata = {
   // it does not affect spawning; the dashboard renders a one-click open link.
   port: number | null;
   roomId: string | null;
+  favorite: boolean;
   process: ChildProcess;
   stdoutClient: ProcessStdoutClient;
   stderrClient: ProcessStdoutClient;

@@ -53,6 +53,10 @@ export function getProcess(id: string): Promise<ProcessView> {
   return api<ProcessView>("GET", `/api/processes/${encodeURIComponent(id)}`);
 }
 
+export function setProcessFavorite(id: string, favorite: boolean): Promise<ProcessView> {
+  return api<ProcessView>("PATCH", `/api/processes/${encodeURIComponent(id)}`, { favorite });
+}
+
 export function getLogs(
   id: string,
   stream: "stdout" | "stderr",

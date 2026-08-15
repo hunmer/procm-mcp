@@ -101,6 +101,47 @@ await runTest("POST start without script/cwd → 400", async () => {
   assert(!!data.error, "has error message");
 });
 
+await runTest("POST start enforces unique names and explicit replacement", async () => {
+  const body = {
+    script: "node",
+    args: ["-e", "setInterval(()=>{},1000)"],
+    cwd: projectRoot,
+    name: "unique-name-check",
+  };
+  const first = await http(port, "POST", "/api/processes", body);
+  assertEqual(first.status, 201, "first named start");
+
+  const duplicate = await http(port, "POST", "/api/processes", body);
+  assertEqual(duplicate.status, 409, "duplicate named start rejected");
+  assert(duplicate.data.error.includes("overwrite=true"), "duplicate explains overwrite");
+
+  const withoutRestart = await http(port, "POST", "/api/processes", { ...body, overwrite: true });
+  assertEqual(withoutRestart.status, 409, "running replacement requires restart");
+  assert(withoutRestart.data.error.includes("restart=true"), "running replacement explains restart");
+
+  const replaced = await http(port, "POST", "/api/processes", { ...body, overwrite: true, restart: true });
+  assertEqual(replaced.status, 201, "running named process replaced");
+  const listed = await http(port, "GET", "/api/processes?search=unique-name-check");
+  assertEqual(listed.data.processes.filter((p) => p.name === body.name).length, 1, "only one named record remains");
+  await http(port, "DELETE", "/api/processes", { ids: [replaced.data.id] });
+});
+
+await runTest("PATCH process favorite persists in REST and list views", async () => {
+  const started = await http(port, "POST", "/api/processes", {
+    script: "node",
+    args: ["-e", "setInterval(()=>{},1000)"],
+    cwd: projectRoot,
+    name: "favorite-persistence-check",
+  });
+  assertEqual(started.status, 201, "favorite fixture start");
+  const patched = await http(port, "PATCH", `/api/processes/${started.data.id}`, { favorite: true });
+  assertEqual(patched.status, 200, "favorite patch status");
+  assertEqual(patched.data.favorite, true, "favorite patch response");
+  const listed = await http(port, "GET", "/api/processes?search=favorite-persistence-check");
+  assertEqual(listed.data.processes.find((p) => p.id === started.data.id).favorite, true, "favorite in list");
+  await http(port, "DELETE", "/api/processes", { ids: [started.data.id] });
+});
+
 await runTest("package scripts use the enclosing pnpm workspace", async () => {
   const workspace = await mkdtemp(join(tmpdir(), "procm-pnpm-workspace-"));
   const packageDir = join(workspace, "packages", "client");

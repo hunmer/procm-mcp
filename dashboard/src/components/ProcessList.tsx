@@ -6,7 +6,6 @@ import {
   FolderOpenIcon,
   InboxIcon,
   ListXIcon,
-  TrashIcon,
 } from "lucide-react";
 import { clearAllProcesses } from "@/lib/api";
 import { Badge } from "@/registry/default/ui/badge";
@@ -24,23 +23,17 @@ import {
   EmptyTitle,
 } from "@/registry/default/ui/empty";
 import { Frame, FrameHeader, FramePanel } from "@/registry/default/ui/frame";
-import {
-  favoriteSignature,
-  groupKeyOf,
-  UNGROUPED,
-  type Favorite,
-} from "@/lib/favorites";
 import type { ProcessView } from "@/lib/types";
 import {
   type ProcessListProps,
   type RowActions,
+  type SortMode,
   type StatusFilter,
 } from "./process-list/types";
 import { useProcessActions } from "./process-list/useProcessActions";
 import { canStopProcess } from "./process-list/utils";
 import { ProcessFilterBar } from "./process-list/ProcessFilterBar";
 import { ProcessCard } from "./process-list/ProcessCard";
-import { FavoriteCard } from "./process-list/FavoriteCard";
 import { ProcessDialogs } from "./process-list/ProcessDialogs";
 
 // Whether a group label looks like an absolute folder path that the backend
@@ -55,11 +48,21 @@ function looksLikePath(label: string): boolean {
 // localStorage may be unavailable (private mode); the in-memory state still
 // works for the session.
 const COLLAPSED_KEY = "procm.collapsedGroups";
+const UNGROUPED = "Ungrouped";
 
-function loadCollapsed(): Set<string> {
+function groupKeyOf(group: string | undefined): string {
+  const value = (group ?? "").trim();
+  return value || UNGROUPED;
+}
+
+// Pinned process ids, persisted across reloads. Ids of deleted processes may
+// linger; they simply never match a row again.
+const PINNED_KEY = "procm.pinnedProcesses";
+
+function loadIdSet(key: string): Set<string> {
   if (typeof localStorage === "undefined") return new Set();
   try {
-    const raw = JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? "[]");
+    const raw = JSON.parse(localStorage.getItem(key) ?? "[]");
     return new Set(
       Array.isArray(raw) ? raw.filter((v): v is string => typeof v === "string") : [],
     );
@@ -68,10 +71,47 @@ function loadCollapsed(): Set<string> {
   }
 }
 
+function saveIdSet(key: string, ids: Set<string>) {
+  try {
+    localStorage.setItem(key, JSON.stringify([...ids]));
+  } catch {
+    // localStorage may be unavailable; ignore.
+  }
+}
+
+function loadCollapsed(): Set<string> {
+  return loadIdSet(COLLAPSED_KEY);
+}
+
 interface Group {
   label: string;
   processes: ProcessView[];
-  favorites: Favorite[];
+}
+
+// Order the rows inside a group: pinned rows always float to the top; the
+// sort mode then applies — "startedAt" newest-first, "none" keeps the
+// backend's push order (stabilized via the original index).
+function orderGroup(
+  rows: ProcessView[],
+  sortMode: SortMode,
+  pinned: Set<string>,
+): ProcessView[] {
+  if (pinned.size === 0 && sortMode === "none") return rows;
+  return rows
+    .map((p, i) => ({ p, i }))
+    .sort((a, b) => {
+      const pa = pinned.has(a.p.id) ? 1 : 0;
+      const pb = pinned.has(b.p.id) ? 1 : 0;
+      if (pa !== pb) return pb - pa;
+      if (sortMode === "startedAt") {
+        return (
+          (b.p.lastStartedAt ?? b.p.startedAt ?? 0) -
+          (a.p.lastStartedAt ?? a.p.startedAt ?? 0)
+        );
+      }
+      return a.i - b.i;
+    })
+    .map(({ p }) => p);
 }
 
 interface GroupSectionProps {
@@ -82,15 +122,15 @@ interface GroupSectionProps {
   onOpenChange: (open: boolean) => void;
   selectedId: string | null;
   unread: Record<string, number>;
-  favoritedSignatures: Set<string>;
+  // Pinned process ids (rows that float to the top of their group).
+  pinnedIds: Set<string>;
   actions: RowActions;
-  favActions: {
-    onLaunch: (f: Favorite) => void;
-    onEdit: (f: Favorite) => void;
-    onRemove: (id: string) => void;
-  };
   onOpenFolder: (path: string) => void;
-  onRemoveCategory: (ids: string[]) => void;
+  // Pin/unpin a process row.
+  onTogglePin: (p: ProcessView) => void;
+  // Only called for the Ungrouped bucket: stop its running processes and
+  // remove every record from the list.
+  onClearUngrouped: (g: Group) => void;
 }
 
 // One category section, following the "Frame with collapsible content" pattern
@@ -103,11 +143,11 @@ function GroupSection({
   onOpenChange,
   selectedId,
   unread,
-  favoritedSignatures,
+  pinnedIds,
   actions,
-  favActions,
   onOpenFolder,
-  onRemoveCategory,
+  onTogglePin,
+  onClearUngrouped,
 }: GroupSectionProps) {
   const { t } = useTranslation();
   return (
@@ -125,7 +165,7 @@ function GroupSection({
               {g.label === UNGROUPED ? t("processes.ungrouped") : g.label}
             </span>
             <Badge variant="secondary" className="tabular-nums">
-              {g.processes.length + g.favorites.length}
+            {g.processes.length}
             </Badge>
           </CollapsibleTrigger>
           <div className="flex items-center gap-0.5">
@@ -141,17 +181,19 @@ function GroupSection({
                 <FolderOpenIcon />
               </Button>
             )}
-            {g.favorites.length > 0 && (
-              <Button
-                size="icon-sm"
-                variant="ghost"
-                aria-label={t("favorites.deleteGroupAria", { label: g.label })}
-                title={t("favorites.deleteGroupTitle")}
-                onClick={() => onRemoveCategory(g.favorites.map((f) => f.id))}
-                className="text-muted-foreground hover:text-destructive"
-              >
-                <TrashIcon />
-              </Button>
+            {g.label === UNGROUPED && (
+              g.processes.length > 0 && (
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={t("processes.clearUngroupedAria")}
+                  title={t("processes.clearUngroupedTitle")}
+                  onClick={() => onClearUngrouped(g)}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <ListXIcon />
+                </Button>
+              )
             )}
           </div>
         </FrameHeader>
@@ -164,17 +206,9 @@ function GroupSection({
                   p={p}
                   isActive={p.id === selectedId}
                   unreadCount={unread[p.id] ?? 0}
-                  favoritedSignatures={favoritedSignatures}
+                  pinned={pinnedIds.has(p.id)}
+                  onTogglePin={onTogglePin}
                   actions={actions}
-                />
-              ))}
-              {g.favorites.map((f) => (
-                <FavoriteCard
-                  key={f.id}
-                  favorite={f}
-                  onLaunch={() => favActions.onLaunch(f)}
-                  onEdit={() => favActions.onEdit(f)}
-                  onRemove={() => favActions.onRemove(f.id)}
                 />
               ))}
             </div>
@@ -185,34 +219,37 @@ function GroupSection({
   );
 }
 
-// The merged 进程 list: one grouped view that combines the live processes with
-// the favorites they were started from. A process is placed in the category
-// group of the favorite with the same launch signature (script+args+cwd);
-// everything else — plus favorites without a category — falls into the
-// 【未分组】(Ungrouped) bucket. Groups render in the favorites style: a folder
-// header with a count badge, then a card grid.
+// The process list uses one card shape for every process and groups by the
+// process record's own group field.
 export function ProcessList({
   processes,
-  favorites,
   selectedId,
   unread,
-  favoritedSignatures,
   onToggleFavorite,
   onSelectLogs,
   onView,
   onToast,
-  onLaunchFavorite,
-  onEditFavorite,
-  onRemoveFavorite,
-  onImport,
   onOpenFolder,
-  onRemoveCategory,
 }: ProcessListProps) {
   const { t } = useTranslation();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [nameFilter, setNameFilter] = useState("");
+  // How the rows inside each group are ordered (pinned always first).
+  const [sortMode, setSortMode] = useState<SortMode>("none");
+  // Pinned process ids, persisted to localStorage.
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(() => loadIdSet(PINNED_KEY));
   // Which groups the user collapsed (by label), persisted to localStorage.
   const [collapsedLabels, setCollapsedLabels] = useState<Set<string>>(loadCollapsed);
+
+  function togglePin(p: ProcessView) {
+    setPinnedIds((cur) => {
+      const next = new Set(cur);
+      if (next.has(p.id)) next.delete(p.id);
+      else next.add(p.id);
+      saveIdSet(PINNED_KEY, next);
+      return next;
+    });
+  }
 
   function toggleGroup(label: string, open: boolean) {
     setCollapsedLabels((cur) => {
@@ -241,6 +278,41 @@ export function ProcessList({
     dismissDelete,
     dismissStop,
   } = useProcessActions(onToast);
+
+  // Clearing the Ungrouped bucket. The pending state holds the bucket snapshot
+  // from click time, so WS updates arriving while the dialog is open don't
+  // change what gets cleared.
+  const [pendingClear, setPendingClear] = useState<Group | null>(null);
+
+  function requestClearUngrouped(g: Group) {
+    if (g.label !== UNGROUPED) return;
+    setPendingClear(g);
+  }
+
+  async function confirmClearUngrouped() {
+    const g = pendingClear;
+    setPendingClear(null);
+    if (!g) return;
+    try {
+      // Bulk delete stops running processes first, then erases the records;
+      // the WS push refreshes the list.
+      if (g.processes.length > 0) {
+        await clearAllProcesses(g.processes.map((p) => p.id));
+      }
+      onToast(
+        t("toasts.clearedUngrouped", {
+          count: g.processes.length,
+        }),
+      );
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : String(err), true);
+    }
+  }
+
+  const clearCounts = pendingClear && {
+    processes: pendingClear.processes.length,
+    running: pendingClear.processes.filter(canStopProcess).length,
+  };
 
   // Bundle the per-row callbacks so the cards and the context menu take a
   // single prop instead of a long argument list.
@@ -276,30 +348,6 @@ export function ProcessList({
     return rows;
   }, [processes, statusFilter, nameFilter]);
 
-  // Favorites have no status, so only the name search applies to them.
-  const filteredFavorites = useMemo(() => {
-    const q = nameFilter.trim().toLowerCase();
-    if (!q) return favorites;
-    return favorites.filter((f) =>
-      [f.name ?? "", f.script, f.args.join(" "), f.desc ?? "", groupKeyOf(f.group)]
-        .join(" ")
-        .toLowerCase()
-        .includes(q),
-    );
-  }, [favorites, nameFilter]);
-
-  // Launch signature -> group label, so a process started from a favorite is
-  // grouped under that favorite's category. addFavorite de-dupes by signature,
-  // so the first (and only) favorite wins.
-  const sigGroup = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const f of favorites) {
-      const sig = favoriteSignature(f);
-      if (!m.has(sig)) m.set(sig, groupKeyOf(f.group));
-    }
-    return m;
-  }, [favorites]);
-
   // Grouping is computed from the filtered sets so empty groups vanish.
   // Named groups sort alphabetically; the Ungrouped catch-all goes last.
   const groups = useMemo(() => {
@@ -307,33 +355,28 @@ export function ProcessList({
     const bucket = (label: string): Group => {
       let b = map.get(label);
       if (!b) {
-        b = { label, processes: [], favorites: [] };
+        b = { label, processes: [] };
         map.set(label, b);
       }
       return b;
     };
     for (const p of filteredProcesses) {
-      bucket(groupKeyOf(p.group ?? sigGroup.get(favoriteSignature(p)))).processes.push(p);
-    }
-    for (const f of filteredFavorites) {
-      bucket(groupKeyOf(f.group)).favorites.push(f);
+      bucket(groupKeyOf(p.group ?? undefined)).processes.push(p);
     }
     return [...map.values()]
       .map((g) => ({
         label: g.label,
-        // Processes keep the backend's push order (no auto-sorting); favorites
-        // stay newest-first within a group.
-        processes: g.processes,
-        favorites: g.favorites.sort((a, b) => b.createdAt - a.createdAt),
+        // Pinned rows first, then the selected sort order.
+        processes: orderGroup(g.processes, sortMode, pinnedIds),
       }))
       .sort((a, b) => {
         if (a.label === UNGROUPED) return 1;
         if (b.label === UNGROUPED) return -1;
         return a.label.localeCompare(b.label);
       });
-  }, [filteredProcesses, filteredFavorites, sigGroup]);
+  }, [filteredProcesses, sortMode, pinnedIds]);
 
-  const hasAnything = processes.length > 0 || favorites.length > 0;
+  const hasAnything = processes.length > 0;
 
   // The Ungrouped catch-all is pinned in its own area above the scrolling
   // region, so it stays put while the named groups scroll underneath. When
@@ -341,22 +384,17 @@ export function ProcessList({
   const ungrouped = groups.find((g) => g.label === UNGROUPED) ?? null;
   const grouped = groups.filter((g) => g.label !== UNGROUPED);
 
-  const favActions = {
-    onLaunch: onLaunchFavorite,
-    onEdit: onEditFavorite,
-    onRemove: onRemoveFavorite,
-  };
-
   return (
     <div className="flex h-full min-h-0 flex-col">
       <ProcessFilterBar
         statusFilter={statusFilter}
         onStatusFilterChange={setStatusFilter}
+        sortMode={sortMode}
+        onSortModeChange={setSortMode}
         nameFilter={nameFilter}
         onNameFilterChange={setNameFilter}
         shownCount={filteredProcesses.length}
         totalCount={processes.length}
-        onImport={onImport}
       />
 
       {/* `@container` tracks each region's own width (not the viewport), so
@@ -372,11 +410,11 @@ export function ProcessList({
                 onOpenChange={(open) => toggleGroup(ungrouped.label, open)}
                 selectedId={selectedId}
                 unread={unread}
-                favoritedSignatures={favoritedSignatures}
                 actions={actions}
-                favActions={favActions}
                 onOpenFolder={onOpenFolder}
-                onRemoveCategory={onRemoveCategory}
+                onClearUngrouped={requestClearUngrouped}
+                pinnedIds={pinnedIds}
+                onTogglePin={togglePin}
               />
             </div>
           )}
@@ -390,11 +428,11 @@ export function ProcessList({
                   onOpenChange={(open) => toggleGroup(g.label, open)}
                   selectedId={selectedId}
                   unread={unread}
-                  favoritedSignatures={favoritedSignatures}
                   actions={actions}
-                  favActions={favActions}
                   onOpenFolder={onOpenFolder}
-                  onRemoveCategory={onRemoveCategory}
+                  onClearUngrouped={requestClearUngrouped}
+                  pinnedIds={pinnedIds}
+                  onTogglePin={togglePin}
                 />
               ))}
             </div>
@@ -408,11 +446,11 @@ export function ProcessList({
             onOpenChange={(open) => toggleGroup(ungrouped.label, open)}
             selectedId={selectedId}
             unread={unread}
-            favoritedSignatures={favoritedSignatures}
             actions={actions}
-            favActions={favActions}
             onOpenFolder={onOpenFolder}
-            onRemoveCategory={onRemoveCategory}
+            onClearUngrouped={requestClearUngrouped}
+            pinnedIds={pinnedIds}
+            onTogglePin={togglePin}
           />
         </div>
       ) : (
@@ -440,10 +478,13 @@ export function ProcessList({
       <ProcessDialogs
         pendingDelete={pendingDelete}
         pendingStop={pendingStop}
+        pendingClearUngrouped={clearCounts}
         onConfirmDelete={confirmDelete}
         onConfirmStop={confirmStop}
+        onConfirmClearUngrouped={confirmClearUngrouped}
         onDismissDelete={dismissDelete}
         onDismissStop={dismissStop}
+        onDismissClearUngrouped={() => setPendingClear(null)}
       />
     </div>
   );

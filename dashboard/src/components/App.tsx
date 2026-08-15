@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/registry/default/ui/button";
 import { Badge } from "@/registry/default/ui/badge";
@@ -20,11 +20,9 @@ import {
   TrashIcon,
 } from "lucide-react";
 import {
-  FavoriteDialog,
   NewProcessDialog,
   ProcessDetailsDialog,
 } from "./NewProcessDialog";
-import { ImportFavoritesDialog } from "./ImportFavoritesDialog";
 import { ProcessList } from "./ProcessList";
 import { SystemProcessList } from "./SystemProcessList";
 import { LogPanel } from "./LogPanel";
@@ -40,7 +38,7 @@ import {
   clearAllProcesses,
   listProcesses,
   openFolder,
-  startProcess,
+  setProcessFavorite,
 } from "@/lib/api";
 import { readUrlState, writeUrlState } from "@/lib/urlState";
 import {
@@ -52,12 +50,6 @@ import {
   AlertDialogPopup,
   AlertDialogTitle,
 } from "@/registry/default/ui/alert-dialog";
-import {
-  favoriteSignature,
-  favoriteToStartBody,
-  useFavorites,
-  type Favorite,
-} from "@/lib/favorites";
 import type {
   ProcessListResponse,
   ProcessView,
@@ -86,8 +78,7 @@ export function App() {
   // Per-process unread log counters (incremented on live log push, cleared
   // when that process's log panel is open).
   const [unread, setUnread] = useState<Record<string, number>>({});
-  // Which list tab is shown: the merged process list (live processes grouped
-  // together with the favorites they were started from), the OS-level
+  // Which list tab is shown: the grouped process list, the OS-level
   // system-process monitor, the on-disk history log files, or the HTTP API
   // playground.
   const [activeTab, setActiveTab] = useState<
@@ -97,25 +88,8 @@ export function App() {
   const { language, changeLanguage } = useLanguage();
   const { t } = useTranslation();
 
-  // Favorites live entirely client-side (localStorage). They're a saved launch
-  // recipe + optional category, decoupled from the backend process records.
-  const {
-    favorites,
-    addFavorite,
-    removeFavorite,
-    updateFavorite,
-  } = useFavorites();
-
-  // The favorite editor dialog opens in one of two modes:
-  //   - adding a new favorite seeded from a process (star click on a row), or
-  //   - editing an existing favorite (pencil on a card).
-  const [favOpen, setFavOpen] = useState(false);
-  const [favSeedProcess, setFavSeedProcess] = useState<ProcessView | null>(null);
-  const [favSeedFavorite, setFavSeedFavorite] = useState<Favorite | null>(null);
   // "Clear all" confirmation dialog — stop + delete every process at once.
   const [clearAllOpen, setClearAllOpen] = useState(false);
-  // Folder import dialog: scan a project dir for commands to save as favorites.
-  const [importOpen, setImportOpen] = useState(false);
 
   const { status, reconnectInMs, onProcessesMessage, onLogMessage } =
     useDashboardSocket();
@@ -128,14 +102,10 @@ export function App() {
   // Forwarder for live log lines to the active LogPanel. The panel registers
   // its callback here; everything else increments the unread counter.
   const liveLogForwardRef = useRef<((m: WsLogMessage) => void) | null>(null);
-  // A process id that should be auto-selected (opening its log panel) as soon
-  // as it appears in a WS push. Set when launching a favorite so the panel
-  // opens automatically once the backend confirms the new process; cleared
-  // after it's consumed. The launch response returns before the WS delivers
-  // the row, so we can't select directly.
+  // A process id that should be auto-selected as soon as it appears in a WS
+  // push. The response can arrive before the WS delivers the row.
   const pendingSelectRef = useRef<string | null>(null);
-  // On first load, a `?proc=` from the URL seeds the same auto-open path as a
-  // favorite launch: wait for the WS push to deliver the row, then open it.
+  // On first load, a `?proc=` from the URL waits for the WS row to arrive.
   const initialProcRef = useRef<string | null>(readUrlState().procId);
 
   // Live updates from the backend: replace the process list and keep the
@@ -147,8 +117,7 @@ export function App() {
       processes: m.data,
     });
     if (m.startedAt != null) setServerStartedAt(m.startedAt);
-    // If a launch is pending auto-select (e.g. from "Launch" on a favorite),
-    // open its log panel as soon as the backend reports it.
+    // Open a process whose start response is waiting for its WS row.
     const pending = pendingSelectRef.current;
     if (pending && m.data.some((p) => p.id === pending)) {
       const started = m.data.find((p) => p.id === pending) ?? null;
@@ -158,8 +127,7 @@ export function App() {
         return;
       }
     }
-    // First-load auto-select from a `?proc=` in the URL: same open-on-arrival
-    // path as a favorite launch. Consumed once.
+    // First-load auto-select from a `?proc=` in the URL. Consumed once.
     const initial = initialProcRef.current;
     if (initial && m.data.some((p) => p.id === initial)) {
       const found = m.data.find((p) => p.id === initial) ?? null;
@@ -281,69 +249,23 @@ export function App() {
     [],
   );
 
-  // Set of currently-favorited launch signatures, for the row star fill state.
-  const favoritedSignatures = useMemo(
-    () => new Set(favorites.map((f) => favoriteSignature(f))),
-    [favorites],
-  );
-
-  // Star on a process row: if already favorited, remove it; otherwise open the
-  // favorite dialog seeded from that process so the user can set a category.
+  // Star on a process row updates the persisted backend field.
   const handleToggleFavorite = useCallback(
-    (p: ProcessView) => {
-      if (favoritedSignatures.has(favoriteSignature(p))) {
-        const sig = favoriteSignature(p);
-        const existing = favorites.find((f) => favoriteSignature(f) === sig);
-        if (existing) removeFavorite(existing.id);
-        showToast(t("toasts.removedFromFavorites", { name: p.name }));
-      } else {
-        setFavSeedFavorite(null);
-        setFavSeedProcess(p);
-        setFavOpen(true);
+    async (p: ProcessView) => {
+      const favorite = !p.favorite;
+      try {
+        const updated = await setProcessFavorite(p.id, favorite);
+        setData((cur) => cur ? {
+          ...cur,
+          processes: cur.processes.map((row) => row.id === p.id ? updated : row),
+        } : cur);
+        showToast(t(favorite ? "toasts.addedToFavorites" : "toasts.removedFromFavorites", { name: p.name }));
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : String(err), true);
       }
     },
-    [favorites, favoritedSignatures, removeFavorite, showToast],
+    [showToast, t],
   );
-
-  // Save a brand-new favorite coming out of the dialog. Avoids duplicates by
-  // launch signature (the hook de-dupes too, but we toast accordingly).
-  function handleCreateFavorite(fav: Favorite) {
-    if (favoritedSignatures.has(favoriteSignature(fav))) {
-      showToast(t("toasts.alreadyInFavorites", { name: fav.name ?? fav.script }), true);
-      return;
-    }
-    addFavorite(fav);
-    showToast(t("toasts.addedToFavorites", { name: fav.name ?? fav.script }));
-  }
-
-  function handleEditFavorite(fav: Favorite) {
-    updateFavorite(fav);
-    showToast(t("toasts.updatedFavorite", { name: fav.name ?? fav.script }));
-  }
-
-  function handleRemoveFavorite(id: string) {
-    const f = favorites.find((x) => x.id === id);
-    removeFavorite(id);
-    showToast(t("toasts.removedFavorite", { name: f?.name ?? f?.script ?? "" }));
-  }
-
-  // Import a batch of scanned favorites (from the folder-import dialog). Each
-  // is added via addFavorite, which de-dupes by launch signature; we tally the
-  // skips so the toast reports how many were actually new vs. already saved.
-  function handleImportFavorites(favs: Favorite[]) {
-    let added = 0;
-    for (const fav of favs) {
-      if (addFavorite(fav)) added++;
-    }
-    const skipped = favs.length - added;
-    if (skipped === 0) {
-      showToast(t("toasts.importedAll", { count: added }));
-    } else if (added === 0) {
-      showToast(t("toasts.allAlreadyInFavorites", { count: skipped }), true);
-    } else {
-      showToast(t("toasts.importedSome", { added, skipped }));
-    }
-  }
 
   // Open a group's folder in the OS file manager via the backend (the browser
   // can't do this directly). The group label is an absolute path here.
@@ -355,34 +277,6 @@ export function App() {
     }
   }
 
-  // Delete an entire favorites group by removing each of its favorites. No
-  // confirmation: the cards' per-item remove doesn't confirm either, and the
-  //action is local/reversible by re-importing from the folder.
-  function handleRemoveCategory(ids: string[]) {
-    const n = ids.length;
-    for (const id of ids) removeFavorite(id);
-    if (n > 0) showToast(t("toasts.deletedGroup", { count: n }));
-  }
-
-  // Launch a favorite as a real process via the backend. On success, arm
-  // `pendingSelectRef` so the log panel auto-opens on this process the moment
-  // the WS push delivers its row.
-  async function handleLaunchFavorite(fav: Favorite) {
-    try {
-      const r = await startProcess(favoriteToStartBody(fav));
-      pendingSelectRef.current = r.id;
-      showToast(t("toasts.started", { id: r.id }));
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : String(err), true);
-    }
-  }
-
-  // Open the editor on an existing favorite (from a card's pencil button).
-  function handleEditFavoriteCard(fav: Favorite) {
-    setFavSeedProcess(null);
-    setFavSeedFavorite(fav);
-    setFavOpen(true);
-  }
 
   // Stop + delete every process at once. Goes through the bulk endpoint so the
   // backend kills + erases them in a single pass each — fanning out per-id
@@ -489,9 +383,7 @@ export function App() {
         <main className="flex min-w-0 flex-1 flex-col gap-4 p-5">
           <div className="bg-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
             <div className="flex shrink-0 items-center justify-between border-b px-4 py-2.5">
-              {/* Tabs double as the section title. Switching is purely
-                  client-side — favorites are persisted in localStorage,
-                  independent of the backend. */}
+              {/* Tabs double as the section title. */}
               <Tabs
                 value={activeTab}
                 onValueChange={(v) =>
@@ -510,9 +402,9 @@ export function App() {
                   <TabsTab value="processes">
                     <ListIcon className="size-3.5" />
                     {t("header.tabProcesses")}
-                    {processes.length + favorites.length > 0 && (
+                    {processes.length > 0 && (
                       <span className="text-muted-foreground text-xs">
-                        ({processes.length + favorites.length})
+                        ({processes.length})
                       </span>
                     )}
                   </TabsTab>
@@ -557,10 +449,8 @@ export function App() {
                 <div className="flex min-w-0 flex-1 flex-col">
                   <ProcessList
                     processes={processes}
-                    favorites={favorites}
                     selectedId={selected?.id ?? null}
                     unread={unread}
-                    favoritedSignatures={favoritedSignatures}
                     onToggleFavorite={handleToggleFavorite}
                     onSelectLogs={openLogFor}
                     onView={(p) => {
@@ -568,12 +458,7 @@ export function App() {
                       setDetailsOpen(true);
                     }}
                     onToast={showToast}
-                    onLaunchFavorite={handleLaunchFavorite}
-                    onEditFavorite={handleEditFavoriteCard}
-                    onRemoveFavorite={handleRemoveFavorite}
-                    onImport={() => setImportOpen(true)}
                     onOpenFolder={handleOpenFolder}
-                    onRemoveCategory={handleRemoveCategory}
                   />
                 </div>
                 {selected && !logCollapsed && (
@@ -628,22 +513,6 @@ export function App() {
         open={detailsOpen}
         onOpenChange={setDetailsOpen}
         viewProcess={viewing}
-      />
-
-      <FavoriteDialog
-        open={favOpen}
-        onOpenChange={setFavOpen}
-        seedProcess={favSeedProcess}
-        seedFavorite={favSeedFavorite}
-        onCreate={handleCreateFavorite}
-        onEdit={handleEditFavorite}
-      />
-
-      <ImportFavoritesDialog
-        open={importOpen}
-        onOpenChange={setImportOpen}
-        onImport={handleImportFavorites}
-        onToast={showToast}
       />
 
       {/* Clear-all confirmation: stop + delete every process at once. The

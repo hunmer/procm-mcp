@@ -20,10 +20,8 @@ import {
   FieldLabel,
 } from "@/registry/default/ui/field";
 import { PlusIcon, ZapIcon } from "lucide-react";
-import { parseEnvs, startProcess, stringifyEnvs } from "@/lib/api";
+import { parseEnvs, startProcess } from "@/lib/api";
 import { applyPreset, useProcessPresets } from "@/lib/presets";
-import type { Favorite } from "@/lib/favorites";
-import { makeFavoriteId } from "@/lib/favorites";
 import type { ProcessView } from "@/lib/types";
 
 interface NewProcessDialogProps {
@@ -205,153 +203,7 @@ export function ProcessDetailsDialog({
   );
 }
 
-// Favorite editor dialog. Reuses the same ProcessForm layout as the new-process
-// and details dialogs (per the task: "复用编辑对话框"), and adds a Category
-// field. Operates in two modes:
-//   - "create": seeded from a live process (`seedProcess`) → saves a NEW
-//     favorite via onCreate. Triggered by the star toggle on a process row.
-//   - "edit": seeded from an existing favorite (`seedFavorite`) → updates it
-//     in place via onEdit. Triggered from the favorites cards.
-export interface FavoriteDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  // Exactly one of these is set when opened.
-  seedProcess?: ProcessView | null;
-  seedFavorite?: Favorite | null;
-  onCreate: (fav: Favorite) => void;
-  onEdit: (fav: Favorite) => void;
-}
-
-export function FavoriteDialog({
-  open,
-  onOpenChange,
-  seedProcess,
-  seedFavorite,
-  onCreate,
-  onEdit,
-}: FavoriteDialogProps) {
-  const { t } = useTranslation();
-  const isEdit = seedFavorite != null;
-  const [fields, setFields] = useState({
-    name: "",
-    script: "",
-    args: "",
-    cwd: "",
-    desc: "",
-    envs: "",
-    port: "",
-    group: "",
-  });
-
-  // Seed the form whenever the dialog opens to a fresh target.
-  useEffect(() => {
-    if (!open) return;
-    if (seedFavorite) {
-      setFields({
-        name: seedFavorite.name ?? "",
-        script: seedFavorite.script,
-        args: seedFavorite.args.join(" "),
-        cwd: seedFavorite.cwd,
-        desc: seedFavorite.desc ?? "",
-        envs: stringifyEnvs(seedFavorite.envs),
-        port: seedFavorite.port ? String(seedFavorite.port) : "",
-        group: seedFavorite.group ?? "",
-      });
-    } else if (seedProcess) {
-      // Favoriting a process: envs aren't exposed by the public API, so they
-      // start empty (the user can re-add them before saving).
-      setFields({
-        name: seedProcess.name,
-        script: seedProcess.script,
-        args: seedProcess.args.join(" "),
-        cwd: seedProcess.cwd,
-        desc: seedProcess.desc ?? "",
-        envs: "",
-        port: seedProcess.port ? String(seedProcess.port) : "",
-        group: "",
-      });
-    }
-  }, [open, seedFavorite, seedProcess]);
-
-  function set<K extends keyof typeof fields>(key: K, v: string) {
-    setFields((f) => ({ ...f, [key]: v }));
-  }
-
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!fields.script.trim() || !fields.cwd.trim()) return;
-    const portTrimmed = fields.port.trim();
-    const portNum = portTrimmed === "" ? undefined : Number(portTrimmed);
-    const fav: Favorite = {
-      id: seedFavorite?.id ?? makeFavoriteId(),
-      name: fields.name.trim() || undefined,
-      desc: fields.desc.trim() || undefined,
-      script: fields.script.trim(),
-      args: fields.args.trim() ? fields.args.trim().split(/\s+/) : [],
-      cwd: fields.cwd.trim(),
-      envs: parseEnvs(fields.envs),
-      // Only persist a valid port; drop anything the user half-typed so a
-      // relaunched favorite never carries a bogus number into the start call.
-      port:
-        portNum !== undefined &&
-        Number.isInteger(portNum) &&
-        portNum >= 1 &&
-        portNum <= 65535
-          ? portNum
-          : undefined,
-      group: fields.group.trim(),
-      createdAt: seedFavorite?.createdAt ?? Date.now(),
-    };
-    if (isEdit) onEdit(fav);
-    else onCreate(fav);
-    onOpenChange(false);
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogPopup>
-        <DialogHeader>
-          <DialogTitle>
-            {isEdit ? t("dialogs.favorite.titleEdit") : t("dialogs.favorite.titleAdd")}
-          </DialogTitle>
-          <DialogDescription>
-            {isEdit
-              ? t("dialogs.favorite.descEdit")
-              : t("dialogs.favorite.descAdd")}
-          </DialogDescription>
-        </DialogHeader>
-        <ProcessForm
-          name={fields.name}
-          script={fields.script}
-          args={fields.args}
-          cwd={fields.cwd}
-          desc={fields.desc}
-          envs={fields.envs}
-          port={fields.port}
-          group={fields.group}
-          setters={{
-            setName: (v) => set("name", v),
-            setScript: (v) => set("script", v),
-            setArgs: (v) => set("args", v),
-            setCwd: (v) => set("cwd", v),
-            setDesc: (v) => set("desc", v),
-            setEnvs: (v) => set("envs", v),
-            setPort: (v) => set("port", v),
-            setGroup: (v) => set("group", v),
-          }}
-          presets={[]}
-          submitting={false}
-          submitLabel={t(isEdit ? "common.edit" : "common.save")}
-          onSubmit={handleSubmit}
-        />
-      </DialogPopup>
-    </Dialog>
-  );
-}
-
-// Shared form body for both new-process and read-only detail views. When
-// `group` is provided it also renders the group input — used by the
-// favorite editor (see FavoriteDialog) which groups saved launches.
+// Shared form body for new-process and read-only detail views.
 interface ProcessFormProps {
   name: string;
   script: string;
@@ -360,7 +212,6 @@ interface ProcessFormProps {
   desc: string;
   envs: string;
   port: string;
-  group?: string;
   setters: {
     setName: (v: string) => void;
     setScript: (v: string) => void;
@@ -369,7 +220,6 @@ interface ProcessFormProps {
     setDesc: (v: string) => void;
     setEnvs: (v: string) => void;
     setPort: (v: string) => void;
-    setGroup?: (v: string) => void;
   };
   presets: ReturnType<typeof useProcessPresets>;
   readOnly?: boolean;
@@ -389,7 +239,6 @@ function ProcessForm({
   desc,
   envs,
   port,
-  group,
   setters,
   presets,
   readOnly,
@@ -504,23 +353,6 @@ function ProcessForm({
             {t("dialogs.form.descHelp")}
           </FieldDescription>
         </Field>
-        {/* Category only renders for the favorite editor (setters.setCategory
-            is wired only there). It's the grouping key for the favorites view. */}
-        {setters.setGroup && (
-          <Field className="mt-4">
-            <FieldLabel htmlFor="f-group">{t("dialogs.form.groupLabel")}</FieldLabel>
-            <Input
-              id="f-group"
-              placeholder={t("dialogs.form.groupPlaceholder")}
-              value={group ?? ""}
-              onChange={(e) => setters.setGroup!(e.target.value)}
-              readOnly={readOnly}
-            />
-            <FieldDescription>
-              {t("dialogs.form.groupHelp")}
-            </FieldDescription>
-          </Field>
-        )}
         <Field className="mt-4">
           <FieldLabel htmlFor="f-envs">
             {t("dialogs.form.envsLabel")}

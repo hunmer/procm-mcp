@@ -137,6 +137,7 @@ function toRecord(meta: ProcessMetadata, stoppedAt: number | null = null): Proce
     group: meta.group,
     port: meta.port,
     roomId: meta.roomId,
+    favorite: meta.favorite,
     startedAt: startedAtByMeta.get(meta.id) ?? Date.now(),
     // lastStartedAt falls back to startedAt so a record that predates this
     // field (or a process that never restarted) still has a sensible value.
@@ -184,6 +185,23 @@ export async function listProcessRecords(): Promise<ProcessRecord[]> {
 
 export function getProcess(id: string): ProcessMetadata | undefined {
   return processes.find((p) => p.id === id);
+}
+
+// Persist the UI favorite flag for both live and historical records.
+export async function setProcessFavorite(id: string, favorite: boolean): Promise<boolean> {
+  const live = getProcess(id);
+  if (live) {
+    live.favorite = favorite;
+    await persist(live);
+    dashboardEvents.emitProcessChange();
+    return true;
+  }
+  const repo = await ensureRepository();
+  const record = await repo.getById(id);
+  if (!record) return false;
+  await repo.upsert({ ...record, favorite });
+  dashboardEvents.emitProcessChange();
+  return true;
 }
 
 // Fetch a persisted process record by id (used by the HTTP layer to serve
@@ -422,6 +440,7 @@ export async function startProcess(
       group: group?.trim() || null,
       port: port ?? null,
       roomId: roomId?.trim() || null,
+      favorite: false,
       process: childProcess,
       stdoutClient,
       stderrClient,
@@ -767,12 +786,14 @@ export async function restartProcess(id: string): Promise<ProcessMetadata | null
       processMetadata.roomId,
       processMetadata.group,
     );
+    newProcess.favorite = processMetadata.favorite;
     processes[processIndex] = newProcess;
     // This branch reassigns in place and bypasses pushProcess, so reset the
     // most-recent-start time explicitly — this is the restart that "time since
     // last restart" must reflect. (Persist happens later via the spawn handlers
     // in startProcess, same as the rest of the record.)
     lastStartedAtByMeta.set(id, Date.now());
+    void persist(newProcess);
     dashboardEvents.emitProcessChange();
     return newProcess;
   }
@@ -796,6 +817,7 @@ export async function restartProcess(id: string): Promise<ProcessMetadata | null
     record.roomId ?? null,
     record.group ?? null,
   );
+  restored.favorite = record.favorite ?? false;
   // Preserve the original start time so the revived process keeps its place
   // in the history-sorted list instead of jumping to the top.
   if (record.startedAt) startedAtByMeta.set(id, record.startedAt);

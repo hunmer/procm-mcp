@@ -26,6 +26,7 @@ export interface ProcessView {
   // "time since last restart". Falls back to startedAt when absent.
   lastStartedAt?: number | null;
   stoppedAt?: number | null;
+  favorite?: boolean;
 }
 
 export interface ProcessListResponse {
@@ -98,6 +99,8 @@ export interface StartProcessBody {
   port?: number;
   roomId?: string;
   group?: string;
+  overwrite?: boolean;
+  restart?: boolean;
 }
 
 // ---- WebSocket messages (mirrors src/websocket-server.ts envelope) ----

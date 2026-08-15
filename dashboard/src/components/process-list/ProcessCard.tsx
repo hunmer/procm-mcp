@@ -6,7 +6,6 @@ import {
   ContextMenu,
   ContextMenuTrigger,
 } from "@/registry/default/ui/context-menu";
-import { favoriteSignature } from "@/lib/favorites";
 import type { ProcessView } from "@/lib/types";
 import { canStopProcess } from "./utils";
 import { ProcessCardBody } from "./ProcessCardBody";
@@ -21,13 +20,15 @@ export function ProcessCard({
   p,
   isActive,
   unreadCount,
-  favoritedSignatures,
+  pinned,
+  onTogglePin,
   actions,
 }: {
   p: ProcessView;
   isActive: boolean;
   unreadCount: number;
-  favoritedSignatures: Set<string>;
+  pinned: boolean;
+  onTogglePin: (p: ProcessView) => void;
   actions: RowActions;
 }) {
   const { t } = useTranslation();
@@ -44,10 +45,14 @@ export function ProcessCard({
           />
         }
       >
-        <ProcessCardBody p={p} unreadCount={unreadCount} />
+        <ProcessCardBody
+          p={p}
+          unreadCount={unreadCount}
+          pinned={pinned}
+          onTogglePin={() => onTogglePin(p)}
+        />
         <CardPanel className="flex flex-col gap-3 p-4">
-          {/* Mirrors FavoriteCard: labeled command + working-directory blocks,
-              then the actions row aligned to the bottom-right corner. */}
+          {/* Every process card uses the same command, cwd, and actions body. */}
           <div className="flex flex-col gap-1">
             <span className="text-muted-foreground text-[10px] uppercase tracking-wide">
               {t("favorites.cardCommand")}
@@ -67,12 +72,11 @@ export function ProcessCard({
               {p.cwd}
             </span>
           </div>
-          {/* Action icons on the left, the primary stop/run button on the
-              right — mirroring FavoriteCard's bottom-right Launch button. */}
+          {/* Action icons on the left, with the primary stop/run action on the right. */}
           <div className="mt-1 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
             <ProcessActions
               process={p}
-              favorited={favoritedSignatures.has(favoriteSignature(p))}
+              favorited={p.favorite === true}
               onToggleFavorite={actions.onToggleFavorite}
               onRestart={actions.onRestart}
               onStop={actions.onRequestStop}

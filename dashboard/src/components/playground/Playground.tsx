@@ -233,7 +233,10 @@ export function Playground() {
   ];
 
   return (
-    <div className="flex min-h-0 flex-1">
+    // Container queries drive the responsive split: wide enough (>= 64rem)
+    // the response gets its own right rail next to the form; narrower it
+    // stacks below the form inside the scrolling middle pane.
+    <div className="@container flex min-h-0 flex-1">
       {/* Left rail: endpoint cards grouped by category. */}
       <aside className="w-72 shrink-0 overflow-y-auto border-r p-2">
         {PLAY_GROUPS.map((g) => {
@@ -272,72 +275,93 @@ export function Playground() {
         })}
       </aside>
 
-      {/* Right pane: the selected endpoint's form + last response. */}
-      <section className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-        <div className="shrink-0 border-b p-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <MethodBadge method={endpoint.method} />
-            <code className="text-sm break-all">
-              <PathTemplate path={endpoint.path} />
-            </code>
-          </div>
-          <p className="text-muted-foreground mt-1.5 text-xs">{endpoint.desc}</p>
-        </div>
-
-        <Form
-          errors={errors}
-          onSubmit={handleSubmit}
-          className="flex shrink-0 flex-col gap-4 p-4"
-        >
-          {sections.map(
-            (s) =>
-              s.fields.length > 0 && (
-                <fieldset key={s.key} className="flex flex-col gap-3">
-                  <legend className="text-muted-foreground mb-1 text-xs font-semibold">
-                    {t(`playground.${s.key}`)}
-                  </legend>
-                  {s.fields.map((f) => (
-                    <PlaygroundFieldControl
-                      key={f.name}
-                      field={f}
-                      value={values[f.name] ?? ""}
-                      onChange={(v) => setValues((cur) => ({ ...cur, [f.name]: v }))}
-                      omitLabel={t("playground.omit")}
-                    />
-                  ))}
-                </fieldset>
-              ),
-          )}
-          {fieldsOf(endpoint).length === 0 && (
-            <p className="text-muted-foreground text-xs">{t("playground.noFields")}</p>
-          )}
-          <Button type="submit" loading={loading} className="self-start">
-            {t("playground.send")}
-          </Button>
-        </Form>
-
-        {response && (
-          <div className="flex min-h-0 flex-col border-t p-4">
-            <div className="mb-2 flex items-center gap-2">
-              <span className="text-xs font-semibold">{t("playground.response")}</span>
-              <Badge variant={response.ok ? "success" : "destructive"}>
-                {response.status === 0
-                  ? t("playground.networkError")
-                  : `HTTP ${response.status}`}
-              </Badge>
-              <span className="text-muted-foreground font-mono text-xs tabular-nums">
-                {response.ms} ms
-              </span>
+      {/* Middle + right: the endpoint form, with the response beside it on
+          wide containers and stacked below on narrow ones. */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col @5xl:flex-row">
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
+          <div className="shrink-0 border-b p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <MethodBadge method={endpoint.method} />
+              <code className="text-sm break-all">
+                <PathTemplate path={endpoint.path} />
+              </code>
             </div>
-            <JsonViewer
-              data={response.data as never}
-              rootName="response"
-              defaultExpanded={true}
-              className="max-h-[40vh] overflow-y-auto"
-            />
+            <p className="text-muted-foreground mt-1.5 text-xs">{endpoint.desc}</p>
           </div>
+
+          <Form
+            errors={errors}
+            onSubmit={handleSubmit}
+            className="flex shrink-0 flex-col gap-4 p-4"
+          >
+            {sections.map(
+              (s) =>
+                s.fields.length > 0 && (
+                  <fieldset key={s.key} className="flex flex-col gap-3">
+                    <legend className="text-muted-foreground mb-1 text-xs font-semibold">
+                      {t(`playground.${s.key}`)}
+                    </legend>
+                    {s.fields.map((f) => (
+                      <PlaygroundFieldControl
+                        key={f.name}
+                        field={f}
+                        value={values[f.name] ?? ""}
+                        onChange={(v) => setValues((cur) => ({ ...cur, [f.name]: v }))}
+                        omitLabel={t("playground.omit")}
+                      />
+                    ))}
+                  </fieldset>
+                ),
+            )}
+            {fieldsOf(endpoint).length === 0 && (
+              <p className="text-muted-foreground text-xs">{t("playground.noFields")}</p>
+            )}
+            <Button type="submit" loading={loading} className="self-start">
+              {t("playground.send")}
+            </Button>
+          </Form>
+
+          {/* Narrow containers: response below the form. */}
+          {response && (
+            <div className="@5xl:hidden flex max-h-[50vh] flex-col border-t">
+              <ResponsePanel response={response} />
+            </div>
+          )}
+        </section>
+
+        {/* Wide containers: response as a dedicated right rail. */}
+        {response && (
+          <aside className="hidden w-[40%] max-w-[640px] shrink-0 flex-col border-l @5xl:flex">
+            <ResponsePanel response={response} />
+          </aside>
         )}
-      </section>
+      </div>
+    </div>
+  );
+}
+
+// Status + duration header and the expandable JSON tree of the last response.
+function ResponsePanel({ response }: { response: PlayResponse }) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex min-h-0 flex-1 flex-col p-4">
+      <div className="mb-2 flex shrink-0 items-center gap-2">
+        <span className="text-xs font-semibold">{t("playground.response")}</span>
+        <Badge variant={response.ok ? "success" : "destructive"}>
+          {response.status === 0
+            ? t("playground.networkError")
+            : `HTTP ${response.status}`}
+        </Badge>
+        <span className="text-muted-foreground font-mono text-xs tabular-nums">
+          {response.ms} ms
+        </span>
+      </div>
+      <JsonViewer
+        data={response.data as never}
+        rootName="response"
+        defaultExpanded={true}
+        className="min-h-0 flex-1 overflow-y-auto"
+      />
     </div>
   );
 }

@@ -22,6 +22,7 @@ import {
   validateScript,
   pushProcess,
   sendProcessInput,
+  setProcessFavorite,
 } from "./process-manager.js";
 import type { ProcessRecord } from "./processes-repository.js";
 import { toErrorMessage } from "./error.js";
@@ -90,6 +91,7 @@ function toPublicView(p: ProcessMetadata) {
     group: p.group,
     port: p.port,
     roomId: p.roomId,
+    favorite: p.favorite,
   };
 }
 
@@ -110,6 +112,7 @@ function toPublicRecord(p: ProcessRecord) {
     group: p.group ?? null,
     port: p.port ?? null,
     roomId: p.roomId ?? null,
+    favorite: p.favorite ?? false,
     startedAt: p.startedAt,
     lastStartedAt: p.lastStartedAt ?? null,
     stoppedAt: p.stoppedAt,
@@ -798,6 +801,8 @@ function createRequestHandler(token: string | undefined) {
             return;
           }
           const name = body.name ? String(body.name) : undefined;
+          const overwrite = body.overwrite === true;
+          const restart = body.restart === true;
           const args: string[] = Array.isArray(body.args)
             ? body.args.map(String)
             : [];
@@ -820,6 +825,27 @@ function createRequestHandler(token: string | undefined) {
           if (body.port !== undefined && body.port !== null && port === null) {
             json(res, 400, { error: "port must be an integer between 1 and 65535" });
             return;
+          }
+
+          // A name identifies one dashboard entry. Require explicit opt-in to
+          // replace an existing record, and require restart for a live one so
+          // accidental duplicate launches cannot create repeated rows.
+          if (name) {
+            const existing = (await listProcessRecords()).filter((p) => p.name === name);
+            if (existing.length > 0) {
+              if (!overwrite) {
+                json(res, 409, { error: `A process named "${name}" already exists; set overwrite=true to replace it.` });
+                return;
+              }
+              const running = existing.some((p) => p.status === "running" || p.status === "spawning");
+              if (running && !restart) {
+                json(res, 409, { error: `Process "${name}" is running; set restart=true to replace it.` });
+                return;
+              }
+              for (const process of existing) {
+                await deleteProcess(process.id);
+              }
+            }
           }
           const processId = generateProcessId();
           const started = await startProcess(
@@ -1077,6 +1103,28 @@ function createRequestHandler(token: string | undefined) {
           }
           const status = result.reason === "not_found" ? 404 : 400;
           json(res, status, { id: idParam, error: result.error || result.reason });
+          return;
+        }
+
+        // PATCH /api/processes/:id -> update persisted UI metadata.
+        if (method === "PATCH" && !action) {
+          const body = JSON.parse((await readBody(req)) || "{}");
+          if (typeof body.favorite !== "boolean") {
+            json(res, 400, { error: "favorite must be a boolean" });
+            return;
+          }
+          const updated = await setProcessFavorite(idParam, body.favorite);
+          if (!updated) {
+            json(res, 404, { error: "Process not found" });
+            return;
+          }
+          const live = getProcess(idParam);
+          if (live) {
+            json(res, 200, toPublicView(live));
+            return;
+          }
+          const record = await getProcessRecord(idParam);
+          json(res, 200, record ? toPublicRecord(record) : { id: idParam, favorite: body.favorite });
           return;
         }
 
