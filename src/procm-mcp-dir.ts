@@ -1,6 +1,10 @@
-import { tmpdir } from "os";
+import { homedir } from "os";
 import path from "path";
 
 export function ProcmMcpDir() {
-  return process.env.PROCM_MCP_DIR || path.join(tmpdir(), "procm-mcp");
+  return process.env.PROCM_MCP_DIR || process.cwd();
+}
+
+export function ProcmGlobalDir() {
+  return path.join(homedir(), ".procm-mcp");
 }

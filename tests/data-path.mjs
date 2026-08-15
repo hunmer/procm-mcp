@@ -45,4 +45,30 @@ await runTest("--data-path overrides PROCM_MCP_DIR", async () => {
   }
 });
 
+await runTest("default data path is the process working directory", async () => {
+  const root = mkdtempSync(join(tmpdir(), "procm-mcp-data-default-"));
+  const port = randomPort();
+  const child = spawn("node", [buildIndex, "--server", "--port", String(port)], {
+    cwd: root,
+    env: { ...process.env, PROCM_MCP_DIR: "" },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  try {
+    const deadline = Date.now() + 8000;
+    while (Date.now() < deadline && !existsSync(join(root, "processes.json"))) {
+      if (child.exitCode !== null) throw new Error(`backend exited with code ${child.exitCode}`);
+      await sleep(100);
+    }
+    assert(existsSync(join(root, "processes.json")), "working directory contains processes.json");
+  } finally {
+    child.kill("SIGTERM");
+    await Promise.race([
+      new Promise((resolve) => child.once("exit", resolve)),
+      sleep(3000),
+    ]);
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 summarize();

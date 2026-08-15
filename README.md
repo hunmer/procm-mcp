@@ -90,7 +90,7 @@ node ./node_modules/procm-mcp/build/index.js --server --port 8080 --data-path .p
 
 `--port <number>` also works in the default (stdio) mode to start the dashboard without setting `PROCM_HTTP_PORT`. It takes precedence over `PROCM_HTTP_PORT`.
 
-`--data-path <path>` selects the directory used for process history, rooms, and logs. Relative paths are resolved from the current working directory. It takes precedence over `PROCM_MCP_DIR`; without either setting, data is stored under the system temporary directory.
+`--data-path <path>` selects the directory used for process history, rooms, and logs. Relative paths are resolved from the current working directory. Without the flag, data is stored in the process working directory. Use `--data-path global` for the per-user `~/.procm-mcp` directory. `PROCM_MCP_DIR` remains supported when set.
 
 ### Connect over HTTP (`type: "http"`)
 

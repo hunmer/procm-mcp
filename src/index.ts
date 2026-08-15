@@ -18,6 +18,7 @@ import { registerRoomTools } from "./tools/room.js";
 import { registerTraceTools } from "./tools/trace.js";
 import { closeTraceStore } from "./trace-store.js";
 import { isClientCommand, runClient, clientHelp } from "./cli-client.js";
+import { ProcmGlobalDir } from "./procm-mcp-dir.js";
 import path from "path";
 
 const DEFAULT_SERVER_PORT = 7331;
@@ -56,7 +57,7 @@ function parseArgs(argv: string[]) {
           "",
           "Options:",
           "  --port <number>   Dashboard port (default: 7331, or PROCM_HTTP_PORT).",
-          "  --data-path <path>  Data directory (default: PROCM_MCP_DIR or the system temp directory).",
+          "  --data-path <path>  Data directory (default: current working directory; use 'global' for ~/.procm-mcp).",
           "  -h, --help        Show this help.",
         ].join("\n") + "\n",
       );
@@ -74,7 +75,10 @@ try {
       console.error("procm-mcp: --data-path requires a non-empty path.");
       exitProcess(1);
     }
-    process.env.PROCM_MCP_DIR = path.resolve(cli.dataPath);
+    process.env.PROCM_MCP_DIR =
+      cli.dataPath.trim().toLowerCase() === "global"
+        ? ProcmGlobalDir()
+        : path.resolve(cli.dataPath);
   }
 
   // Client mode: if the first positional arg is a client command (ps/info/...),
