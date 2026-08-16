@@ -1,4 +1,5 @@
 import { PROCM_LOG_TOPIC, PROCM_PROTOCOL_VERSION, encodeStructuredLog, } from "./protocol.js";
+import { createProcmClient } from "./client.js";
 const LEVEL_ORDER = {
     debug: 0,
     info: 1,
@@ -12,8 +13,16 @@ export class Logger {
     level;
     constructor(options = {}) {
         this.options = options;
-        this.output = options.console ?? console;
+        const nativeConsole = {
+            debug: console.debug.bind(console),
+            info: console.info.bind(console),
+            warn: console.warn.bind(console),
+            error: console.error.bind(console),
+        };
+        this.output = options.console ?? nativeConsole;
         this.level = options.level ?? "debug";
+        if (options.captureConsole)
+            installConsoleCapture(this);
     }
     setLevel(level) {
         this.level = level;
@@ -43,6 +52,12 @@ export class Logger {
             data,
             traceId: context?.traceId,
         };
+        try {
+            this.options.onLog?.(entry);
+        }
+        catch {
+            // Observers must not interfere with the original logger output.
+        }
         const readable = `${entry.timestamp ? new Date(entry.timestamp).toISOString() : ""} ${level.toUpperCase()} ${entry.clientName}: ${message}${data === undefined ? "" : ` ${JSON.stringify(data)}`}`;
         this.output[level](`${readable} ${encodeStructuredLog(entry)}`);
         if (client?.connectionState === "open") {
@@ -55,6 +70,48 @@ export class Logger {
         }
     }
 }
+let restoreConsole;
+function installConsoleCapture(logger) {
+    restoreConsole?.();
+    const originals = {
+        debug: console.debug.bind(console),
+        info: console.info.bind(console),
+        log: console.log.bind(console),
+        warn: console.warn.bind(console),
+        error: console.error.bind(console),
+        trace: console.trace.bind(console),
+    };
+    console.debug = (...args) => logger.debug(formatConsoleArgs(args));
+    console.info = (...args) => logger.info(formatConsoleArgs(args));
+    console.log = (...args) => logger.info(formatConsoleArgs(args));
+    console.warn = (...args) => logger.warn(formatConsoleArgs(args));
+    console.error = (...args) => logger.error(formatConsoleArgs(args));
+    console.trace = (...args) => logger.debug(formatConsoleArgs(args));
+    restoreConsole = () => {
+        console.debug = originals.debug;
+        console.info = originals.info;
+        console.log = originals.log;
+        console.warn = originals.warn;
+        console.error = originals.error;
+        console.trace = originals.trace;
+        restoreConsole = undefined;
+    };
+}
+function formatConsoleArgs(args) {
+    return args.map((arg) => {
+        if (arg instanceof Error)
+            return arg.stack || `${arg.name}: ${arg.message}`;
+        if (typeof arg === "object" && arg !== null) {
+            try {
+                return JSON.stringify(arg);
+            }
+            catch {
+                return String(arg);
+            }
+        }
+        return String(arg);
+    }).join(" ");
+}
 // Keep the global logger inert until an integration explicitly configures it.
 // This preserves the optional nature of procm integration for consumers.
 let defaultLogger = new Logger({ level: "silent" });
@@ -63,8 +120,35 @@ let defaultLogger = new Logger({ level: "silent" });
  * to create and pass a Logger instance through every module.
  */
 export function setLogger(options = {}) {
+    restoreConsole?.();
     defaultLogger = new Logger(options);
     return defaultLogger;
+}
+/**
+ * Application-facing logger setup. Console capture is enabled by default so
+ * consumers only need to provide their identity and optional room client.
+ */
+export function setupLogger(options = {}) {
+    return setLogger({ ...options, captureConsole: options.captureConsole ?? true });
+}
+/**
+ * Zero-configuration setup for Node processes launched by procm-mcp.
+ * When room variables are absent, this still enables structured console logs.
+ */
+export function setupLoggerFromEnv(options = {}) {
+    const processLike = globalThis.process;
+    const env = processLike?.env ?? {};
+    const clientName = options.clientName ?? env.PROCM_CLIENT_NAME;
+    let client = options.client;
+    if (!client && env.PROCM_ROOM_ID && env.PROCM_WS_URL) {
+        try {
+            client = createProcmClient({ clientName });
+        }
+        catch {
+            // Console logging remains available when room setup is incomplete.
+        }
+    }
+    return setupLogger({ ...options, client, clientName });
 }
 /** Return the process-wide configured logger. */
 export function getLogger() {

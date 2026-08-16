@@ -1,11 +1,15 @@
 import { type JsonValue, type LogLevel, type RoomMessage, type StructuredLog } from "./protocol.js";
-import type { ProcmClient } from "./client.js";
+import { type ProcmClient } from "./client.js";
 export interface LoggerOptions {
     client?: ProcmClient;
     clientName?: string;
     memberId?: string;
     processId?: string;
     console?: Pick<Console, "debug" | "info" | "warn" | "error">;
+    /** Forward global console logging methods through this structured logger. */
+    captureConsole?: boolean;
+    /** Observe emitted structured entries without replacing the console sink. */
+    onLog?: (entry: StructuredLog) => void;
     level?: LogLevel | "silent";
 }
 export interface LogContext {
@@ -30,6 +34,16 @@ export declare class Logger {
  * to create and pass a Logger instance through every module.
  */
 export declare function setLogger(options?: LoggerOptions): Logger;
+/**
+ * Application-facing logger setup. Console capture is enabled by default so
+ * consumers only need to provide their identity and optional room client.
+ */
+export declare function setupLogger(options?: LoggerOptions): Logger;
+/**
+ * Zero-configuration setup for Node processes launched by procm-mcp.
+ * When room variables are absent, this still enables structured console logs.
+ */
+export declare function setupLoggerFromEnv(options?: LoggerOptions): Logger;
 /** Return the process-wide configured logger. */
 export declare function getLogger(): Logger;
 export declare function createLogger(options?: LoggerOptions): Logger;

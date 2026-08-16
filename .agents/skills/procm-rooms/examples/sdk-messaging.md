@@ -29,4 +29,15 @@ process.once("SIGINT", () => {
 
 For procm-managed processes, omit `url`, `roomId`, and `processId`; injected environment variables supply them. Explicit options take precedence.
 
+For the smallest Node.js setup, use the environment-aware logger setup. It
+creates a room client when `PROCM_ROOM_ID` and `PROCM_WS_URL` are present, and
+otherwise keeps structured console logging local:
+
+```ts
+import { setupLoggerFromEnv } from "@hunmer/procm-mcp-sdk";
+
+const logger = setupLoggerFromEnv({ clientName: "trace-reader" });
+logger.info("Trace reader started");
+```
+
 See the real [Node server demo](../../../../demo/node-server/index.js) and [client implementation](../../../../packages/procm-sdk/src/client.ts).

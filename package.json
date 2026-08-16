@@ -20,7 +20,7 @@
   ],
   "scripts": {
     "build": "npm run build:sdk && npm run sync:demos && npm run build:dashboard && tsc",
-    "build:sdk": "npm --prefix packages/procm-sdk run build",
+    "build:sdk": "npm --prefix packages/procm-sdk run build && npm --prefix packages/procm-sdk run build:browser",
     "sync:demos": "pnpm -C demo/electron-client install",
     "watch": "tsc -w",
     "build:dashboard": "npm --prefix dashboard run build",

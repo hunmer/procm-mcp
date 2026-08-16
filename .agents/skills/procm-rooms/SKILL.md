@@ -23,7 +23,7 @@ Use the room architecture as a low-intrusion application message bus and debuggi
 3. Retain only the latest explicitly retained message per room/topic in memory so `waitFor` handles late subscribers.
 4. Preserve a managed process's optional `roomId` across restart and inject `PROCM_ROOM_ID`, `PROCM_PROCESS_ID`, `PROCM_WS_URL`, and optional token automatically.
 5. Keep one active socket per logical member while assigning a new connection ID after reconnect.
-6. Write parseable Logger frames into the existing stdout/stderr files while retaining readable console output.
+6. Write parseable Logger frames into the existing stdout/stderr files while retaining readable console output; `setupLogger` can capture all standard console logging methods automatically.
 7. Merge historical room logs by timestamp with member-prefix and level filters, without creating a log database.
 8. Expose room metadata/members through `room`, historical entries through `room-logs`, and bounded best-effort process batches through `batch-process`.
 
@@ -34,7 +34,7 @@ Use the room architecture as a low-intrusion application message bus and debuggi
 - Give each client in the same process a distinct `clientName`; `processId + clientName` is its stable logical identity.
 - Treat a second socket with the same member ID as a replacement for the first.
 - Use `waitFor` with `timeout` or `AbortSignal`; do not create unbounded initialization waits.
-- Use `Logger` for structured data. Keep arbitrary application stdout compatible as plain legacy logs.
+- Use `setupLogger` for the smallest Node/Electron integration, or `setupLoggerFromEnv` for procm-managed processes. Use the browser bundle from `dist/browser.js` with explicit room options. Keep arbitrary application stdout compatible as plain legacy logs.
 - Query historical room logs only for procm-managed processes whose log files exist. External SDK-only clients have live messaging but no durable procm log file.
 - Pass explicit SDK options to override injected environment configuration in standalone scripts.
 - Keep authentication out of browser-visible code. In Electron, connect from main and expose narrow preload IPC methods.
