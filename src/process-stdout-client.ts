@@ -25,6 +25,7 @@ export type ProcessStdoutClient = {
     count?: number,
     after?: number,
   ) => Promise<ProcessStdoutChunk[]>;
+  clear: () => Promise<void>;
   close: () => Promise<void>;
   // Absolute path to the append-only plain-text log file
   // (<serverDir>/processes/<id>-<type>.log). Exposed so the HTTP layer can
@@ -139,6 +140,13 @@ export async function createProcessStdoutClient({
         .map((i) => recent[i])
         .reverse();
     },
+    clear: async () => {
+      updateQueue.push(async () => {
+        recent.length = 0;
+        await fs.promises.writeFile(textFilePath, "", "utf8");
+      }, true);
+      await updateQueue.processing;
+    },
     close: async () => {
       readable.off("data", onData);
       await updateQueue.processing;
@@ -156,8 +164,8 @@ function createUpdateQueue() {
     get processing() {
       return processing;
     },
-    push: (fn: () => Promise<void>) => {
-      if (pending >= maxPending) return;
+    push: (fn: () => Promise<void>, force = false) => {
+      if (!force && pending >= maxPending) return;
       pending++;
       processing = processing.then(() => {
         return new Promise<void>(async (resolve, reject) => {

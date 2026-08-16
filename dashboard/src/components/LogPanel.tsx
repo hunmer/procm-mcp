@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  clearProcessLogs,
   downloadLogUrl,
   getLogFiles,
   getMergedLogs,
@@ -126,11 +127,27 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
     }
   }
 
-  // Clear the currently displayed log view (client-side only; does not erase
-  // the backend history, so live tailing/search still work afterwards).
-  function handleClearLogs() {
-    setEntries([]);
-    stickToBottom.current = true;
+  // Clear this process's stdout/stderr history on the server, then reset the
+  // panel to the empty live-tail view. Keep the current view when it fails.
+  async function handleClearLogs() {
+    try {
+      await clearProcessLogs(process.id);
+      reqId.current++;
+      appliedSearchRef.current = "";
+      setSearch("");
+      setActiveGrep("");
+      setEntries([]);
+      setError(null);
+      stickToBottom.current = true;
+      onToast(t("logs.toastLogsCleared"));
+    } catch (err) {
+      onToast(
+        t("logs.toastClearFailed", {
+          message: err instanceof Error ? err.message : String(err),
+        }),
+        true,
+      );
+    }
   }
 
   // Restart the process. The WebSocket push refreshes the process view (and

@@ -1,5 +1,13 @@
 # API Changes
 
+## 2026-08-17
+
+- 新增 `DELETE /api/processes/:id/logs`
+  - 请求 body：无
+  - 响应 200：`{ "id": string, "cleared": true }`
+  - 响应 404：`{ "error": "Process not found" }`
+  - 说明：将指定进程的 stdout、stderr 内存历史及对应日志文件清空为空文本；运行中的进程会继续记录清空后产生的新日志。
+
 ## 2026-08-15
 
 - 新增 `POST /api/processes/import-batch`

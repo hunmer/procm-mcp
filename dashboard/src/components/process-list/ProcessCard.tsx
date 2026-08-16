@@ -1,3 +1,4 @@
+import { useState, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { PlayIcon, SquareIcon } from "lucide-react";
 import { Button } from "@/registry/default/ui/button";
@@ -32,8 +33,23 @@ export function ProcessCard({
   actions: RowActions;
 }) {
   const { t } = useTranslation();
+  const [starting, setStarting] = useState(false);
   const canStop = canStopProcess(p);
+  // Keep the button busy until the restart request resolves. The server also
+  // reports `spawning` over WebSocket, covering the gap before the response.
+  const isStarting = starting || p.status === "spawning";
   const cmd = `${p.script}${p.args?.length ? " " + p.args.join(" ") : ""}`;
+
+  async function handleStart(e: MouseEvent<HTMLButtonElement>) {
+    e.stopPropagation();
+    if (isStarting) return;
+    setStarting(true);
+    try {
+      await actions.onRestart(p.id);
+    } finally {
+      setStarting(false);
+    }
+  }
   return (
     <ContextMenu>
       <ContextMenuTrigger
@@ -82,13 +98,13 @@ export function ProcessCard({
               onStop={actions.onRequestStop}
               onDelete={actions.onRequestDelete}
             />
-            {canStop ? (
+            {canStop && !isStarting ? (
               <Button size="sm" variant="destructive" onClick={(e) => { e.stopPropagation(); actions.onRequestStop(p); }}>
                 <SquareIcon />
                 {t("processes.stopTitle")}
               </Button>
             ) : (
-              <Button size="sm" variant="default" onClick={(e) => { e.stopPropagation(); actions.onRestart(p.id); }}>
+              <Button size="sm" variant="default" loading={isStarting} onClick={handleStart}>
                 <PlayIcon />
                 {t("processes.runTitle")}
               </Button>

@@ -93,6 +93,15 @@ export function getLogs(
   );
 }
 
+export function clearProcessLogs(
+  id: string,
+): Promise<{ id: string; cleared: boolean }> {
+  return api<{ id: string; cleared: boolean }>(
+    "DELETE",
+    `/api/processes/${encodeURIComponent(id)}/logs`,
+  );
+}
+
 // Search a single stream for a regex pattern (backed by the /logs?grep= route).
 // `after` requests up to that many trailing context lines following each match.
 export function grepLogs(

@@ -1,6 +1,6 @@
 import http from "http";
 import path from "path";
-import { readFile, open, stat } from "fs/promises";
+import { readFile, open, stat, writeFile } from "fs/promises";
 import { spawn, execFileSync } from "child_process";
 import {
   dashboardNotBuiltHtml,
@@ -1008,7 +1008,7 @@ function createRequestHandler(token: string | undefined) {
         }
 
         if (action === "logs") {
-          if (method !== "GET") {
+          if (method !== "GET" && method !== "DELETE") {
             json(res, 405, { error: "Method not allowed" });
             return;
           }
@@ -1017,6 +1017,28 @@ function createRequestHandler(token: string | undefined) {
             json(res, 404, { error: "Process not found" });
             return;
           }
+
+          // DELETE /api/processes/:id/logs -> clear both stdout and stderr
+          // histories for this process. Live clients serialize the truncate
+          // with pending appends; historical records are truncated directly.
+          if (method === "DELETE") {
+            if (rp.kind === "live") {
+              await Promise.all([
+                rp.meta.stdoutClient.clear(),
+                rp.meta.stderrClient.clear(),
+              ]);
+            } else {
+              const paths = logFilePathsOf(rp);
+              await Promise.all(
+                [paths.stdoutPath, paths.stderrPath]
+                  .filter((filePath): filePath is string => !!filePath)
+                  .map((filePath) => writeFile(filePath, "", "utf8")),
+              );
+            }
+            json(res, 200, { id: idParam, cleared: true });
+            return;
+          }
+
           const stream = (url.searchParams.get("stream") || "stdout") as
             | "stdout"
             | "stderr";
