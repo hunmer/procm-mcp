@@ -70,6 +70,8 @@
     "pinTitle": "置顶（组内排序优先）",
     "unpinAria": "取消置顶 {{name}}",
     "unpinTitle": "取消置顶",
+    "infoAria": "查看端口 {{port}} 的占用进程",
+    "infoTitle": "查看端口占用（可结束进程）",
     "countOfTotal": "{{shown}} / {{total}}",
     "ungrouped": "未分组",
     "emptyNoProcesses": "暂无进程",

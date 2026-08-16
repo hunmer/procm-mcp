@@ -70,6 +70,8 @@
     "pinTitle": "Pin (sorts first in its group)",
     "unpinAria": "Unpin {{name}}",
     "unpinTitle": "Unpin",
+    "infoAria": "View the process listening on port {{port}}",
+    "infoTitle": "View port owner (kill available)",
     "countOfTotal": "{{shown}} of {{total}}",
     "ungrouped": "Ungrouped",
     "emptyNoProcesses": "No processes yet",

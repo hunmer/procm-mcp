@@ -83,9 +83,9 @@
         "dev"
       ],
       "cwd": "/Users/Zhuanz/Documents/mira",
-      "status": "running",
+      "status": "exited",
       "pid": 64300,
-      "exitCode": null,
+      "exitCode": 0,
       "error": null,
       "desc": null,
       "group": "mira",
