@@ -25,6 +25,13 @@ export declare class Logger {
     log(level: LogLevel, message: string, data?: JsonValue, context?: LogContext): void;
     private write;
 }
+/**
+ * Configure the process-wide SDK logger used by integrations that do not need
+ * to create and pass a Logger instance through every module.
+ */
+export declare function setLogger(options?: LoggerOptions): Logger;
+/** Return the process-wide configured logger. */
+export declare function getLogger(): Logger;
 export declare function createLogger(options?: LoggerOptions): Logger;
 export interface LogFilter {
     minLevel?: LogLevel | "silent";

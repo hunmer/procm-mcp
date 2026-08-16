@@ -84,6 +84,24 @@ export class Logger {
   }
 }
 
+// Keep the global logger inert until an integration explicitly configures it.
+// This preserves the optional nature of procm integration for consumers.
+let defaultLogger = new Logger({ level: "silent" });
+
+/**
+ * Configure the process-wide SDK logger used by integrations that do not need
+ * to create and pass a Logger instance through every module.
+ */
+export function setLogger(options: LoggerOptions = {}): Logger {
+  defaultLogger = new Logger(options);
+  return defaultLogger;
+}
+
+/** Return the process-wide configured logger. */
+export function getLogger(): Logger {
+  return defaultLogger;
+}
+
 export function createLogger(options: LoggerOptions = {}): Logger {
   return new Logger(options);
 }
