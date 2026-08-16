@@ -1,35 +1,6 @@
 {
   "processes": [
     {
-      "id": "lRAYMXjN",
-      "name": "procm-mcp",
-      "script": "node",
-      "args": [
-        "build/index.js",
-        "--server",
-        "--port",
-        "7332",
-        "--data-path",
-        ".procm-mcp-data"
-      ],
-      "cwd": "G:/procm-mcp",
-      "status": "exited",
-      "pid": 15572,
-      "exitCode": 1,
-      "error": null,
-      "desc": "Start the current project's procm-mcp backend on port 7332",
-      "group": "procm-mcp",
-      "port": null,
-      "roomId": null,
-      "favorite": false,
-      "startedAt": 1786792513104,
-      "lastStartedAt": 1786792513104,
-      "stoppedAt": null,
-      "stdoutLogPath": "G:\\procm-mcp\\.procm-mcp\\B6OZWh(34100)\\processes\\lRAYMXjN-stdout.log",
-      "stderrLogPath": "G:\\procm-mcp\\.procm-mcp\\B6OZWh(34100)\\processes\\lRAYMXjN-stderr.log",
-      "envs": {}
-    },
-    {
       "id": "vyPYs0N0",
       "name": "dashboard",
       "script": "npm",
@@ -65,7 +36,7 @@
         "start:client:mac"
       ],
       "cwd": "/Users/Zhuanz/Documents/mira",
-      "status": "running",
+      "status": "exited",
       "pid": 44811,
       "exitCode": null,
       "error": null,
@@ -113,7 +84,7 @@
       ],
       "cwd": "/Users/Zhuanz/Documents/mira",
       "status": "running",
-      "pid": 45533,
+      "pid": 64300,
       "exitCode": null,
       "error": null,
       "desc": null,
@@ -122,10 +93,10 @@
       "roomId": null,
       "favorite": true,
       "startedAt": 1786862819175,
-      "lastStartedAt": 1786867923975,
+      "lastStartedAt": 1786870748649,
       "stoppedAt": null,
-      "stdoutLogPath": "/Users/Zhuanz/Documents/procm-mcp/.procm-mcp/tZJAsD(94341)/processes/tj17UOUy-stdout.log",
-      "stderrLogPath": "/Users/Zhuanz/Documents/procm-mcp/.procm-mcp/tZJAsD(94341)/processes/tj17UOUy-stderr.log",
+      "stdoutLogPath": "/Users/Zhuanz/Documents/procm-mcp/.procm-mcp/DbWqaY(64272)/processes/tj17UOUy-stdout.log",
+      "stderrLogPath": "/Users/Zhuanz/Documents/procm-mcp/.procm-mcp/DbWqaY(64272)/processes/tj17UOUy-stderr.log",
       "envs": {}
     },
     {
@@ -171,6 +142,35 @@
       "startedAt": 1786862819176,
       "lastStartedAt": null,
       "stoppedAt": null
+    },
+    {
+      "id": "46M04eXW",
+      "name": "procm-mcp",
+      "script": "node",
+      "args": [
+        "build/index.js",
+        "--server",
+        "--port",
+        "7332",
+        "--data-path",
+        ".procm-mcp-data"
+      ],
+      "cwd": "/Users/Zhuanz/Documents/procm-mcp",
+      "status": "exited",
+      "pid": 62968,
+      "exitCode": 0,
+      "error": null,
+      "desc": "Start the current project procm-mcp backend on port 7332",
+      "group": "procm-mcp",
+      "port": null,
+      "roomId": null,
+      "favorite": false,
+      "startedAt": 1786870624452,
+      "lastStartedAt": 1786870624452,
+      "stoppedAt": 1786870732049,
+      "stdoutLogPath": "/Users/Zhuanz/Documents/procm-mcp/.procm-mcp/tZJAsD(94341)/processes/46M04eXW-stdout.log",
+      "stderrLogPath": "/Users/Zhuanz/Documents/procm-mcp/.procm-mcp/tZJAsD(94341)/processes/46M04eXW-stderr.log",
+      "envs": {}
     }
   ]
 }

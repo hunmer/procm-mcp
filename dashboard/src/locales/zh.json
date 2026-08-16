@@ -449,6 +449,8 @@
     "invalidNumber": "必须是数字",
     "omit": "省略",
     "noFields": "该接口无参数，直接发送即可。",
-    "networkError": "网络错误"
+    "networkError": "网络错误",
+    "copyCurl": "复制 curl",
+    "copied": "已复制"
   }
 }

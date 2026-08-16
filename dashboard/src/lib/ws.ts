@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type {
+  WsProcessesMessage,
   WsLogMessage,
   ProcessStream,
 } from "./types";
@@ -10,6 +11,7 @@ export interface UseDashboardSocket {
   status: WsStatus;
   // ms until the next reconnect attempt (when status === "closed")
   reconnectInMs: number | null;
+  onProcessesMessage: (cb: (m: WsProcessesMessage) => void) => void;
   onLogMessage: (cb: (m: WsLogMessage) => void) => void;
 }
 
@@ -20,9 +22,13 @@ export function useDashboardSocket(): UseDashboardSocket {
   const [status, setStatus] = useState<WsStatus>("connecting");
   const [reconnectInMs, setReconnectInMs] = useState<number | null>(null);
 
+  const processesRef = useRef<((m: WsProcessesMessage) => void) | null>(null);
   const logRef = useRef<((m: WsLogMessage) => void) | null>(null);
 
-  // Keep the latest callback without touching the socket lifecycle.
+  // Keep the latest callbacks without touching the socket lifecycle.
+  const onProcessesMessage = (cb: (m: WsProcessesMessage) => void) => {
+    processesRef.current = cb;
+  };
   const onLogMessage = (cb: (m: WsLogMessage) => void) => {
     logRef.current = cb;
   };
@@ -56,7 +62,9 @@ export function useDashboardSocket(): UseDashboardSocket {
         }
         if (!msg || typeof msg !== "object") return;
         const type = (msg as { type?: string }).type;
-        if (type === "log") {
+        if (type === "processes") {
+          processesRef.current?.(msg as WsProcessesMessage);
+        } else if (type === "log") {
           logRef.current?.(msg as WsLogMessage);
         }
       };
@@ -105,7 +113,7 @@ export function useDashboardSocket(): UseDashboardSocket {
     };
   }, []);
 
-  return { status, reconnectInMs, onLogMessage };
+  return { status, reconnectInMs, onProcessesMessage, onLogMessage };
 }
 
 // Build a ws:// or wss:// URL from the current page origin (dashboard is

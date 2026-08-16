@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { z } from "zod";
+import { CheckIcon, CopyIcon } from "lucide-react";
 import { Badge } from "@/registry/default/ui/badge";
 import { Button } from "@/registry/default/ui/button";
 import {
@@ -51,6 +52,43 @@ interface PlayResponse {
   ok: boolean;
   data: unknown;
   ms: number;
+}
+
+// The exact request the last Send produced, so the response panel can offer an
+// equivalent curl command for it.
+interface PlayRequest {
+  method: HttpMethod;
+  url: string; // resolved path + query string, relative to the origin
+  body?: string; // serialized JSON body, when the endpoint has body fields
+}
+
+// Quote a token for POSIX shells (bash/zsh/sh): single quotes with the
+// standard `'\''` escape, robust against any metacharacter inside the URL or
+// JSON body.
+function quotePosix(token: string): string {
+  return `'${token.replace(/'/g, "'\\''")}'`;
+}
+
+// Quote a token for cmd.exe: double quotes with embedded `"` escaped as `\"` —
+// same strategy as the backend's copy-command quoting in src/http-server.ts.
+function quoteWin(token: string): string {
+  return `"${token.replace(/"/g, '\\"')}"`;
+}
+
+function toCurl(req: PlayRequest): string {
+  // Match the quoting style to the browser's OS so the copied line runs when
+  // pasted into the user's local terminal: cmd.exe on Windows, POSIX shell
+  // elsewhere.
+  const win = navigator.userAgent.includes("Windows");
+  const q = win ? quoteWin : quotePosix;
+  const parts = ["curl"];
+  if (req.method !== "GET") parts.push(`-X ${req.method}`);
+  parts.push(q(`${window.location.origin}${req.url}`));
+  if (req.body !== undefined) {
+    parts.push(win ? '-H "Content-Type: application/json"' : "-H 'Content-Type: application/json'");
+    parts.push(`--data ${q(req.body)}`);
+  }
+  return parts.join(" ");
 }
 
 function initialValues(ep: PlayEndpoint): Record<string, string> {
@@ -136,6 +174,7 @@ export function Playground() {
   const [errors, setErrors] = useState<Record<string, string | string[]>>({});
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<PlayResponse | null>(null);
+  const [lastRequest, setLastRequest] = useState<PlayRequest | null>(null);
 
   const schema = useMemo(
     () =>
@@ -154,6 +193,7 @@ export function Playground() {
     setValues(initialValues(next));
     setErrors({});
     setResponse(null);
+    setLastRequest(null);
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -194,6 +234,12 @@ export function Playground() {
         if (v !== undefined) body[f.name] = v;
       }
     }
+
+    setLastRequest({
+      method: endpoint.method,
+      url,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
 
     try {
       const res = await fetch(url, {
@@ -324,7 +370,7 @@ export function Playground() {
           {/* Narrow containers: response below the form. */}
           {response && (
             <div className="@5xl:hidden flex max-h-[50vh] flex-col border-t">
-              <ResponsePanel response={response} />
+              <ResponsePanel response={response} request={lastRequest} />
             </div>
           )}
         </section>
@@ -332,7 +378,7 @@ export function Playground() {
         {/* Wide containers: response as a dedicated right rail. */}
         {response && (
           <aside className="hidden w-[40%] max-w-[640px] shrink-0 flex-col border-l @5xl:flex">
-            <ResponsePanel response={response} />
+            <ResponsePanel response={response} request={lastRequest} />
           </aside>
         )}
       </div>
@@ -341,8 +387,29 @@ export function Playground() {
 }
 
 // Status + duration header and the expandable JSON tree of the last response.
-function ResponsePanel({ response }: { response: PlayResponse }) {
+function ResponsePanel({
+  response,
+  request,
+}: {
+  response: PlayResponse;
+  request: PlayRequest | null;
+}) {
   const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+
+  // Copy the last request as a paste-and-run curl command; the label flips to
+  // a check briefly so the click is visibly acknowledged.
+  async function handleCopyCurl() {
+    if (!request) return;
+    try {
+      await navigator.clipboard.writeText(toCurl(request));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard unavailable (e.g. insecure context) — nothing to fall back to
+    }
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col p-4">
       <div className="mb-2 flex shrink-0 items-center gap-2">
@@ -355,6 +422,20 @@ function ResponsePanel({ response }: { response: PlayResponse }) {
         <span className="text-muted-foreground font-mono text-xs tabular-nums">
           {response.ms} ms
         </span>
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto h-7 gap-1 px-2 text-xs"
+          onClick={handleCopyCurl}
+          disabled={!request}
+        >
+          {copied ? (
+            <CheckIcon className="size-3.5" />
+          ) : (
+            <CopyIcon className="size-3.5" />
+          )}
+          {copied ? t("playground.copied") : t("playground.copyCurl")}
+        </Button>
       </div>
       <JsonViewer
         data={response.data as never}

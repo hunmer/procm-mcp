@@ -1342,9 +1342,12 @@ export function startHttpServer(port: number): Promise<http.Server> {
         `Dashboard HTTP server listening on http://${HOST}:${port}` +
           (token ? " (token protected)" : ""),
       );
-      // Attach the WebSocket endpoint for real-time log updates. Process list
-      // data is served by GET /api/processes and refreshed by the dashboard.
-      attachWebsocketServer(server, token);
+      // Attach the WebSocket endpoint for real-time process and log updates.
+      attachWebsocketServer(server, token, {
+        serverId,
+        pid: process.pid,
+        startedAt: serverStartedAt,
+      });
       resolve(server);
     });
   });

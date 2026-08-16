@@ -52,7 +52,7 @@ import type {
 
 export function App() {
   const [data, setData] = useState<ProcessListResponse | null>(null);
-  // Backend start time (epoch ms) — received via GET /api/processes.
+  // Backend start time (epoch ms) — received via WS or GET /api/processes.
   const [serverStartedAt, setServerStartedAt] = useState<number | null>(null);
   // Ticks every second so the uptime display stays current.
   const [now, setNow] = useState(() => Date.now());
@@ -88,7 +88,8 @@ export function App() {
   // Bumped after a bulk log clear so the mounted LogFilesView re-lists.
   const [logFilesReloadKey, setLogFilesReloadKey] = useState(0);
 
-  const { status, reconnectInMs, onLogMessage } = useDashboardSocket();
+  const { status, reconnectInMs, onProcessesMessage, onLogMessage } =
+    useDashboardSocket();
 
   // Whether the log panel is currently open (visible + not collapsed) and
   // which process it shows — used to decide whether to count a live log line
@@ -100,6 +101,21 @@ export function App() {
   const liveLogForwardRef = useRef<((m: WsLogMessage) => void) | null>(null);
   // On first load, a `?proc=` from the URL waits for the WS row to arrive.
   const initialProcRef = useRef<string | null>(readUrlState().procId);
+
+  // Process mutations are reflected immediately by the backend's WS snapshot.
+  // HTTP polling below remains only as a recovery path for missed messages.
+  onProcessesMessage((message) => {
+    setData((current) => ({
+      serverId: message.serverId ?? current?.serverId ?? "",
+      pid: message.pid ?? current?.pid ?? 0,
+      startedAt: message.startedAt ?? current?.startedAt,
+      processes: message.data,
+    }));
+    if (message.startedAt != null) setServerStartedAt(message.startedAt);
+    setSelected((current) =>
+      current ? message.data.find((p) => p.id === current.id) ?? null : null,
+    );
+  });
 
   // Dispatch every live log line: forward to the open panel if it matches,
   // otherwise bump that process's unread badge.
@@ -136,7 +152,7 @@ export function App() {
     };
 
     void refresh();
-    const timer = setInterval(() => void refresh(), 3000);
+    const timer = setInterval(() => void refresh(), 30000);
     return () => {
       cancelled = true;
       clearInterval(timer);

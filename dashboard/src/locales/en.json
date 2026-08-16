@@ -449,6 +449,8 @@
     "invalidNumber": "Must be a number",
     "omit": "omit",
     "noFields": "This endpoint takes no inputs — just hit Send.",
-    "networkError": "Network error"
+    "networkError": "Network error",
+    "copyCurl": "Copy curl",
+    "copied": "Copied"
   }
 }
