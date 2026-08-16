@@ -1,7 +1,7 @@
 import http from "http";
 import path from "path";
 import { readFile, open, stat } from "fs/promises";
-import { spawn } from "child_process";
+import { spawn, execFileSync } from "child_process";
 import {
   dashboardNotBuiltHtml,
   getDashboardServeState,
@@ -38,10 +38,31 @@ import { queryRoomLogs } from "./room-logs.js";
 import { scanProjectCommands } from "./project-scanner.js";
 import { createRequire } from "module";
 // native-file-dialog ships only a compiled .node addon (no CJS wrapper), so
-// the ESM loader can't import it — pull it through createRequire.
-const { folder_dialog } = createRequire(import.meta.url)(
-  "native-file-dialog",
-) as { folder_dialog: () => string };
+// the ESM loader can't import it — pull it through createRequire. The addon
+// is Windows-only, so load it lazily and use osascript on macOS; a broken or
+// missing addon must not take the whole server down at startup.
+let folderDialog: (() => string) | null = null;
+
+function pickDirectory(): string {
+  if (process.platform === "darwin") {
+    try {
+      return execFileSync("osascript", [
+        "-e",
+        'POSIX path of (choose folder with prompt "Select directory")',
+      ])
+        .toString()
+        .trim();
+    } catch (e) {
+      const stderr = e instanceof Error ? e.message : String(e);
+      if (/-128|cancel/i.test(stderr)) return "UserCancelled";
+      throw e;
+    }
+  }
+  folderDialog ??= createRequire(import.meta.url)(
+    "native-file-dialog",
+  ) as unknown as { folder_dialog: () => string }["folder_dialog"];
+  return folderDialog();
+}
 import { listSystemProcesses, killProcessTree, findProcessByPort } from "./system-processes.js";
 import { ProcmMcpDir } from "./procm-mcp-dir.js";
 import { listProcessLogFiles, deleteProcessLogFiles } from "./process-log-files.js";
@@ -668,7 +689,7 @@ function createRequestHandler(token: string | undefined) {
       // { canceled: true } when the user dismisses the picker.
       if (method === "POST" && pathname === "/api/select-directory") {
         try {
-          const dir = folder_dialog().trim();
+          const dir = pickDirectory().trim();
           if (!dir || dir === "UserCancelled") {
             json(res, 200, { canceled: true, path: null });
             return;

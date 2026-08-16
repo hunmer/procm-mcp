@@ -55,6 +55,117 @@
       "envs": {
         "PROCM_DEV_BACKEND": "http://127.0.0.1:7332"
       }
+    },
+    {
+      "id": "GZW8sBZx",
+      "name": "start:client:mac",
+      "script": "pnpm",
+      "args": [
+        "run",
+        "start:client:mac"
+      ],
+      "cwd": "/Users/Zhuanz/Documents/mira",
+      "status": "exited",
+      "pid": null,
+      "exitCode": null,
+      "error": null,
+      "desc": "pnpm -C packages/mira-client run electron:dev:mac",
+      "group": "mira",
+      "favorite": true,
+      "startedAt": 1786862819173,
+      "lastStartedAt": null,
+      "stoppedAt": null
+    },
+    {
+      "id": "LgU7f6cL",
+      "name": "start:client:win",
+      "script": "pnpm",
+      "args": [
+        "run",
+        "start:client:win"
+      ],
+      "cwd": "/Users/Zhuanz/Documents/mira",
+      "status": "exited",
+      "pid": null,
+      "exitCode": null,
+      "error": null,
+      "desc": "pnpm -C packages/mira-client run electron:dev",
+      "group": "mira",
+      "favorite": true,
+      "startedAt": 1786862819174,
+      "lastStartedAt": null,
+      "stoppedAt": null
+    },
+    {
+      "id": "tj17UOUy",
+      "name": "mira-app-server-dev",
+      "script": "pnpm",
+      "args": [
+        "--filter",
+        "mira-app-server",
+        "run",
+        "dev"
+      ],
+      "cwd": "/Users/Zhuanz/Documents/mira",
+      "status": "exited",
+      "pid": 94788,
+      "exitCode": 1,
+      "error": null,
+      "desc": null,
+      "group": "mira",
+      "port": null,
+      "roomId": null,
+      "favorite": true,
+      "startedAt": 1786862819175,
+      "lastStartedAt": 1786862827301,
+      "stoppedAt": 1786862837787,
+      "stdoutLogPath": "/Users/Zhuanz/Documents/procm-mcp/.procm-mcp/tZJAsD(94341)/processes/tj17UOUy-stdout.log",
+      "stderrLogPath": "/Users/Zhuanz/Documents/procm-mcp/.procm-mcp/tZJAsD(94341)/processes/tj17UOUy-stderr.log",
+      "envs": {}
+    },
+    {
+      "id": "FaTQ6y-z",
+      "name": "mira-dashboard-next-dev",
+      "script": "pnpm",
+      "args": [
+        "-C",
+        "packages/mira-dashboard-next",
+        "run",
+        "dev"
+      ],
+      "cwd": "/Users/Zhuanz/Documents/mira",
+      "status": "exited",
+      "pid": null,
+      "exitCode": null,
+      "error": null,
+      "desc": null,
+      "group": "mira",
+      "favorite": true,
+      "startedAt": 1786862819175,
+      "lastStartedAt": null,
+      "stoppedAt": null
+    },
+    {
+      "id": "fBvaT87K",
+      "name": "mira-doc-dev",
+      "script": "pnpm",
+      "args": [
+        "-C",
+        "packages/mira-doc",
+        "run",
+        "docs:dev"
+      ],
+      "cwd": "/Users/Zhuanz/Documents/mira",
+      "status": "exited",
+      "pid": null,
+      "exitCode": null,
+      "error": null,
+      "desc": null,
+      "group": "mira",
+      "favorite": true,
+      "startedAt": 1786862819176,
+      "lastStartedAt": null,
+      "stoppedAt": null
     }
   ]
 }
