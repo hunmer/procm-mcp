@@ -146,11 +146,11 @@ npm i -D procm-mcp
 Room clients install the separately published TypeScript SDK:
 
 ```bash
-npm i @procm-mcp/sdk
+npm i @hunmer/procm-mcp-sdk
 ```
 
 ```ts
-import { createLogger, createProcmClient } from "@procm-mcp/sdk";
+import { createLogger, createProcmClient } from "@hunmer/procm-mcp-sdk";
 
 const client = createProcmClient({ clientName: "backend" });
 const logger = createLogger({ client });
@@ -166,7 +166,7 @@ logger.info("Backend ready", { pid: process.pid });
 Trace storage is built into each procm-mcp process and requires no external service. Traces expire after 24 hours by default. `PROCM_TRACE_TTL_SECONDS` changes the default and accepts `1..604800` seconds. A trace is limited to 256 KiB after JSON serialization, and the LRU cache is bounded to 64 MiB total.
 
 ```ts
-import { createHook, createLogger, createProcmClient, saveTrace } from "@procm-mcp/sdk";
+import { createHook, createLogger, createProcmClient, saveTrace } from "@hunmer/procm-mcp-sdk";
 
 const client = createProcmClient({ clientName: "backend" });
 const logger = createLogger({ client });

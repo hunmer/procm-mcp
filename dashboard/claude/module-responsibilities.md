@@ -21,7 +21,7 @@
 | `components/StatusBadge.tsx` | 按 `ProcessStatus` 映射 coss `Badge` variant。 |
 | `components/Toast.tsx` | 内联瞬时 toast（非 coss 原语），2.8s 自动消失。 |
 | `components/DevInspector.tsx` | dev-only 组件检查器（`react-dev-inspector`，生产环境渲染空；Ctrl+Shift+Alt+C 热键）。 |
-| `lib/api.ts` | **REST 客户端**。`api<T>()` 同源 fetch 封装，非 2xx 抛带 `error` 消息。从 `@procm-mcp/sdk` import `decodeStructuredLogLine`/`stripStructuredLogFrame` 还原结构化日志。导出 list/get/logs/grep/mergedLogs/start/stop/restart/delete/clearAll/logFiles/downloadUrl/command/scanDirectory/openFolder/systemProcesses 等 + `parseEnvs/stringifyEnvs/parseLogText/mergeEntries`。 |
+| `lib/api.ts` | **REST 客户端**。`api<T>()` 同源 fetch 封装，非 2xx 抛带 `error` 消息。从 `@hunmer/procm-mcp-sdk` import `decodeStructuredLogLine`/`stripStructuredLogFrame` 还原结构化日志。导出 list/get/logs/grep/mergedLogs/start/stop/restart/delete/clearAll/logFiles/downloadUrl/command/scanDirectory/openFolder/systemProcesses 等 + `parseEnvs/stringifyEnvs/parseLogText/mergeEntries`。 |
 | `lib/ws.ts` | **WebSocket hook** `useDashboardSocket`。同源 `/ws` 连接，指数退避（cap 10s）自动重连，回调存 ref（不触发重订阅）。 |
 | `lib/types.ts` | 镜像后端：`ProcessStatus`/`ProcessView`/`ProcessListResponse`/`LogsResponse`/`LogEntry`/`StartProcessBody`/`WsProcessesMessage`/`WsLogMessage`。 |
 | `lib/urlState.ts` | **URL 状态同步**：选中进程（`?proc=`）与日志面板折叠（`?collapsed=1`）写入 URL，刷新/分享可还原视图；`history.replaceState` 不产生历史记录。 |

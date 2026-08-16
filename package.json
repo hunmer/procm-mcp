@@ -43,7 +43,7 @@
   "keywords": [],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.3",
-    "@procm-mcp/sdk": "^0.1.0",
+    "@hunmer/procm-mcp-sdk": "^0.1.0",
     "find-process": "^2.1.1",
     "get-ports-natively": "^1.0.13",
     "lowdb": "^7.0.1",

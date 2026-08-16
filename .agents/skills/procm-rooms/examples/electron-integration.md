@@ -4,7 +4,7 @@ Connect from Electron main, not the renderer:
 
 ```ts
 import { ipcMain } from "electron";
-import { createProcmClient } from "@procm-mcp/sdk";
+import { createProcmClient } from "@hunmer/procm-mcp-sdk";
 
 const client = createProcmClient({ clientName: "electron" });
 

@@ -1,4 +1,4 @@
-import { createProcmClient, executeCustom, exposeCustomExecution } from "@procm-mcp/sdk";
+import { createProcmClient, executeCustom, exposeCustomExecution } from "@hunmer/procm-mcp-sdk";
 import { spawn } from "node:child_process";
 import {
   assert,
@@ -192,7 +192,7 @@ await runTest("process roomId survives restart and structured logs are queryable
   const port = randomPort();
   const backend = await startBackend({ port });
   try {
-    const source = `import('@procm-mcp/sdk').then(({createLogger})=>{const logger=createLogger({clientName:'fixture',memberId:'fixture:logger'});logger.info('fixture ready',{answer:42},{traceId:'fixture-trace'});logger.info('unrelated trace',undefined,{traceId:'other-trace'})})`;
+    const source = `import('@hunmer/procm-mcp-sdk').then(({createLogger})=>{const logger=createLogger({clientName:'fixture',memberId:'fixture:logger'});logger.info('fixture ready',{answer:42},{traceId:'fixture-trace'});logger.info('unrelated trace',undefined,{traceId:'other-trace'})})`;
     const started = await http(port, "POST", "/api/processes", {
       script: "node",
       args: ["-e", source],

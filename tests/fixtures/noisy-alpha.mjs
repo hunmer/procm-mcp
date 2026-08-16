@@ -1,4 +1,4 @@
-import { createProcmClient, exposeCustomExecution } from "@procm-mcp/sdk";
+import { createProcmClient, exposeCustomExecution } from "@hunmer/procm-mcp-sdk";
 
 const target = "noisy-alpha";
 const roomId = process.env.PROCM_ROOM_ID;

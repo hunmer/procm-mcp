@@ -1,6 +1,6 @@
 # procm-mcp
 
-一个用于**进程管理**的 Model Context Protocol (MCP) 服务器。让 LLM 与人类操作者通过统一接口启动、监控、重启、停止子进程，写入其 stdin 或发送信号，并读取其 stdout/stderr 日志。在此之上提供两个子域：**房间**（被管进程经 WebSocket `/room` 互发消息与结构化日志，SDK 为 `@procm-mcp/sdk`）与**追踪**（SDK hook 捕获函数调用存内存 LRU，经 `trace-get` 读取）。纯 Node.js + TypeScript（ESM），前端 dashboard 是独立的 React + Vite 工程。
+一个用于**进程管理**的 Model Context Protocol (MCP) 服务器。让 LLM 与人类操作者通过统一接口启动、监控、重启、停止子进程，写入其 stdin 或发送信号，并读取其 stdout/stderr 日志。在此之上提供两个子域：**房间**（被管进程经 WebSocket `/room` 互发消息与结构化日志，SDK 为 `@hunmer/procm-mcp-sdk`）与**追踪**（SDK hook 捕获函数调用存内存 LRU，经 `trace-get` 读取）。纯 Node.js + TypeScript（ESM），前端 dashboard 是独立的 React + Vite 工程。
 
 后端有三种形态（stdio MCP / `--server` HTTP 后端 / CLI 客户端）共享同一套模块级状态，并额外在 HTTP 端口暴露 stateless 的 `/mcp` 端点与一个仅绑定 `127.0.0.1` 的 dashboard（经 WebSocket `/ws` 实时推送进程状态与日志）。进程历史持久化到 `processes.json`，跨重启可见。**进程启动没有任何白名单/审批门控**：`start-process` / `procm-command` 直接执行给定命令，应像对待任意 shell 命令一样保留人工确认。
 
@@ -39,7 +39,7 @@
 | 模块 | 职责摘要 | 入口 |
 |---|---|---|
 | 根后端（`src/`） | MCP 服务器（9 工具）+ HTTP 后端 + CLI 客户端 + 进程/日志/房间/追踪领域核心 + WS 双端点 | `src/index.ts` |
-| procm-sdk（`packages/procm-sdk/`） | `@procm-mcp/sdk`：房间客户端、结构化日志、函数 hook/trace、custom-execution RPC | `packages/procm-sdk/src/index.ts` |
+| procm-sdk（`packages/procm-sdk/`） | `@hunmer/procm-mcp-sdk`：房间客户端、结构化日志、函数 hook/trace、custom-execution RPC | `packages/procm-sdk/src/index.ts` |
 | dashboard（`dashboard/`） | React + Vite + coss 的 Web UI，经 WebSocket 实时推送 + 同源 REST 管理进程（含系统进程 Tab、i18n） | `dashboard/src/main.tsx` |
 
 ```mermaid
@@ -49,7 +49,7 @@ flowchart LR
     HTTPC["HTTP MCP Client (/mcp)"]
     CLI["CLI Client (ps/start/...)"]
     BR["Browser (dashboard)"]
-    SDK["@procm-mcp/sdk 进程 (demo 等)"]
+    SDK["@hunmer/procm-mcp-sdk 进程 (demo 等)"]
   end
   subgraph 后端["procm-mcp 后端 (src/)"]
     IDX["index.ts (入口/分流)"]

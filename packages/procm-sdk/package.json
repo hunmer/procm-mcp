@@ -1,5 +1,5 @@
 {
-  "name": "@procm-mcp/sdk",
+  "name": "@hunmer/procm-mcp-sdk",
   "version": "0.1.0",
   "description": "TypeScript client and structured logger for procm-mcp rooms",
   "type": "module",

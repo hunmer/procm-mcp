@@ -1,4 +1,4 @@
-import { createProcmClient, executeCustom } from "@procm-mcp/sdk";
+import { createProcmClient, executeCustom } from "@hunmer/procm-mcp-sdk";
 import {
   assert,
   assertEqual,

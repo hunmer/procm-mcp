@@ -6,7 +6,7 @@ import { mkdirp } from "mkdirp";
 import { log } from "./logger.js";
 import { toErrorMessage } from "./error.js";
 import { dashboardEvents } from "./events.js";
-import { decodeStructuredLogLine, stripStructuredLogFrame } from "@procm-mcp/sdk";
+import { decodeStructuredLogLine, stripStructuredLogFrame } from "@hunmer/procm-mcp-sdk";
 
 export type ProcessStdoutChunk = {
   timestamp: Date;

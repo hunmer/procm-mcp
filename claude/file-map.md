@@ -35,7 +35,7 @@ procm-mcp/
 │       ├── procm-commands.ts # procm-command(list/start)
 │       ├── room.ts           # room(list/get/update) / room-logs
 │       └── trace.ts          # trace-get
-├── packages/procm-sdk/       # @procm-mcp/sdk，见 packages/procm-sdk/CLAUDE.md
+├── packages/procm-sdk/       # @hunmer/procm-mcp-sdk，见 packages/procm-sdk/CLAUDE.md
 ├── dashboard/                # 独立 React+Vite 工程，见 dashboard/CLAUDE.md
 ├── tests/                    # 10 套（run-all）+ ws-livecheck + _smoke-* + _helpers + fixtures
 ├── demo/                     # node-server / electron-client（SDK 接入示例）+ custom-execution-test

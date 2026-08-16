@@ -87,7 +87,7 @@ dashboard/
 | 某个 REST 调用 | `src/lib/api.ts` |
 | 后端字段对应类型 | `src/lib/types.ts` |
 | 日志展示/ANSI/实时追加 | `LogPanel.tsx` + `TerminalLog.tsx` + `ansi.ts` |
-| 结构化日志 data 展开 | `JsonViewer.tsx`（经 `@procm-mcp/sdk` decode） |
+| 结构化日志 data 展开 | `JsonViewer.tsx`（经 `@hunmer/procm-mcp-sdk` decode） |
 | 启动进程表单/presets | `NewProcessDialog.tsx` + `lib/presets.ts` |
 | 收藏 CRUD/存储 | `lib/favorites.ts` |
 | 收藏网格/分组/导入 | `FavoritesView.tsx` + `ImportFavoritesDialog.tsx` |

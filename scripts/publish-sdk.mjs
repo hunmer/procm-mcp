@@ -22,7 +22,7 @@ if (!skipBuild) run(["run", "build"]);
 const entry = resolve(sdkDir, "dist", "index.js");
 if (!existsSync(entry)) {
   console.error(`Expected SDK build output not found: ${entry}`);
-  console.error("Run without --no-build or build @procm-mcp/sdk first.");
+  console.error("Run without --no-build or build @hunmer/procm-mcp-sdk first.");
   process.exit(1);
 }
 

@@ -25,10 +25,10 @@
 
 | 文件 | 作用 |
 |---|---|
-| `package.json` | `@procm-mcp/sdk`、ESM only、`files: ["dist"]`、`engines.node >= 22`、`main/types/exports` 指 dist |
+| `package.json` | `@hunmer/procm-mcp-sdk`、ESM only、`files: ["dist"]`、`engines.node >= 22`、`main/types/exports` 指 dist |
 | `tsconfig.json` | `tsc -p` 构建（declaration + sourcemap 出 dist） |
 
 ## 与 monorepo 的关系
 
-- 根 `package.json` `workspaces: ["packages/*"]`，后端依赖 `"@procm-mcp/sdk": "^0.1.0"`（workspace 解析）；dashboard 也 import 其 `decodeStructuredLogLine`。
+- 根 `package.json` `workspaces: ["packages/*"]`，后端依赖 `"@hunmer/procm-mcp-sdk": "^0.1.0"`（workspace 解析）；dashboard 也 import 其 `decodeStructuredLogLine`。
 - `dist/` 构建产物**随仓库提交**——根构建链 `npm run build` = `build:sdk` → `sync:demos` → `build:dashboard` → `tsc`，SDK 排第一。

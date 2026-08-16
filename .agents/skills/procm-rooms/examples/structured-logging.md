@@ -3,7 +3,7 @@
 Create a Logger next to the client:
 
 ```ts
-import { createLogger, createProcmClient } from "@procm-mcp/sdk";
+import { createLogger, createProcmClient } from "@hunmer/procm-mcp-sdk";
 
 const client = createProcmClient({ clientName: "orders-api" });
 const logger = createLogger({ client });

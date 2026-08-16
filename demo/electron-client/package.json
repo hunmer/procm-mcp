@@ -5,7 +5,7 @@
   "main": "main.js",
   "scripts": { "start": "node --env-file=.env.defaults ./node_modules/electron/cli.js ." },
   "dependencies": {
-    "@procm-mcp/sdk": "file:../../packages/procm-sdk",
+    "@hunmer/procm-mcp-sdk": "file:../../packages/procm-sdk",
     "electron": "^37.2.6"
   },
   "pnpm": {

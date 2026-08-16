@@ -1,6 +1,6 @@
 # 对外接口
 
-包唯一出口 `@procm-mcp/sdk`（`src/index.ts` re-export 一切）。以下为公共 API 摘要。
+包唯一出口 `@hunmer/procm-mcp-sdk`（`src/index.ts` re-export 一切）。以下为公共 API 摘要。
 
 ## createProcmClient / ProcmClient（client.ts）
 

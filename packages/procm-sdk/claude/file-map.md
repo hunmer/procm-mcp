@@ -2,7 +2,7 @@
 
 ```
 packages/procm-sdk/
-├── package.json            # @procm-mcp/sdk · ESM only · files:["dist"] · node>=22
+├── package.json            # @hunmer/procm-mcp-sdk · ESM only · files:["dist"] · node>=22
 ├── tsconfig.json           # tsc -p 构建（declaration + sourcemap）
 ├── src/
 │   ├── index.ts            # ★ 包唯一出口：全量 re-export

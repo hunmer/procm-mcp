@@ -9,7 +9,7 @@ import type {
   SystemProcess,
   SystemProcessListResponse,
 } from "./types";
-import { decodeStructuredLogLine, stripStructuredLogFrame } from "@procm-mcp/sdk";
+import { decodeStructuredLogLine, stripStructuredLogFrame } from "@hunmer/procm-mcp-sdk";
 
 // Thin wrapper around the same-origin REST API. Throws on non-2xx with the
 // server's `error` message when present.

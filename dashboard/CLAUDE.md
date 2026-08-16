@@ -1,6 +1,6 @@
 # procm-mcp dashboard
 
-procm-mcp 的 Web 管理界面，由后端在 `GET /` 静态托管（构建产物 `dist/` 打包进 npm 包）。独立的 React + Vite 工程，经同源 **WebSocket `/ws`**（实时进程/日志推送，自动重连）+ REST `/api/*`（操作与历史）与后端通信。进程列表支持表格/卡片双视图、过滤、分页、排序、右键菜单与批量操作；System Tab 查看/终止 OS 级进程；日志面板带 ANSI 终端渲染与结构化 JSON 展开（经 `@procm-mcp/sdk` 解码）；收藏夹（纯 localStorage 启动配方，支持文件夹导入）；en/zh 双语；默认暗色，支持亮/暗切换，选中状态可经 URL 还原。
+procm-mcp 的 Web 管理界面，由后端在 `GET /` 静态托管（构建产物 `dist/` 打包进 npm 包）。独立的 React + Vite 工程，经同源 **WebSocket `/ws`**（实时进程/日志推送，自动重连）+ REST `/api/*`（操作与历史）与后端通信。进程列表支持表格/卡片双视图、过滤、分页、排序、右键菜单与批量操作；System Tab 查看/终止 OS 级进程；日志面板带 ANSI 终端渲染与结构化 JSON 展开（经 `@hunmer/procm-mcp-sdk` 解码）；收藏夹（纯 localStorage 启动配方，支持文件夹导入）；en/zh 双语；默认暗色，支持亮/暗切换，选中状态可经 URL 还原。
 
 技术栈：**React 19** + **Vite 6** + **Tailwind CSS v4** + **coss**（基于 `@base-ui/react`）+ `@tanstack/react-table` + `react-i18next` + `lucide-react`。
 

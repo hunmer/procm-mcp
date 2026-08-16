@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createProcmClient, executeCustom } from "@procm-mcp/sdk";
+import { createProcmClient, executeCustom } from "@hunmer/procm-mcp-sdk";
 
 const client = createProcmClient({ clientName: "custom-execution-test", reconnect: false });
 

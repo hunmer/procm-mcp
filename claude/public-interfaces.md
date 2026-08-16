@@ -55,7 +55,7 @@
 ## WebSocket（双端点）
 
 - **`/ws`**（dashboard）：连接即发 `{type:"processes",snapshot:true,...}` 快照；之后 `PROCESS_CHANGE` → `{type:"processes",...}`，`LOG_APPEND` → `{type:"log",processId,stream,timestamp,message}`。
-- **`/room`**（SDK 房间协议）：`@procm-mcp/sdk` `ProcmClient` 接入；hello/welcome、subscribe/publish（prefix/retain）、member 事件、`trace:put`/`trace:stored`、ping/pong——帧定义见 SDK 包 `protocol.ts`。托管进程自动获 `PROCM_WS_URL` 指向此端点。
+- **`/room`**（SDK 房间协议）：`@hunmer/procm-mcp-sdk` `ProcmClient` 接入；hello/welcome、subscribe/publish（prefix/retain）、member 事件、`trace:put`/`trace:stored`、ping/pong——帧定义见 SDK 包 `protocol.ts`。托管进程自动获 `PROCM_WS_URL` 指向此端点。
 
 鉴权两端口相同：`?token=` 或 `bearer.<token>` 子协议。
 

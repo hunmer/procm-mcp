@@ -1,4 +1,4 @@
-# @procm-mcp/sdk
+# @hunmer/procm-mcp-sdk
 
 procm-mcp 房间系统的 TypeScript 客户端 SDK（独立 npm 包，workspace 成员）。四块能力：`ProcmClient` WebSocket 房间消息（订阅/retain 发布/waitFor/自动重连）、`createLogger` 结构化日志（console + `$procm/log` 双写，base64url marker）、`createHook`/`saveTrace` 函数追踪（调用链 + 后端内存 LRU 存储，经 `trace-get` 工具读取）、`exposeCustomExecution`/`executeCustom` 远程函数执行 RPC。纯库无进程，浏览器与 Node（≥22）通用，运行时依赖仅 `callsites`。
 

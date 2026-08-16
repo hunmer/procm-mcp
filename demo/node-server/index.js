@@ -8,7 +8,7 @@ import {
   executeCustom,
   exposeCustomExecution,
   getTrace,
-} from "@procm-mcp/sdk";
+} from "@hunmer/procm-mcp-sdk";
 
 const port = Number(process.env.PORT || 4444);
 const indexHtml = await readFile(new URL("./public/index.html", import.meta.url));

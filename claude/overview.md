@@ -1,6 +1,6 @@
 # 架构总览
 
-procm-mcp 让 LLM（经 MCP）与人类操作者（经 dashboard / CLI）管理子进程：启动、查看、重启、停止、写 stdin / 发信号、读 stdout/stderr。在此之上叠加两个子域：**房间**（room——被管进程间经 WebSocket `/room` 互发消息/结构化日志，协议由 `@procm-mcp/sdk` 定义）与**追踪**（trace——SDK hook 捕获的函数调用存内存 LRU，LLM 经 `trace-get` 读取）。
+procm-mcp 让 LLM（经 MCP）与人类操作者（经 dashboard / CLI）管理子进程：启动、查看、重启、停止、写 stdin / 发信号、读 stdout/stderr。在此之上叠加两个子域：**房间**（room——被管进程间经 WebSocket `/room` 互发消息/结构化日志，协议由 `@hunmer/procm-mcp-sdk` 定义）与**追踪**（trace——SDK hook 捕获的函数调用存内存 LRU，LLM 经 `trace-get` 读取）。
 
 ## 运行形态（共享同一份模块级状态）
 
@@ -16,7 +16,7 @@ procm-mcp 让 LLM（经 MCP）与人类操作者（经 dashboard / CLI）管理�
 两个 WebSocket 端点（同一 HTTP server 的 `upgrade` 分发）：
 
 - **`/ws`**：dashboard 专用——推进程列表与日志行（`websocket-server.ts`）。
-- **`/room`**：SDK 房间协议——`@procm-mcp/sdk` 的 `ProcmClient` 接入（`room-hub.ts`），承载消息/成员事件/结构化日志上报/trace:put。被管进程启动时自动注入 `PROCM_WS_URL` 指向它。
+- **`/room`**：SDK 房间协议——`@hunmer/procm-mcp-sdk` 的 `ProcmClient` 接入（`room-hub.ts`），承载消息/成员事件/结构化日志上报/trace:put。被管进程启动时自动注入 `PROCM_WS_URL` 指向它。
 
 进程列表（`processes: ProcessMetadata[]`）、server id、room hub、trace store 都是模块级变量。因此 stdio MCP、HTTP REST、`/mcp` HTTP、dashboard 四条路径看到的是**同一份**进程状态。`/mcp` 之所以选 stateless，正是因为状态不依赖会话。
 

@@ -3,7 +3,7 @@
 Install and connect with explicit values in standalone scripts:
 
 ```ts
-import { createProcmClient } from "@procm-mcp/sdk";
+import { createProcmClient } from "@hunmer/procm-mcp-sdk";
 
 const client = createProcmClient({
   url: "ws://127.0.0.1:7331/room",

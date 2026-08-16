@@ -3,7 +3,7 @@ import {
   createLogger,
   decodeStructuredLogLine,
   encodeStructuredLog,
-} from "@procm-mcp/sdk";
+} from "@hunmer/procm-mcp-sdk";
 import { assert, assertEqual, runTest, summarize } from "./_helpers.mjs";
 
 await runTest("all logger methods encode optional traceId once", () => {

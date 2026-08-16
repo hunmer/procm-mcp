@@ -1,5 +1,5 @@
 import { open, stat } from "fs/promises";
-import { decodeStructuredLogLine, stripStructuredLogFrame, type JsonValue, type LogLevel } from "@procm-mcp/sdk";
+import { decodeStructuredLogLine, stripStructuredLogFrame, type JsonValue, type LogLevel } from "@hunmer/procm-mcp-sdk";
 import { getRoomRecord } from "./room-repository.js";
 import { listProcessRecords } from "./process-manager.js";
 

@@ -4,7 +4,7 @@
 
 ## 2026-08-15 — 增量更新（process-list 重构 + System Tab + i18n + 终端日志）
 
-- **背景**：8-01 全量重写后 dashboard 又落地多批功能：`ProcessList` 拆分为 `components/process-list/` 组合式子域（13 文件，表格/卡片双视图、过滤、分页、排序、右键菜单、批量操作）；新增 `SystemProcessList`（System Tab，OS 进程查看/kill）、`TerminalLog` + `ansi.ts`（ANSI 终端日志渲染）、`JsonViewer`（结构化日志 data 展开）、`lib/urlState.ts`（URL 选中/折叠同步）、i18n（`i18n.ts` + `locales/{en,zh}.json` + `lib/useLanguage.ts` + react-i18next）；`lib/api.ts` 开始依赖 `@procm-mcp/sdk` 解码结构化日志。
+- **背景**：8-01 全量重写后 dashboard 又落地多批功能：`ProcessList` 拆分为 `components/process-list/` 组合式子域（13 文件，表格/卡片双视图、过滤、分页、排序、右键菜单、批量操作）；新增 `SystemProcessList`（System Tab，OS 进程查看/kill）、`TerminalLog` + `ansi.ts`（ANSI 终端日志渲染）、`JsonViewer`（结构化日志 data 展开）、`lib/urlState.ts`（URL 选中/折叠同步）、i18n（`i18n.ts` + `locales/{en,zh}.json` + `lib/useLanguage.ts` + react-i18next）；`lib/api.ts` 开始依赖 `@hunmer/procm-mcp-sdk` 解码结构化日志。
 - **更新**：`module-responsibilities.md`、`file-map.md` 重写补齐以上；`CLAUDE.md` 简介与扫描状态同步。
 - **覆盖**：新组件按头部注释/导入/导出结构级抽查（未逐行）；`process-list/` 仅结构级。
 

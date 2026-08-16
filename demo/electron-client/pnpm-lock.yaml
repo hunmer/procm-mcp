@@ -8,7 +8,7 @@ importers:
 
   .:
     dependencies:
-      '@procm-mcp/sdk':
+      '@hunmer/procm-mcp-sdk':
         specifier: file:../../packages/procm-sdk
         version: file:../../packages/procm-sdk
       electron:
@@ -21,7 +21,7 @@ packages:
     resolution: {integrity: sha512-Qkzpg2s9GnVV2I2BjRksUi43U5e6+zaQMcjoJy0C+C5oxaKl+fmckGDQFtRpZpZV0NQekuZZ+tGz7EA9TVnQtQ==}
     engines: {node: '>=12'}
 
-  '@procm-mcp/sdk@file:../../packages/procm-sdk':
+  '@hunmer/procm-mcp-sdk@file:../../packages/procm-sdk':
     resolution: {directory: ../../packages/procm-sdk, type: directory}
     engines: {node: '>=22'}
 
@@ -299,7 +299,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@procm-mcp/sdk@file:../../packages/procm-sdk':
+  '@hunmer/procm-mcp-sdk@file:../../packages/procm-sdk':
     dependencies:
       callsites: 4.2.0
 

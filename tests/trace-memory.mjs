@@ -1,5 +1,5 @@
 import { WebSocket } from "ws";
-import { createHook, createProcmClient, getTrace, saveTrace } from "@procm-mcp/sdk";
+import { createHook, createProcmClient, getTrace, saveTrace } from "@hunmer/procm-mcp-sdk";
 import {
   assert,
   assertEqual,

@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createHook, createLogger, createProcmClient, exposeCustomExecution, getTrace, PROCM_LOG_TOPIC } from "@procm-mcp/sdk";
+import { createHook, createLogger, createProcmClient, exposeCustomExecution, getTrace, PROCM_LOG_TOPIC } from "@hunmer/procm-mcp-sdk";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 // PROCM_DEMO_WS_URL wins over PROCM_WS_URL on purpose: the process manager

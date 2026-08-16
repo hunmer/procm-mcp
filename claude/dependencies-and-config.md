@@ -4,7 +4,7 @@
 
 | 依赖 | 用途 |
 |---|---|
-| `@procm-mcp/sdk`（workspace） | room 协议帧解析/marker 编解码（`room-hub.ts`/`room-logs.ts`/dashboard 直接 import） |
+| `@hunmer/procm-mcp-sdk`（workspace） | room 协议帧解析/marker 编解码（`room-hub.ts`/`room-logs.ts`/dashboard 直接 import） |
 | `@modelcontextprotocol/sdk` | MCP 服务器/传输（stdio + Streamable HTTP） |
 | `zod` | 工具入参 schema |
 | `lowdb` | `processes.json`/`rooms.json` 持久化 |

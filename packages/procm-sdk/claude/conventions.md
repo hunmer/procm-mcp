@@ -8,7 +8,7 @@ npm run link:local     # 把 dist 链接到某个本地消费项目（scripts/li
 npm run publish:public # 发布 npm（scripts/publish-sdk.mjs）
 ```
 
-根项目视角：`npm run build:sdk`（= `npm --prefix packages/procm-sdk run build`），根 `npm run build` 会**先**编 SDK 再编后端——后端 `src/` 直接 import `@procm-mcp/sdk`（protocol/解码函数），改 SDK 后必须重跑 `build:sdk` 才会被后端用到。
+根项目视角：`npm run build:sdk`（= `npm --prefix packages/procm-sdk run build`），根 `npm run build` 会**先**编 SDK 再编后端——后端 `src/` 直接 import `@hunmer/procm-mcp-sdk`（protocol/解码函数），改 SDK 后必须重跑 `build:sdk` 才会被后端用到。
 
 ## 代码风格 / 约定
 

@@ -1,6 +1,6 @@
 ---
 name: procm-rooms
-description: Use procm-mcp rooms and @procm-mcp/sdk to connect Node.js, Electron, browser-capable, and diagnostic TypeScript clients over WebSocket; coordinate startup with retained waitFor signals; publish and subscribe to typed topics; emit structured logs; query merged room logs; inspect room members; and batch start or restart managed processes. Trigger when building, integrating, debugging, or documenting applications that use roomId, PROCM_ROOM_ID, /room, createProcmClient, Logger, waitFor, room/room-logs MCP tools, or batch-process.
+description: Use procm-mcp rooms and @hunmer/procm-mcp-sdk to connect Node.js, Electron, browser-capable, and diagnostic TypeScript clients over WebSocket; coordinate startup with retained waitFor signals; publish and subscribe to typed topics; emit structured logs; query merged room logs; inspect room members; and batch start or restart managed processes. Trigger when building, integrating, debugging, or documenting applications that use roomId, PROCM_ROOM_ID, /room, createProcmClient, Logger, waitFor, room/room-logs MCP tools, or batch-process.
 ---
 
 # Procm Rooms

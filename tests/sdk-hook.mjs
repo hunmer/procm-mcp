@@ -1,4 +1,4 @@
-import { createHook, hookProperty } from "@procm-mcp/sdk";
+import { createHook, hookProperty } from "@hunmer/procm-mcp-sdk";
 import { assert, assertEqual, runTest, summarize } from "./_helpers.mjs";
 import { invokeFirst } from "./fixtures/hook-target.mjs";
 

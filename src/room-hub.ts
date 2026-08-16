@@ -7,7 +7,7 @@ import {
   type RoomMember,
   type RoomMessage,
   type ServerFrame,
-} from "@procm-mcp/sdk";
+} from "@hunmer/procm-mcp-sdk";
 import { nanoid } from "nanoid";
 import { ensureRoom, listRoomRecords, getRoomRecord, updateRoom, type RoomRecord } from "./room-repository.js";
 import { serverLog } from "./server-log.js";

@@ -1,6 +1,6 @@
 # 架构总览
 
-`@procm-mcp/sdk` 是 procm-mcp 房间系统的 TypeScript 客户端 SDK，独立发布到 npm。被管理进程（由 `start-process` 启动、环境变量里自动拿到 `PROCM_ROOM_ID`/`PROCM_WS_URL` 等）或任意 WebSocket 客户端用它接入后端的 `/room` 端点。
+`@hunmer/procm-mcp-sdk` 是 procm-mcp 房间系统的 TypeScript 客户端 SDK，独立发布到 npm。被管理进程（由 `start-process` 启动、环境变量里自动拿到 `PROCM_ROOM_ID`/`PROCM_WS_URL` 等）或任意 WebSocket 客户端用它接入后端的 `/room` 端点。
 
 ## 四块能力
 

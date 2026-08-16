@@ -6,7 +6,7 @@
 - 编写日期：2026-08-15
 - 目标仓库：`/Users/Zhuanz/Documents/procm-mcp`
 - 需求来源：SDK hook 函数/变量，采集调用链与函数位置；详细数据写入 Redis；logger 仅输出关联 ID；MCP tool 按 ID 读取详情
-- 基线版本：`procm-mcp@0.0.44`、`@procm-mcp/sdk@0.1.0`
+- 基线版本：`procm-mcp@0.0.44`、`@hunmer/procm-mcp-sdk@0.1.0`
 - 实施原则：最小改动、保持兼容、业务控制台零额外追踪噪音、错误必须可观察
 
 > 2026-08-15 变更：确认实际只使用同一 procm-mcp 实例提供的 HTTP Stream MCP，
