@@ -2,8 +2,8 @@
 
 ## MCP 工具
 
-**stdio（11 个）**：`start-process`、`batch-process`、`process`、`process-logs`、`process-log-files`、`log-files`、`process-input`、`procm-command`、`room`、`room-logs`、`trace-get`。
-**`/mcp` HTTP（10 个）**：同上去掉 `process-input`（HTTP MCP 不注册输入工具；可用 REST `POST /api/processes/:id/input` 或 dashboard 代替）。
+**stdio（14 个）**：`start-process`、`batch-process`、`process`、`process-logs`、`process-log-files`、`log-files`、`process-input`、`procm-command`、`room`、`room-logs`、`trace-get`、`clear-process-logs`、`import-process-batch`、`select-directory`。
+**`/mcp` HTTP（10 个）**：同上去掉 `process-input` 与 api-operations 组三件（`clear-process-logs`/`import-process-batch`/`select-directory`，仅在 stdio 注册）。REST 可代替：`POST /api/processes/:id/input`、`DELETE /api/processes/:id/logs`、`POST /api/processes/import-batch`、`POST /api/select-directory`。
 
 | 工具 | 参数 | 说明 |
 |---|---|---|
@@ -16,8 +16,11 @@
 | `process-input` | `id`(必) `text?` `newline?` `signal?` | `text` 写 stdin（`newline` 默认 true）或 `signal` 发信号；二选一。signal ∈ `SIGINT`/`SIGTERM`/`SIGKILL`/`SIGHUP`/`SIGUSR1`/`SIGUSR2`/`SIGTSTP`/`SIGCONT`/`SIGQUIT`。**stdio 限定。** |
 | `procm-command` | `action`(必) `name?` `cwd?` | `action` ∈ `list`/`start`；start 需 `name`，读项目根 `procm-commands.json` 按名启动（`cwd` 相对项目目录解析为绝对路径）。 |
 | `room` | `action`(必) `roomId?` `title?` `note?` | `action` ∈ `list`/`get`/`update`；房间元数据 + 活跃成员。 |
-| `room-logs` | `roomId`(必) `memberPrefix?` `level?` `traceId?` `count?` | 合并房间成员结构化日志（marker 解析自各进程 `.log`），可按成员前缀/级别/trace ID 过滤。 |
+| `room-logs` | `roomId`(必) `memberPrefix?` `level?` `traceId?` `count?` `startTime?` `endTime?` | 合并房间成员结构化日志（marker 解析自各进程 `.log`），可按成员前缀/级别/trace ID/时间窗口（Unix 毫秒，包含边界）过滤。 |
 | `trace-get` | `id`(必) | 读当前实例内存中的完整 trace；`{ok:true,trace}` 或 `{ok:false,error:{code}}`（`TRACE_NOT_FOUND` 等稳定码）。 |
+| `clear-process-logs` | `id`(必) | 清空进程 stdout/stderr 历史（运行中清内存缓冲并截断日志文件，之后继续记录新日志）；不存在返回 `{error:"Process not found"}`。**仅 stdio 注册。** |
+| `import-process-batch` | `items`(必)[] `group?` | 批量导入进程配置（不启动），每项 `{script,args,cwd,name?,desc?}` 存为 favorite 记录；`group` 应用于每一项。**仅 stdio 注册。** |
+| `select-directory` | `title?` | 弹出系统原生目录选择器（macOS 走 osascript，其他平台 native-file-dialog），同步阻塞直到用户选择 → `{canceled,path}`。**仅 stdio 注册。** |
 
 ## REST API（同源，绑 `127.0.0.1`）
 
@@ -36,11 +39,16 @@
 | POST | `/api/processes/:id/stop` | 停止并删除 |
 | POST | `/api/processes/:id/restart` | 重启 |
 | POST | `/api/processes/:id/input` | body `{text?,newline?,signal?}` → 写 stdin 或发信号（镜像 `process-input`） |
+| DELETE | `/api/processes/:id/logs` | 清空该进程 stdout/stderr 历史（运行中清内存缓冲，历史记录截断日志文件）→ `{id,cleared:true}`；404 `{error:"Process not found"}` |
+| POST | `/api/processes/import-batch` | body `{items:[{script,args,cwd,name?,desc?}],group?}` 整批校验后导入 favorite 记录（不启动）→ 201 `{imported:[{id,name,favorite}]}`（按输入顺序）；items 空/缺字段 400 且不写入任何记录 |
+| POST | `/api/select-directory` | body `{title?}` 弹原生目录选择器（同步阻塞，见 `native-directory.ts`）→ `{canceled,path}`；弹不出 500 |
 | DELETE | `/api/processes/:id` | 停止 + 删除记录 |
+| DELETE | `/api/log-files` | 删除**非运行**进程的日志文件 → `{deleted,skipped}` 文件名列表（运行中进程的文件跳过，仍在写入） |
+| GET | `/api/log-files/content?path=` | 读日志文件全文；path 必须是数据根内（任意 server 代目录）的 `<id>-<stream>.log`，防任意文件读取 |
 | GET | `/api/meta` | `{serverId, pid, cwd, startedAt}` |
 | GET | `/api/rooms` | 房间列表（元数据 + 活跃成员） |
 | GET / PATCH | `/api/rooms/:roomId` | 查看 / 更新房间 title/note |
-| GET | `/api/rooms/:roomId/logs?memberPrefix=&level=&traceId=&count=` | 合并房间结构化日志 |
+| GET | `/api/rooms/:roomId/logs?memberPrefix=&level=&traceId=&count=&startTime=&endTime=` | 合并房间结构化日志；`startTime`/`endTime` 为 Unix 毫秒包含边界 |
 | GET | `/api/system-processes` | OS 级进程列表（pid/ppid/name/cmd/exe/ports） |
 | POST | `/api/favorites/scan` | body `{path}` 扫项目清单 → `{candidates}`（无状态，dashboard 存 localStorage） |
 | POST | `/api/open-folder` | body `{path}` 调 `explorer`/`open`/`xdg-open` |
@@ -50,7 +58,7 @@
 
 ## `/mcp`（MCP-over-HTTP）
 
-`POST|GET|DELETE /mcp` → Streamable HTTP，stateless（每请求新建 transport+server），8 工具。`OPTIONS /mcp` 在 token 检查前做 CORS 预检，反射 Origin。连接配置：`{"type":"http","url":"http://127.0.0.1:<port>/mcp"}`。
+`POST|GET|DELETE /mcp` → Streamable HTTP，stateless（每请求新建 transport+server），10 工具（缺 `process-input` 与 api-operations 组）。`OPTIONS /mcp` 在 token 检查前做 CORS 预检，反射 Origin。连接配置：`{"type":"http","url":"http://127.0.0.1:<port>/mcp"}`。
 
 ## WebSocket（双端点）
 
@@ -61,7 +69,9 @@
 
 ## CLI 客户端
 
-`node build/index.js <cmd> [--port <n>] [--token <t>]`：`ps`、`info <id>`、`logs <id> [--stream] [-n]`、`grep <id> <pattern> [--stream] [-n] [-i]`、`start <script> [args...] [--cwd <dir>] [--name <n>] [--env KEY=VAL ...]`、`restart <id>`、`stop <id>`、`ping`。
+`node build/index.js <cmd> [--port <n>] [--token <t>]`：`ps`、`info <id>`、`logs <id> [--stream] [-n]`、`grep <id> <pattern> [--stream] [-n] [-i]`、`start <script> [args...] [--cwd <dir>] [--name <n>] [--env KEY=VAL ...]`、`edit <id> [字段选项]`、`import --config '<json>'`（存配置不启动）、`import-batch --config '<json>' [--group g]`（批量导入）、`clear-logs`（删非运行进程日志文件）、`clear-process-logs <id>`（清空 stdout/stderr 历史）、`select-directory [--title <t>]`（原生目录选择器）、`restart <id>`、`stop <id>`、`ping`、`mcptool`（列出/调用后端 MCP 工具）。
+
+SDK 侧等价封装：`@hunmer/procm-mcp-sdk` `rest.ts` 的 `clearProcessLogs`/`importProcessBatch`/`selectDirectory`（见 SDK 包索引）。
 
 ## procm-commands.json
 

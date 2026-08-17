@@ -16,6 +16,7 @@ import { registerProcessInputTools } from "./tools/process-input.js";
 import { registerProcmCommandsTools } from "./tools/procm-commands.js";
 import { registerRoomTools } from "./tools/room.js";
 import { registerTraceTools } from "./tools/trace.js";
+import { registerApiOperationTools } from "./tools/api-operations.js";
 import { closeTraceStore } from "./trace-store.js";
 import { isClientCommand, runClient, clientHelp } from "./cli-client.js";
 import { ProcmGlobalDir } from "./procm-mcp-dir.js";
@@ -132,6 +133,7 @@ try {
     registerProcmCommandsTools(server);
     registerRoomTools(server);
     registerTraceTools(server);
+    registerApiOperationTools(server);
 
     // Reconcile stale "running" records from a prior crashed backend before
     // the dashboard (if any) starts serving. Same rationale as --server mode.

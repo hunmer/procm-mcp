@@ -4,9 +4,9 @@
 
 `parseArgs(argv)` 识别 `--server` / `--port <n>` / `--port=<n>` / `--data-path <path>` / `-h,--help`。分流顺序：
 
-1. **CLI 客户端**（最高优先级）：首个位置参数属于 `ps/info/logs/grep/start/restart/stop/ping` 时，`runClient` 连一个已运行后端并退出，**不**起后端。
+1. **CLI 客户端**（最高优先级）：首个位置参数属于 `ps/info/logs/grep/start/edit/import/import-batch/clear-logs/clear-process-logs/select-directory/restart/stop/ping/mcptool` 时，`runClient` 连一个已运行后端并退出，**不**起后端。
 2. **`--server`（HTTP 后端）**：端口取 `--port` → `PROCM_HTTP_PORT` → `7331`；跑 `reconcileStaleProcesses()` → `startHttpServer(port)` → 安装信号处理器 → 常驻服务。无 stdio MCP。
-3. **默认（stdio MCP）**：建 `McpServer`，注册 6 组 9 工具，`reconcileStaleProcesses()`，安装信号处理器（stdio 模式额外：stdin-close → cleanup+exit），按需启 dashboard（`--port` 或 `PROCM_HTTP_PORT`），最后连 `StdioServerTransport`。
+3. **默认（stdio MCP）**：建 `McpServer`，注册 8 组 14 工具，`reconcileStaleProcesses()`，安装信号处理器（stdio 模式额外：stdin-close → cleanup+exit），按需启 dashboard（`--port` 或 `PROCM_HTTP_PORT`），最后连 `StdioServerTransport`。
 
 `--data-path` 在分流前生效：解析为绝对路径覆写 `PROCM_MCP_DIR`，决定 `processes.json`/`rooms.json`/日志的数据目录。
 

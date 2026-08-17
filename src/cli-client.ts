@@ -17,6 +17,9 @@
 //          [--app-port <n>|--no-port] [--envs <json>] [--favorite|--unfavorite]
 //   import [--config <json>]                 Save a process configuration without starting
 //   clear-logs                               Delete logs for non-running processes
+//   clear-process-logs <id>                  Clear stdout/stderr history for a process
+//   import-batch --config <json> [--group g] Import multiple process configurations
+//   select-directory [--title <title>]      Open the native directory picker
 //   restart <id>                          Restart a process
 //   stop <id>                             Stop and delete a process
 //   ping                                  Check the backend is reachable
@@ -337,6 +340,40 @@ async function cmdClearLogs(port: number, token?: string) {
   console.log(`Deleted ${data.deleted?.length || 0} log file(s); skipped ${data.skipped?.length || 0}.`);
 }
 
+async function cmdClearProcessLogs(port: number, args: string[], token?: string) {
+  const id = args[0];
+  if (!id || args.length > 1) fail("usage: procm-mcp clear-process-logs <id>");
+  const data = await request(port, "DELETE", `/api/processes/${encodeURIComponent(id)}/logs`, undefined, token);
+  console.log(`Process ${data.id} logs cleared.`);
+}
+
+async function cmdImportBatch(port: number, args: string[], token?: string) {
+  let raw: string | undefined;
+  let group: string | undefined;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--config") raw = args[++i];
+    else if (args[i].startsWith("--config=")) raw = args[i].slice(9);
+    else if (args[i] === "--group") group = args[++i];
+    else if (args[i].startsWith("--group=")) group = args[i].slice(8);
+    else fail(`unexpected argument "${args[i]}"`);
+  }
+  const config = tryJson(raw || "");
+  if (!config || typeof config !== "object" || Array.isArray(config)) fail("--config must be a JSON object");
+  const data = await request(port, "POST", "/api/processes/import-batch", { ...config, ...(group === undefined ? {} : { group }) }, token);
+  console.log(`Imported ${data.imported?.length || 0} process configuration(s).`);
+}
+
+async function cmdSelectDirectory(port: number, args: string[], token?: string) {
+  let title: string | undefined;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--title") title = args[++i];
+    else if (args[i].startsWith("--title=")) title = args[i].slice(8);
+    else fail(`unexpected argument "${args[i]}"`);
+  }
+  const data = await request(port, "POST", "/api/select-directory", title === undefined ? {} : { title }, token);
+  console.log(data.canceled ? "(canceled)" : data.path);
+}
+
 async function cmdRestart(port: number, args: string[], token?: string) {
   const id = args[0];
   if (!id) fail("usage: procm-mcp restart <id>");
@@ -535,7 +572,7 @@ async function cmdMcpTool(port: number, args: string[], token?: string) {
   }
 }
 
-const COMMANDS = ["ps", "info", "logs", "grep", "start", "edit", "import", "clear-logs", "restart", "stop", "ping", "mcptool"];
+const COMMANDS = ["ps", "info", "logs", "grep", "start", "edit", "import", "import-batch", "clear-logs", "clear-process-logs", "select-directory", "restart", "stop", "ping", "mcptool"];
 
 export function isClientCommand(arg: string | undefined): boolean {
   return !!arg && COMMANDS.includes(arg);
@@ -555,7 +592,10 @@ export function clientHelp(): string {
     "  restart <id>                          Restart a process",
     "  edit <id> [fields]                     Update process configuration (--app-port for process port)",
     "  import --config '<json>'               Save configuration without starting",
+    "  import-batch --config '<json>' [--group g]  Import multiple configurations",
     "  clear-logs                             Delete logs for non-running processes",
+    "  clear-process-logs <id>                 Clear stdout/stderr history for a process",
+    "  select-directory [--title <title>]      Open the native directory picker",
     "  stop <id>                             Stop and delete a process",
     "  ping                                  Check the backend is reachable",
     "  mcptool                               List MCP tools",
@@ -588,8 +628,14 @@ export async function runClient(argv: string[]): Promise<void> {
       return cmdEdit(p, args, t);
     case "import":
       return cmdImport(p, args, t);
+    case "import-batch":
+      return cmdImportBatch(p, args, t);
     case "clear-logs":
       return cmdClearLogs(p, t);
+    case "clear-process-logs":
+      return cmdClearProcessLogs(p, args, t);
+    case "select-directory":
+      return cmdSelectDirectory(p, args, t);
     case "restart":
       return cmdRestart(p, args, t);
     case "stop":

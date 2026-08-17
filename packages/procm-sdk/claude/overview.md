@@ -2,12 +2,13 @@
 
 `@hunmer/procm-mcp-sdk` 是 procm-mcp 房间系统的 TypeScript 客户端 SDK，独立发布到 npm。被管理进程（由 `start-process` 启动、环境变量里自动拿到 `PROCM_ROOM_ID`/`PROCM_WS_URL` 等）或任意 WebSocket 客户端用它接入后端的 `/room` 端点。
 
-## 四块能力
+## 五块能力
 
 1. **房间消息**（`client.ts`）：`ProcmClient` — WebSocket 连接、hello 握手、精确/prefix 订阅、retain 发布、`waitFor` 一次性等待、成员/连接状态事件、自动重连。
 2. **结构化日志**（`logger.ts` + `protocol.ts`）：`createLogger` 双写 console 与 `$procm/log` topic；日志行内嵌 base64url marker（`@@PROCM_LOG_V1@@`），后端 `room-logs.ts` 靠它从进程 stdout 还原结构化条目。
 3. **函数追踪**（`hook.ts` + `trace.ts`）：`createHook`/`hookProperty` 拦截函数调用生成 `FunctionTrace`（调用链/参数/结果/异常），`saveTrace` 经 `trace:put` 帧存入后端内存 LRU；LLM 侧用 `trace-get` 工具读取。
 4. **自定义远程执行**（`custom-execution.ts`）：`exposeCustomExecution`/`executeCustom` 经 `$procm/custom-execution/request|result` topic 做 RPC——调用方把函数**源码字符串**发给目标端求值。
+5. **后端 REST 封装**（`rest.ts`）：`clearProcessLogs`/`importProcessBatch`/`selectDirectory` 走 HTTP，复用 `ProcmClient` 的连接配置（ws→http 换算 + Bearer token），不新建连接。
 
 ## 运行形态
 

@@ -50,6 +50,18 @@ executeCustom<TResult>(client, target, fn, args?, {timeout?(默认5s), signal?})
 // 失败抛 CustomExecutionError（.name 保留远端错误名）
 ```
 
+## rest.ts 后端 REST 封装
+
+```ts
+clearProcessLogs(client, id): Promise<{id, cleared: true}>        // DELETE /api/processes/:id/logs
+importProcessBatch(client, items: ImportProcessItem[], group?): Promise<{imported: {id,name,favorite}[]}>
+batchImportProcesses   // = importProcessBatch 别名
+selectDirectory(client, title?): Promise<string | null>          // POST /api/select-directory，取消 → null
+// ImportProcessItem: {script, args, cwd, name?, desc?}
+```
+
+不建立新连接：从 `client.connectionTarget` 取 url（`ws://`→`http://`、去 `/room` 尾缀）与 token（Bearer）。非 2xx 抛 `Error(payload.error || "HTTP <status>")`；`items` 为空数组直接抛错。
+
 ## protocol.ts 纯导出
 
 `PROCM_PROTOCOL_VERSION`、`PROCM_LOG_TOPIC("$procm/log")`、`PROCM_LOG_MARKER("@@PROCM_LOG_V1@@")`；类型 `JsonValue/LogLevel/RoomMember/RoomMessage/StructuredLog/ClientFrame/ServerFrame`；函数 `matchesTopic/parseClientFrame/parseServerFrame/encodeStructuredLog/decodeStructuredLogLine/stripStructuredLogFrame`。

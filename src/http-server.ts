@@ -35,6 +35,7 @@ import { attachWebsocketServer } from "./websocket-server.js";
 import { setConnectionConfig } from "./connection-config.js";
 import { getRoom, listRooms, patchRoom } from "./room-hub.js";
 import { queryRoomLogs } from "./room-logs.js";
+import { pickDirectory } from "./native-directory.js";
 
 function parseTimestamp(value: string | null): number | undefined {
   if (!value) return undefined;
@@ -42,33 +43,6 @@ function parseTimestamp(value: string | null): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 import { scanProjectCommands } from "./project-scanner.js";
-import { createRequire } from "module";
-// native-file-dialog ships only a compiled .node addon (no CJS wrapper), so
-// the ESM loader can't import it — pull it through createRequire. The addon
-// is Windows-only, so load it lazily and use osascript on macOS; a broken or
-// missing addon must not take the whole server down at startup.
-let folderDialog: (() => string) | null = null;
-
-function pickDirectory(): string {
-  if (process.platform === "darwin") {
-    try {
-      return execFileSync("osascript", [
-        "-e",
-        'POSIX path of (choose folder with prompt "Select directory")',
-      ])
-        .toString()
-        .trim();
-    } catch (e) {
-      const stderr = e instanceof Error ? e.message : String(e);
-      if (/-128|cancel/i.test(stderr)) return "UserCancelled";
-      throw e;
-    }
-  }
-  folderDialog ??= createRequire(import.meta.url)(
-    "native-file-dialog",
-  ) as unknown as { folder_dialog: () => string }["folder_dialog"];
-  return folderDialog();
-}
 import { listSystemProcesses, killProcessTree, findProcessByPort } from "./system-processes.js";
 import { ProcmMcpDir } from "./procm-mcp-dir.js";
 import { listProcessLogFiles, deleteProcessLogFiles } from "./process-log-files.js";

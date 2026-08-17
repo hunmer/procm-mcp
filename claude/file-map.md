@@ -3,8 +3,8 @@
 ```
 procm-mcp/
 ├── src/
-│   ├── index.ts              # 入口/分流/信号处理（注册 6 组 9 个 stdio 工具；--data-path）
-│   ├── cli-client.ts         # HTTP 客户端（ps/info/logs/grep/start/restart/stop/ping）
+│   ├── index.ts              # 入口/分流/信号处理（注册 8 组 14 个 stdio 工具；--data-path）
+│   ├── cli-client.ts         # HTTP 客户端（ps/info/logs/grep/start/edit/import/import-batch/clear-logs/clear-process-logs/select-directory/restart/stop/ping/mcptool）
 │   ├── process-manager.ts    # ★ 进程生命周期核心（spawn/kill/restart/persist/输入/回收/resolveSpawnTarget）
 │   ├── process-stdout-client.ts  # 每流捕获：2000 行环形缓冲 + .log 双写 + tail/grep
 │   ├── processes-repository.ts   # lowdb 持久化历史 processes.json
@@ -17,7 +17,7 @@ procm-mcp/
 │   ├── events.ts             # 进程内事件总线（burst 合并）
 │   ├── websocket-server.ts   # /ws dashboard 推送 + /room 挂载（upgrade 分发）
 │   ├── http-server.ts        # REST + dashboard + /mcp 委托 + WS 挂载（127.0.0.1）
-│   ├── mcp-http.ts           # /mcp stateless，注册 5 组 8 工具（无 process-input）
+│   ├── mcp-http.ts           # /mcp stateless，注册 6 组 10 工具（无 process-input / api-operations 组）
 │   ├── dashboard-html.ts     # 托管 dashboard/dist 静态包
 │   ├── project-scanner.ts    # 项目清单扫描 → favorites 候选
 │   ├── server-log.ts         # serverId(nanoid) + 日志包装
@@ -27,14 +27,18 @@ procm-mcp/
 │   ├── tool-helpers.ts       # textResult / notFoundResult
 │   ├── error.ts              # toErrorMessage
 │   ├── types.ts              # ProcessStatus / ProcessMetadata
+│   ├── process-log-files.ts  # 日志文件层：路径解析/历史清单/删文件/清空历史（clearProcessLogs）
+│   ├── native-directory.ts   # 原生目录选择器 pickDirectory（osascript / native-file-dialog）
 │   ├── sleep.ts
 │   └── tools/
 │       ├── process.ts        # start-process / batch-process / process(get/delete/restart/list)
 │       ├── process-logs.ts   # process-logs(tail/grep)
+│       ├── process-log-files.ts  # process-log-files(路径) / log-files(历史清单)
 │       ├── process-input.ts  # process-input(stdin/signal，stdio 限定)
 │       ├── procm-commands.ts # procm-command(list/start)
-│       ├── room.ts           # room(list/get/update) / room-logs
-│       └── trace.ts          # trace-get
+│       ├── room.ts           # room(list/get/update) / room-logs(含 startTime/endTime)
+│       ├── trace.ts          # trace-get
+│       └── api-operations.ts # clear-process-logs / import-process-batch / select-directory（stdio 限定）
 ├── packages/procm-sdk/       # @hunmer/procm-mcp-sdk，见 packages/procm-sdk/CLAUDE.md
 ├── dashboard/                # 独立 React+Vite 工程，见 dashboard/CLAUDE.md
 ├── tests/                    # 10 套（run-all）+ ws-livecheck + _smoke-* + _helpers + fixtures
@@ -64,3 +68,7 @@ procm-mcp/
 | 命令重建（粘贴运行） | `http-server.ts` `buildCommand` |
 | 允许发送的信号枚举 | `process-manager.ts` `ALLOWED_INPUT_SIGNALS` |
 | 被管进程的环境注入 | `connection-config.ts` `getConnectionEnv` |
+| 清空进程日志历史 | `process-log-files.ts` `clearProcessLogs`（REST `DELETE /api/processes/:id/logs`、工具 `clear-process-logs`） |
+| 批量导入进程配置 | `http-server.ts`（`POST /api/processes/import-batch`）、工具 `import-process-batch`、SDK `rest.ts` `importProcessBatch` |
+| 原生目录选择器 | `native-directory.ts` `pickDirectory` |
+| 房间日志时间窗口过滤 | `room-logs.ts`（`startTime`/`endTime`，Unix 毫秒） |

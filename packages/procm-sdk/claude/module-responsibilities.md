@@ -1,6 +1,6 @@
 # 模块职责
 
-`src/` 7 个文件，`index.ts` 全量 re-export，其余按依赖分层：protocol（纯类型/编解码）← client ← logger/trace/custom-execution/hook。
+`src/` 8 个文件，`index.ts` 全量 re-export，其余按依赖分层：protocol（纯类型/编解码）← client ← logger/trace/custom-execution/hook；rest 依赖 client 的连接配置走 HTTP。
 
 | 文件 | 职责 |
 |---|---|
@@ -10,4 +10,5 @@
 | `custom-execution.ts` | **远程函数执行 RPC**。`exposeCustomExecution(client, {target?, context?})`：订阅 `$procm/custom-execution/request/<target>`，收到请求后 `eval` 函数源码、注入 context 执行、结果回发 replyTopic（异常转 `{ok:false,error}`）；返回退订函数。`executeCustom(client, target, fn, args?, {timeout?, signal?})`：`fn.toString()` 作为源码发送，`waitFor` 匿名 replyTopic（默认 5s 超时），失败抛 `CustomExecutionError`（保留远端错误名）。仅连接 open 后可用。 |
 | `trace.ts` | **`saveTrace(client, data, {id?, ttlSeconds?, timeout?, signal?})`**。前置校验：必须 open、TTL 整数 1~604800、数据 JSON 可序列化且 ≤256 KiB；`trace:put` 请求默认 10s 超时、支持 abort；未指定 `id` 时遇 `TRACE_STORE_CONFLICT` 自动换 id 重试至 3 次，指定 id 冲突即抛。导出常量 `TRACE_MAX_BYTES`/`TRACE_MIN_TTL_SECONDS`/`TRACE_MAX_TTL_SECONDS` 与 `TraceEnvelope`。 |
 | `hook.ts` | **函数拦截追踪**。`createHook(fn, options)` 返回 `HookedFunction`（`.before()/.after()` 链式、`.original`）：每次调用生成 traceId、`callsites()` 捕获调用链（过滤自身帧、上限 100、可 `filterFrame`）、before 可 `setArgs`/`skip`、after 可 `setResult`（两者必须同步）；保留 `this`/返回值类型/Promise 语义/原始异常；状态 `returned/resolved/threw/rejected/skipped`；`captureArgs/captureResult`（不可序列化时占位 `{unavailable}`）；有 client 时自动 `saveTrace`（`onStored`/`onStoreError` 回调，不写 console）。`hookProperty(target, key, options)`：拦截 own configurable 属性的 get/set（`captureGet/captureSet` 可关），返回幂等 restore 函数。 |
-| `index.ts` | 全量 re-export 六个模块，包唯一出口。 |
+| `rest.ts` | **后端 REST 封装**（不建连，复用 `client.connectionTarget` 的 url/token：`ws(s)://` → `http(s)://` 并去掉 `/room` 尾缀得 base）。内部 `request()`：fetch + Bearer token + JSON body，非 2xx 抛 `payload.error` 或 `HTTP <status>`。导出 `clearProcessLogs(client, id)`、`importProcessBatch(client, items, group?)`（别名 `batchImportProcesses`，空数组抛错）、`selectDirectory(client, title?)`（取消返回 null）；类型 `ImportProcessItem`。 |
+| `index.ts` | 全量 re-export 七个模块（protocol/client/logger/rest/custom-execution/trace/hook），包唯一出口。 |

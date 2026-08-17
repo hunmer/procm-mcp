@@ -10,7 +10,7 @@
 
 - 改 TS 源码后**必须 `npm run build`**（= `build:sdk` → `sync:demos` → `build:dashboard` → `tsc`）——运行入口是 `build/index.js`。改 SDK 源码同理（后端消费 `packages/procm-sdk/dist`）。
 - 源码 import **必须带 `.js` 后缀**（Node16 ESM），即使源文件是 `.ts`。
-- 新增 MCP 工具要在 `index.ts`（stdio，9 工具）**和** `mcp-http.ts` 的 `registerAllTools`（HTTP `/mcp`，8 工具）两处都注册——这两条路径工具集**不完全相同**（`process-input` 目前只在 stdio 注册）。
+- 新增 MCP 工具要在 `index.ts`（stdio，14 工具）**和** `mcp-http.ts` 的 `registerAllTools`（HTTP `/mcp`，10 工具）两处都注册——这两条路径工具集**不完全相同**（`process-input` 与 `api-operations` 组三件目前只在 stdio 注册）。
 - 进程能力统一在 `src/process-manager.ts`，MCP 工具层与 HTTP 层都调它；新增进程状态/日志变更记得 `dashboardEvents.emitProcessChange()`/`emitLog()` 以驱动 WS 推送。
 - room/trace 协议以 `packages/procm-sdk/src/protocol.ts` 为单一事实源（后端 `room-hub.ts` import 它），改协议先改 SDK 并重编。
 - stdio 模式下**不要往 stdout 打业务日志**（stdout 是协议通道），用 `serverLog()` 或 `console.error`。
@@ -38,7 +38,7 @@
 
 | 模块 | 职责摘要 | 入口 |
 |---|---|---|
-| 根后端（`src/`） | MCP 服务器（9 工具）+ HTTP 后端 + CLI 客户端 + 进程/日志/房间/追踪领域核心 + WS 双端点 | `src/index.ts` |
+| 根后端（`src/`） | MCP 服务器（14 工具）+ HTTP 后端 + CLI 客户端 + 进程/日志/房间/追踪领域核心 + WS 双端点 | `src/index.ts` |
 | procm-sdk（`packages/procm-sdk/`） | `@hunmer/procm-mcp-sdk`：房间客户端、结构化日志、函数 hook/trace、custom-execution RPC | `packages/procm-sdk/src/index.ts` |
 | dashboard（`dashboard/`） | React + Vite + coss 的 Web UI，经 WebSocket 实时推送 + 同源 REST 管理进程（含系统进程 Tab、i18n） | `dashboard/src/main.tsx` |
 
@@ -82,7 +82,7 @@ flowchart LR
 
 ## 扫描状态
 
-- **更新时间**：2026-08-15
-- **已扫描**：后端 `src/` 全部 25 个顶层 `.ts` + `tools/` 6 个（含 8-14 后落地的 room/trace/system-processes 子域与未提交的 `resolveSpawnTarget`）、`packages/procm-sdk/src/` 全部 7 文件（100%）、`tests/`（run-all 10 套 + ws-livecheck + _smoke + fixtures）、根配置（package/tsconfig/server.json/.mcp.json/procm-commands.json）、dashboard `src/`（组件 + lib + locales + registry，组件按导出/头部抽查）。
+- **更新时间**：2026-08-17
+- **已扫描**：后端 `src/` 全部 27 个顶层 `.ts` + `tools/` 8 个（本轮新增/重扫 `native-directory.ts`、`tools/api-operations.ts`，并补记上轮遗漏的 `process-log-files.ts` 两处；工具数修正为 stdio 14 / `/mcp` 10）、`packages/procm-sdk/src/` 全部 8 文件（本轮新增 `rest.ts`，100%）、`tests/`（run-all 10 套 + ws-livecheck + fixtures）、根配置（package/tsconfig/server.json/procm-commands.json）、dashboard `src/`（结构级，无代码变化未重扫）。
 - **跳过**：`build/`、`node_modules/`、`dist`/`dashboard/dist`（产物/依赖）；`dashboard/src/registry/default/ui/*`（vendored coss 组件）；`.agents/` `.codex/` `.zcode/` `.claude/` `.github/`（agent/CI 配置）；`demo/`、`scripts/`、`handoff/`（仅按需浏览）。
-- **下一步建议**：dashboard 新组件（`process-list/` 13 文件、`SystemProcessList`、`TerminalLog`/`ansi`、i18n）本轮仅结构级扫描，建议下轮逐行细读更新 dashboard 详情；补单元测试覆盖纯函数（`resolveSpawnTarget`/`validateScript`/`project-scanner`）；评估日志轮转。详见 [claude/changelog.md](claude/changelog.md)。
+- **下一步建议**：dashboard 组件（`process-list/`、`SystemProcessList`、`TerminalLog`/`ansi`、i18n）仍为结构级扫描，建议下轮逐行细读；`api-changes.md` 工作区中被清空，历史 API 记录（8-15 import-batch/select-directory、8-17 DELETE logs、rooms logs 时间窗）已并入本索引 public-interfaces，如需保留独立变更日志请恢复该文件；补单元测试覆盖纯函数。详见 [claude/changelog.md](claude/changelog.md)。

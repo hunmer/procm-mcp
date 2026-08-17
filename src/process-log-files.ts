@@ -1,5 +1,5 @@
 import path from "path";
-import { readdir, stat, unlink } from "fs/promises";
+import { readdir, stat, unlink, writeFile } from "fs/promises";
 import { getProcess, getProcessRecord, listProcessRecords } from "./process-manager.js";
 import { logServerId } from "./server-log.js";
 import { ServerDir } from "./server-dir.js";
@@ -36,6 +36,20 @@ export async function getProcessLogPaths(id: string): Promise<ProcessLogPaths | 
     stdoutPath: record.stdoutLogPath ? path.resolve(record.stdoutLogPath) : null,
     stderrPath: record.stderrLogPath ? path.resolve(record.stderrLogPath) : null,
   };
+}
+
+export async function clearProcessLogs(id: string): Promise<boolean> {
+  const live = getProcess(id);
+  if (live) {
+    await Promise.all([live.stdoutClient.clear(), live.stderrClient.clear()]);
+    return true;
+  }
+  const record = await getProcessRecord(id);
+  if (!record) return false;
+  await Promise.all([record.stdoutLogPath, record.stderrLogPath]
+    .filter((filePath): filePath is string => !!filePath)
+    .map((filePath) => writeFile(filePath, "", "utf8")));
+  return true;
 }
 
 function processLogDir(): string {

@@ -43,11 +43,13 @@ export function registerRoomTools(server: McpServer): void {
       level: z.enum(["debug", "info", "warn", "error"]).optional(),
       traceId: z.string().optional(),
       count: z.number().int().min(1).max(5000).optional(),
+      startTime: z.number().optional(),
+      endTime: z.number().optional(),
     },
-    async ({ roomId, memberPrefix, level, traceId, count }) => {
+    async ({ roomId, memberPrefix, level, traceId, count, startTime, endTime }) => {
       logToolStart("room-logs", { roomId, memberPrefix, level, traceId, count });
       try {
-        const entries = await queryRoomLogs(roomId, { memberPrefix, level, traceId, count });
+        const entries = await queryRoomLogs(roomId, { memberPrefix, level, traceId, count, startTime, endTime });
         if (!entries) return textResult(`Room ${roomId} not found.`);
         logToolEnd("room-logs", { roomId, count: entries.length });
         return textResult(JSON.stringify({ roomId, entries }, null, 2));

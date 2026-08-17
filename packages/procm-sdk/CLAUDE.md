@@ -1,6 +1,6 @@
 # @hunmer/procm-mcp-sdk
 
-procm-mcp 房间系统的 TypeScript 客户端 SDK（独立 npm 包，workspace 成员）。四块能力：`ProcmClient` WebSocket 房间消息（订阅/retain 发布/waitFor/自动重连）、`createLogger` 结构化日志（console + `$procm/log` 双写，base64url marker）、`createHook`/`saveTrace` 函数追踪（调用链 + 后端内存 LRU 存储，经 `trace-get` 工具读取）、`exposeCustomExecution`/`executeCustom` 远程函数执行 RPC。纯库无进程，浏览器与 Node（≥22）通用，运行时依赖仅 `callsites`。
+procm-mcp 房间系统的 TypeScript 客户端 SDK（独立 npm 包，workspace 成员）。五块能力：`ProcmClient` WebSocket 房间消息（订阅/retain 发布/waitFor/自动重连）、`createLogger` 结构化日志（console + `$procm/log` 双写，base64url marker）、`createHook`/`saveTrace` 函数追踪（调用链 + 后端内存 LRU 存储，经 `trace-get` 工具读取）、`exposeCustomExecution`/`executeCustom` 远程函数执行 RPC、`rest.ts` 后端 REST 封装（清日志/批量导入/目录选择器，复用 `ProcmClient` 连接配置把 `ws://` 转为同源 `http://` base）。纯库无进程，浏览器与 Node（≥22）通用，运行时依赖仅 `callsites`。
 
 ## 约定（高优先级）
 
@@ -17,9 +17,9 @@ procm-mcp 房间系统的 TypeScript 客户端 SDK（独立 npm 包，workspace 
 
 | 文件 | 用途 | 何时阅读 |
 |---|---|---|
-| [claude/overview.md](claude/overview.md) | 四块能力、运行形态、设计取舍 | 第一次理解 SDK 时 |
+| [claude/overview.md](claude/overview.md) | 五块能力、运行形态、设计取舍 | 第一次理解 SDK 时 |
 | [claude/conventions.md](claude/conventions.md) | 命令、风格、安全红线 | 改代码前 |
-| [claude/module-responsibilities.md](claude/module-responsibilities.md) | 7 个源文件职责与分层 | 定位实现时 |
+| [claude/module-responsibilities.md](claude/module-responsibilities.md) | 8 个源文件职责与分层 | 定位实现时 |
 | [claude/entrypoints.md](claude/entrypoints.md) | 包出口、接入流程、构建 | 理解初始化时 |
 | [claude/public-interfaces.md](claude/public-interfaces.md) | 全部公共 API 摘要 | 对接 SDK 时 |
 | [claude/dependencies-and-config.md](claude/dependencies-and-config.md) | 依赖、环境变量、workspace 关系 | 排查接入问题时 |
@@ -31,7 +31,7 @@ procm-mcp 房间系统的 TypeScript 客户端 SDK（独立 npm 包，workspace 
 
 ## 扫描状态
 
-- **更新时间**：2026-08-15
-- **已扫描**：`src/` 全部 7 文件（100% 逐行）、`package.json`、`tsconfig.json`；`dist/` 抽查（与 src 同构）；消费方（根 `src/room-hub.ts`、`tests/room-sdk.mjs` 等）在根索引覆盖。
+- **更新时间**：2026-08-17
+- **已扫描**：`src/` 全部 8 文件（本轮新增 `rest.ts` 逐行阅读；其余 7 文件 8-15 已 100% 逐行）、`package.json`、`tsconfig.json`；`dist/` 抽查（与 src 同构）；消费方（根 `src/room-hub.ts`、`tests/room-sdk.mjs` 等）在根索引覆盖。
 - **跳过**：`dist/*.map`（产物）。
-- **下一步建议**：补包内单元测试（protocol 编解码、waitFor 竞态）；`custom-execution` 增加目标端opt-in 白名单开关。
+- **下一步建议**：补包内单元测试（protocol 编解码、waitFor 竞态）；`custom-execution` 增加目标端 opt-in 白名单开关；`rest.ts` 错误信息可携带 HTTP status 码。

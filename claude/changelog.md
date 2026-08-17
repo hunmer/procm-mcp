@@ -2,6 +2,14 @@
 
 > 仅记录本索引体系的生成/更新，与产品 Changelog 分开。保留最近 5 条，倒序。
 
+## 2026-08-17 — 增量更新（api-operations 工具组 + SDK rest.ts）
+
+- **背景**：8-15 后落地（部分未提交）：新工具组 `src/tools/api-operations.ts`（`clear-process-logs`/`import-process-batch`/`select-directory`，仅 stdio 注册）、`src/native-directory.ts`（`pickDirectory` 从 `http-server.ts` 抽出）、SDK 新文件 `src/rest.ts`（REST 封装，`index.ts` re-export）；`room-logs` 工具与 `GET /api/rooms/:roomId/logs` 增加 `startTime`/`endTime`；CLI 新增 `import-batch`/`clear-process-logs`/`select-directory` 子命令。
+- **更新（根）**：`public-interfaces`（工具数 11→14、+3 工具行、REST 补 `DELETE /api/processes/:id/logs`、`POST /api/processes/import-batch`、`POST /api/select-directory`、`DELETE /api/log-files`、`GET /api/log-files/content`、CLI 全命令）；`module-responsibilities`（工具层 8 文件 14 工具、+`native-directory`/`process-log-files` 行）；`conventions`/`file-map`（工具数 9/8→14/10、新文件补录）；`CLAUDE.md` 工具数与扫描状态同步。
+- **补漏**：上轮遗漏的 `src/process-log-files.ts`（顶层）与 `src/tools/process-log-files.ts`（`process-log-files`/`log-files` 工具）本轮补记。
+- **更新（SDK）**：`CLAUDE.md` 简介四块→五块能力；`module-responsibilities`/`public-interfaces`/`file-map` 补 `rest.ts`（8 文件）。
+- **备注**：`api-changes.md` 当前在工作区被清空；其 8-15/8-17 历史 API 记录已并入根 `public-interfaces.md`。
+
 ## 2026-08-15 — 增量更新（room/trace/system 子域落地）+ 新建 SDK 索引
 
 - **背景**：8-14 12:11 ~ 8-15 09:17 共 10 个提交落地了 room（`/room` WS + `room-hub/room-repository/room-logs`）、trace（`trace-store` + `tools/trace.ts` + SDK hook）、`system-processes`、`--data-path`、`batch-process`、`resolveSpawnTarget`（Windows `.cmd`/`.bat` spawn 修复，未提交工作区改动）等，上轮（8-14 09:11）文档未覆盖。

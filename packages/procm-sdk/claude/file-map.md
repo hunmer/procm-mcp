@@ -11,7 +11,8 @@ packages/procm-sdk/
 │   ├── logger.ts           # createLogger：console + $procm/log 双写
 │   ├── custom-execution.ts # exposeCustomExecution / executeCustom（eval RPC）
 │   ├── trace.ts            # saveTrace：校验/重试/超时/abort
-│   └── hook.ts             # createHook / hookProperty：拦截 + FunctionTrace
+│   ├── hook.ts             # createHook / hookProperty：拦截 + FunctionTrace
+│   └── rest.ts             # REST 封装：clearProcessLogs / importProcessBatch / selectDirectory
 └── dist/                   # 构建产物（随仓库提交，改 src 后必须重新 build）
     ├── *.js / *.js.map
     └── *.d.ts / *.d.ts.map
@@ -27,4 +28,5 @@ packages/procm-sdk/
 | 函数拦截/调用链 | `src/hook.ts` |
 | trace 大小/TTL 限制 | `src/trace.ts`（常量） |
 | 远程执行 RPC | `src/custom-execution.ts` |
+| REST 封装（清日志/批量导入/目录选择） | `src/rest.ts` |
 | 消费示例 | `demo/node-server/`、`demo/electron-client/`、根 `README.md` |
