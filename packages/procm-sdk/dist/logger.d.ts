@@ -52,6 +52,23 @@ export interface LogFilter {
     clientNames?: string[];
     memberIds?: string[];
 }
+export interface CollectLogsOptions extends LogFilter {
+    /** Inclusive Unix timestamp in milliseconds. */
+    startTime?: number;
+    /** Inclusive Unix timestamp in milliseconds. */
+    endTime?: number;
+    count?: number;
+}
+export interface CollectedLog extends StructuredLog {
+    roomId?: string;
+    processId?: string;
+    stream?: "stdout" | "stderr";
+}
+/**
+ * Read structured logs persisted by the room server for a time window.
+ * Unlike subscribeLogs, this also returns entries emitted before this call.
+ */
+export declare function collectLogs(client: ProcmClient, options?: CollectLogsOptions): Promise<CollectedLog[]>;
 export declare function matchesLogFilter(entry: StructuredLog, filter?: LogFilter): boolean;
 export declare function subscribeLogs(client: ProcmClient, handler: (entry: StructuredLog, message: RoomMessage) => void, filter?: LogFilter): () => void;
 //# sourceMappingURL=logger.d.ts.map

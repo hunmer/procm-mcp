@@ -28,31 +28,6 @@
       }
     },
     {
-      "id": "GZW8sBZx",
-      "name": "start:client:mac",
-      "script": "pnpm",
-      "args": [
-        "run",
-        "start:client:mac"
-      ],
-      "cwd": "/Users/Zhuanz/Documents/mira",
-      "status": "running",
-      "pid": 39145,
-      "exitCode": null,
-      "error": null,
-      "desc": "pnpm -C packages/mira-client run electron:dev:mac",
-      "group": "mira",
-      "port": null,
-      "roomId": null,
-      "favorite": true,
-      "startedAt": 1786862819173,
-      "lastStartedAt": 1786905166609,
-      "stoppedAt": null,
-      "stdoutLogPath": "/Users/Zhuanz/Documents/procm-mcp/.procm-mcp/RKy1Et(38866)/processes/GZW8sBZx-stdout.log",
-      "stderrLogPath": "/Users/Zhuanz/Documents/procm-mcp/.procm-mcp/RKy1Et(38866)/processes/GZW8sBZx-stderr.log",
-      "envs": {}
-    },
-    {
       "id": "LgU7f6cL",
       "name": "start:client:win",
       "script": "pnpm",
@@ -89,7 +64,7 @@
       ],
       "cwd": "/Users/Zhuanz/Documents/mira",
       "status": "running",
-      "pid": 38895,
+      "pid": 74374,
       "exitCode": null,
       "error": null,
       "desc": null,
@@ -98,7 +73,7 @@
       "roomId": null,
       "favorite": true,
       "startedAt": 1786862819175,
-      "lastStartedAt": 1786905114233,
+      "lastStartedAt": 1786942818926,
       "stoppedAt": null,
       "stdoutLogPath": "/Users/Zhuanz/Documents/procm-mcp/.procm-mcp/RKy1Et(38866)/processes/tj17UOUy-stdout.log",
       "stderrLogPath": "/Users/Zhuanz/Documents/procm-mcp/.procm-mcp/RKy1Et(38866)/processes/tj17UOUy-stderr.log",
@@ -149,7 +124,7 @@
       "stoppedAt": null
     },
     {
-      "id": "46M04eXW",
+      "id": "aqY8MEu7",
       "name": "procm-mcp",
       "script": "node",
       "args": [
@@ -161,21 +136,48 @@
         ".procm-mcp-data"
       ],
       "cwd": "/Users/Zhuanz/Documents/procm-mcp",
-      "status": "exited",
-      "pid": 62968,
-      "exitCode": 0,
+      "status": "running",
+      "pid": 87617,
+      "exitCode": null,
       "error": null,
       "desc": "Start the current project procm-mcp backend on port 7332",
-      "group": "procm-mcp",
+      "group": null,
       "port": null,
       "roomId": null,
       "favorite": false,
-      "startedAt": 1786870624452,
-      "lastStartedAt": 1786870624452,
-      "stoppedAt": 1786870732049,
-      "stdoutLogPath": "/Users/Zhuanz/Documents/procm-mcp/.procm-mcp/tZJAsD(94341)/processes/46M04eXW-stdout.log",
-      "stderrLogPath": "/Users/Zhuanz/Documents/procm-mcp/.procm-mcp/tZJAsD(94341)/processes/46M04eXW-stderr.log",
+      "startedAt": 1786945100729,
+      "lastStartedAt": 1786945100729,
+      "stoppedAt": null,
+      "stdoutLogPath": "/Users/Zhuanz/Documents/procm-mcp/.procm-mcp/RKy1Et(38866)/processes/aqY8MEu7-stdout.log",
+      "stderrLogPath": "/Users/Zhuanz/Documents/procm-mcp/.procm-mcp/RKy1Et(38866)/processes/aqY8MEu7-stderr.log",
       "envs": {}
+    },
+    {
+      "id": "48dWagWh",
+      "name": "start:client:mac",
+      "script": "pnpm",
+      "args": [
+        "run",
+        "start:client:mac"
+      ],
+      "cwd": "/Users/Zhuanz/Documents/mira",
+      "status": "running",
+      "pid": 87820,
+      "exitCode": null,
+      "error": null,
+      "desc": "pnpm -C packages/mira-client run electron:dev:mac",
+      "group": null,
+      "port": null,
+      "roomId": "mira-dev",
+      "favorite": false,
+      "startedAt": 1786945147447,
+      "lastStartedAt": 1786945147448,
+      "stoppedAt": null,
+      "stdoutLogPath": "/Users/Zhuanz/Documents/procm-mcp/.procm-mcp/RKy1Et(38866)/processes/48dWagWh-stdout.log",
+      "stderrLogPath": "/Users/Zhuanz/Documents/procm-mcp/.procm-mcp/RKy1Et(38866)/processes/48dWagWh-stderr.log",
+      "envs": {
+        "PROCM_WS_URL": "ws://127.0.0.1:7332/room"
+      }
     }
   ]
 }

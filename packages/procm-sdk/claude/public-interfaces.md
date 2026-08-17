@@ -54,6 +54,8 @@ executeCustom<TResult>(client, target, fn, args?, {timeout?(默认5s), signal?})
 
 `PROCM_PROTOCOL_VERSION`、`PROCM_LOG_TOPIC("$procm/log")`、`PROCM_LOG_MARKER("@@PROCM_LOG_V1@@")`；类型 `JsonValue/LogLevel/RoomMember/RoomMessage/StructuredLog/ClientFrame/ServerFrame`；函数 `matchesTopic/parseClientFrame/parseServerFrame/encodeStructuredLog/decodeStructuredLogLine/stripStructuredLogFrame`。
 
+`collectLogs(client, {startTime?, endTime?, count?, minLevel?, clientNames?, memberIds?})`：通过客户端对应的 HTTP 服务读取 room 已持久化的结构化日志，并按 Unix 毫秒时间窗口（包含边界）筛选；适合在 UI 测试执行前后记录时间戳后回收测试期间日志。
+
 ## 依赖的后端能力
 
 - WS 端点 `/room`（procm-mcp `room-hub.ts` 实现 ServerFrame 侧）。

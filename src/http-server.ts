@@ -35,6 +35,12 @@ import { attachWebsocketServer } from "./websocket-server.js";
 import { setConnectionConfig } from "./connection-config.js";
 import { getRoom, listRooms, patchRoom } from "./room-hub.js";
 import { queryRoomLogs } from "./room-logs.js";
+
+function parseTimestamp(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
 import { scanProjectCommands } from "./project-scanner.js";
 import { createRequire } from "module";
 // native-file-dialog ships only a compiled .node addon (no CJS wrapper), so
@@ -660,6 +666,8 @@ function createRequestHandler(token: string | undefined) {
             level,
             traceId: url.searchParams.get("traceId") || undefined,
             count: Number(url.searchParams.get("count")) || undefined,
+            startTime: parseTimestamp(url.searchParams.get("startTime")),
+            endTime: parseTimestamp(url.searchParams.get("endTime")),
           });
           if (!entries) json(res, 404, { error: `Room ${roomId} not found` });
           else json(res, 200, { roomId, entries });

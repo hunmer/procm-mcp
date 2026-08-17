@@ -455,6 +455,30 @@ function getLogger() {
 function createLogger(options = {}) {
   return new Logger(options);
 }
+async function collectLogs(client, options = {}) {
+  const target = client.connectionTarget;
+  if (!target.url) throw new Error("procm HTTP URL is required to collect logs");
+  if (options.startTime !== void 0 && options.endTime !== void 0 && options.startTime > options.endTime) {
+    throw new Error("log collection startTime must be before endTime");
+  }
+  const base = target.url.replace(/^ws(s?):\/\//, "http$1://").replace(/\/room\/?$/, "");
+  const query = new URLSearchParams();
+  if (options.startTime !== void 0) query.set("startTime", String(options.startTime));
+  if (options.endTime !== void 0) query.set("endTime", String(options.endTime));
+  if (options.count !== void 0) query.set("count", String(options.count));
+  if (options.minLevel && options.minLevel !== "silent") query.set("level", options.minLevel);
+  if (options.clientNames?.length === 1) query.set("memberPrefix", options.clientNames[0]);
+  if (options.memberIds?.length === 1) query.set("memberPrefix", options.memberIds[0]);
+  const token = target.token;
+  const response = await fetch(`${base}/api/rooms/${encodeURIComponent(client.roomId)}/logs?${query}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : void 0
+  });
+  if (!response.ok) throw new Error(`log collection failed with HTTP ${response.status}`);
+  const payload = await response.json();
+  return (payload.entries ?? []).filter(
+    (entry) => (options.startTime === void 0 || entry.timestamp >= options.startTime) && (options.endTime === void 0 || entry.timestamp <= options.endTime) && matchesLogFilter(entry, options)
+  );
+}
 function matchesLogFilter(entry, filter = {}) {
   if (filter.minLevel !== void 0 && LEVEL_ORDER[entry.level] < LEVEL_ORDER[filter.minLevel]) return false;
   if (filter.clientNames?.length && !filter.clientNames.includes(entry.clientName)) return false;
@@ -824,6 +848,7 @@ export {
   TRACE_MAX_BYTES,
   TRACE_MAX_TTL_SECONDS,
   TRACE_MIN_TTL_SECONDS,
+  collectLogs,
   createHook,
   createLogger,
   createProcmClient,

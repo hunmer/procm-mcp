@@ -200,6 +200,54 @@ export interface LogFilter {
   memberIds?: string[];
 }
 
+export interface CollectLogsOptions extends LogFilter {
+  /** Inclusive Unix timestamp in milliseconds. */
+  startTime?: number;
+  /** Inclusive Unix timestamp in milliseconds. */
+  endTime?: number;
+  count?: number;
+}
+
+export interface CollectedLog extends StructuredLog {
+  roomId?: string;
+  processId?: string;
+  stream?: "stdout" | "stderr";
+}
+
+/**
+ * Read structured logs persisted by the room server for a time window.
+ * Unlike subscribeLogs, this also returns entries emitted before this call.
+ */
+export async function collectLogs(
+  client: ProcmClient,
+  options: CollectLogsOptions = {},
+): Promise<CollectedLog[]> {
+  const target = client.connectionTarget;
+  if (!target.url) throw new Error("procm HTTP URL is required to collect logs");
+  if (options.startTime !== undefined && options.endTime !== undefined && options.startTime > options.endTime) {
+    throw new Error("log collection startTime must be before endTime");
+  }
+  const base = target.url.replace(/^ws(s?):\/\//, "http$1://").replace(/\/room\/?$/, "");
+  const query = new URLSearchParams();
+  if (options.startTime !== undefined) query.set("startTime", String(options.startTime));
+  if (options.endTime !== undefined) query.set("endTime", String(options.endTime));
+  if (options.count !== undefined) query.set("count", String(options.count));
+  if (options.minLevel && options.minLevel !== "silent") query.set("level", options.minLevel);
+  if (options.clientNames?.length === 1) query.set("memberPrefix", options.clientNames[0]);
+  if (options.memberIds?.length === 1) query.set("memberPrefix", options.memberIds[0]);
+  const token = target.token;
+  const response = await fetch(`${base}/api/rooms/${encodeURIComponent(client.roomId)}/logs?${query}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  if (!response.ok) throw new Error(`log collection failed with HTTP ${response.status}`);
+  const payload = await response.json() as { entries?: CollectedLog[] };
+  return (payload.entries ?? []).filter((entry) =>
+    (options.startTime === undefined || entry.timestamp >= options.startTime) &&
+    (options.endTime === undefined || entry.timestamp <= options.endTime) &&
+    matchesLogFilter(entry, options),
+  );
+}
+
 export function matchesLogFilter(entry: StructuredLog, filter: LogFilter = {}): boolean {
   if (filter.minLevel !== undefined && LEVEL_ORDER[entry.level] < LEVEL_ORDER[filter.minLevel]) return false;
   if (filter.clientNames?.length && !filter.clientNames.includes(entry.clientName)) return false;

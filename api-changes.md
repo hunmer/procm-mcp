@@ -2,6 +2,10 @@
 
 ## 2026-08-17
 
+- 扩展 `GET /api/rooms/:roomId/logs` 查询参数：`startTime`、`endTime`（Unix 毫秒，均为包含边界）。用于 SDK `collectLogs()` 按时间窗口读取结构化日志。
+
+## 2026-08-17
+
 - 新增 `DELETE /api/processes/:id/logs`
   - 请求 body：无
   - 响应 200：`{ "id": string, "cleared": true }`

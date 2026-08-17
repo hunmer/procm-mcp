@@ -21,6 +21,8 @@ export interface RoomLogQuery {
   level?: LogLevel;
   traceId?: string;
   count?: number;
+  startTime?: number;
+  endTime?: number;
 }
 
 async function readTail(filePath: string, maxBytes = 2 * 1024 * 1024): Promise<string> {
@@ -80,6 +82,8 @@ export async function queryRoomLogs(roomId: string, query: RoomLogQuery = {}): P
         if (query.level && row.level !== query.level) continue;
         if (query.traceId && row.traceId !== query.traceId) continue;
         if (query.memberPrefix && !row.memberId?.startsWith(query.memberPrefix) && !row.clientName?.startsWith(query.memberPrefix)) continue;
+        if (query.startTime !== undefined && row.timestamp < query.startTime) continue;
+        if (query.endTime !== undefined && row.timestamp > query.endTime) continue;
         rows.push({ ...row, seq });
       }
     }
