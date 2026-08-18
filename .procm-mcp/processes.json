@@ -190,16 +190,21 @@
         "dev"
       ],
       "cwd": "D:\\mira_typescript",
-      "status": "exited",
-      "pid": null,
+      "status": "running",
+      "pid": 176,
       "exitCode": null,
       "error": null,
       "desc": null,
       "group": "mira-win",
+      "port": null,
+      "roomId": null,
       "favorite": true,
       "startedAt": 1787022189093,
-      "lastStartedAt": null,
-      "stoppedAt": null
+      "lastStartedAt": 1787028409498,
+      "stoppedAt": null,
+      "stdoutLogPath": "G:\\procm-mcp\\.procm-mcp\\nmXzVs(16656)\\processes\\rCbLQrj--stdout.log",
+      "stderrLogPath": "G:\\procm-mcp\\.procm-mcp\\nmXzVs(16656)\\processes\\rCbLQrj--stderr.log",
+      "envs": {}
     },
     {
       "id": "DZAM3zVt",
@@ -213,15 +218,20 @@
       ],
       "cwd": "D:\\mira_typescript",
       "status": "exited",
-      "pid": null,
-      "exitCode": null,
+      "pid": 23476,
+      "exitCode": 1,
       "error": null,
       "desc": null,
       "group": "mira-win",
+      "port": null,
+      "roomId": null,
       "favorite": true,
       "startedAt": 1787022189095,
-      "lastStartedAt": null,
-      "stoppedAt": null
+      "lastStartedAt": 1787028442095,
+      "stoppedAt": 1787028452257,
+      "stdoutLogPath": "G:\\procm-mcp\\.procm-mcp\\nmXzVs(16656)\\processes\\DZAM3zVt-stdout.log",
+      "stderrLogPath": "G:\\procm-mcp\\.procm-mcp\\nmXzVs(16656)\\processes\\DZAM3zVt-stderr.log",
+      "envs": {}
     },
     {
       "id": "0vEgMEWR",
@@ -322,6 +332,31 @@
       "envs": {
         "PROCM_DEV_BACKEND": "http://127.0.0.1:7332"
       }
+    },
+    {
+      "id": "Ppbt73_b",
+      "name": "start:client:win",
+      "script": "pnpm",
+      "args": [
+        "run",
+        "start:client:win"
+      ],
+      "cwd": "D:\\mira_typescript",
+      "status": "running",
+      "pid": 16756,
+      "exitCode": null,
+      "error": null,
+      "desc": "pnpm -C packages/mira-client run electron:dev",
+      "group": "mira_typescript",
+      "port": null,
+      "roomId": null,
+      "favorite": true,
+      "startedAt": 1787024128542,
+      "lastStartedAt": 1787035533326,
+      "stoppedAt": null,
+      "stdoutLogPath": "G:\\procm-mcp\\.procm-mcp\\nmXzVs(16656)\\processes\\Ppbt73_b-stdout.log",
+      "stderrLogPath": "G:\\procm-mcp\\.procm-mcp\\nmXzVs(16656)\\processes\\Ppbt73_b-stderr.log",
+      "envs": {}
     }
   ]
 }

@@ -26,8 +26,9 @@ import {
   ComboboxItem,
   ComboboxList,
   ComboboxPopup,
+  ComboboxTrigger,
 } from "@/registry/default/ui/combobox";
-import { PlusIcon, ZapIcon } from "lucide-react";
+import { ChevronsUpDownIcon, PlusIcon, SearchIcon, ZapIcon } from "lucide-react";
 import { parseEnvs, startProcess, updateProcess } from "@/lib/api";
 import { applyPreset, useProcessPresets } from "@/lib/presets";
 import type { ProcessView } from "@/lib/types";
@@ -56,6 +57,8 @@ export interface ProcessDetailsDialogProps {
   onOpenChange: (open: boolean) => void;
   viewProcess: ProcessView | null;
   onToast: (message: string, isError?: boolean) => void;
+  // Existing group labels offered in the group combobox.
+  groupOptions?: string[];
 }
 
 // coss form-in-dialog invariant: DialogHeader stays OUTSIDE the form;
@@ -184,6 +187,7 @@ export function ProcessDetailsDialog({
   onOpenChange,
   viewProcess,
   onToast,
+  groupOptions,
 }: ProcessDetailsDialogProps) {
   const { t } = useTranslation();
   const [submitting, setSubmitting] = useState(false);
@@ -195,6 +199,7 @@ export function ProcessDetailsDialog({
     desc: "",
     envs: "",
     port: "",
+    group: "",
   });
 
   function set<K extends keyof typeof fields>(key: K, v: string) {
@@ -212,6 +217,7 @@ export function ProcessDetailsDialog({
         desc: viewProcess.desc ?? "",
         envs: "", // envs are not exposed in the public view by design; empty = keep current
         port: viewProcess.port ? String(viewProcess.port) : "",
+        group: viewProcess.group ?? "",
       });
     }
   }, [open, viewProcess]);
@@ -244,6 +250,7 @@ export function ProcessDetailsDialog({
         desc: fields.desc.trim() || null,
         port: portNum,
         envs: envsText ? parseEnvs(envsText) : undefined,
+        group: fields.group.trim() || null,
       });
       onOpenChange(false);
     } catch (err) {
@@ -281,6 +288,9 @@ export function ProcessDetailsDialog({
             setEnvs: (v) => set("envs", v),
             setPort: (v) => set("port", v),
           }}
+          group={fields.group}
+          setGroup={(v) => set("group", v)}
+          groupOptions={groupOptions ?? []}
           presets={[]}
           submitting={submitting}
           submitLabel={t("common.save")}
@@ -443,18 +453,39 @@ function ProcessForm({
               <FieldLabel htmlFor="f-group">
                 {t("dialogs.form.groupLabel")}
               </FieldLabel>
-              {/* Combobox with a free-text input: existing groups are offered
-                  in the popup, but any typed name is kept as-is. */}
+              {/* p-combobox-10 (coss): an outline trigger shows the current
+                  group; the search input lives inside the popup. Free text is
+                  kept as-is, so a typed name that matches no existing group
+                  still applies. */}
               <Combobox
                 items={groupItems}
                 inputValue={group}
                 onInputValueChange={(v) => setGroup(v)}
               >
-                <ComboboxInput
-                  id="f-group"
-                  placeholder={t("dialogs.form.groupPlaceholder")}
-                />
+                <ComboboxTrigger
+                  render={
+                    <Button
+                      id="f-group"
+                      variant="outline"
+                      className="w-full justify-between font-normal"
+                    />
+                  }
+                >
+                  <span
+                    className={`truncate ${group ? "" : "text-muted-foreground"}`}
+                  >
+                    {group || t("dialogs.form.groupPlaceholder")}
+                  </span>
+                  <ChevronsUpDownIcon className="text-muted-foreground size-4 opacity-50" />
+                </ComboboxTrigger>
                 <ComboboxPopup aria-label={t("dialogs.form.groupLabel")}>
+                  <div className="border-b p-2">
+                    <ComboboxInput
+                      placeholder={t("dialogs.form.groupPlaceholder")}
+                      showTrigger={false}
+                      startAddon={<SearchIcon />}
+                    />
+                  </div>
                   <ComboboxEmpty>{t("dialogs.form.groupEmpty")}</ComboboxEmpty>
                   <ComboboxList>
                     {(item: { value: string; label: string }) => (

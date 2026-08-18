@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/registry/default/ui/button";
 import { Badge } from "@/registry/default/ui/badge";
@@ -280,6 +280,15 @@ export function App() {
 
   const processes = data?.processes ?? [];
 
+  // Existing group labels offered by the edit dialog's group combobox.
+  const groupOptions = useMemo(
+    () =>
+      [...new Set(processes.map((p) => p.group?.trim()).filter((g): g is string => !!g))].sort(
+        (a, b) => a.localeCompare(b),
+      ),
+    [processes],
+  );
+
   // Delete every history log file except those of running processes (skipped
   // server-side because they're still being written). Bump the reload key so
   // the mounted LogFilesView re-lists its files.
@@ -495,6 +504,7 @@ export function App() {
         onOpenChange={setDetailsOpen}
         viewProcess={viewing}
         onToast={showToast}
+        groupOptions={groupOptions}
       />
 
       {/* Clear-all confirmation: stop + delete every process at once. The
