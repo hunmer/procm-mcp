@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { build } from "../dashboard/node_modules/esbuild/lib/main.js";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = resolve(new URL("..", import.meta.url).pathname);
+const root = fileURLToPath(new URL("..", import.meta.url));
 
 await build({
   entryPoints: [resolve(root, "packages/procm-sdk/src/browser.ts")],

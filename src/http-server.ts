@@ -1248,6 +1248,8 @@ function createRequestHandler(token: string | undefined) {
             updates.port = body.port;
           if (body.envs && typeof body.envs === "object" && !Array.isArray(body.envs))
             updates.envs = body.envs as Record<string, string>;
+          if (typeof body.group === "string" || body.group === null)
+            updates.group = (body.group as string | null)?.trim() || null;
           if (typeof body.favorite === "boolean") updates.favorite = body.favorite;
           if (Object.keys(updates).length === 0) {
             json(res, 400, { error: "No valid fields to update" });

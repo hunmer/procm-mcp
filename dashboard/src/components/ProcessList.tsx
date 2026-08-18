@@ -6,9 +6,10 @@ import {
   FolderOpenIcon,
   InboxIcon,
   ListXIcon,
+  PencilIcon,
   PlusIcon,
 } from "lucide-react";
-import { clearAllProcesses } from "@/lib/api";
+import { clearAllProcesses, updateProcess } from "@/lib/api";
 import { Badge } from "@/registry/default/ui/badge";
 import { Button } from "@/registry/default/ui/button";
 import {
@@ -36,6 +37,10 @@ import { canStopProcess } from "./process-list/utils";
 import { ProcessFilterBar } from "./process-list/ProcessFilterBar";
 import { ProcessCard } from "./process-list/ProcessCard";
 import { ProcessDialogs } from "./process-list/ProcessDialogs";
+import {
+  RenameGroupDialog,
+  type PendingGroupRename,
+} from "./process-list/RenameGroupDialog";
 import { NewProcessDialog } from "./NewProcessDialog";
 
 // Whether a group label looks like an absolute folder path that the backend
@@ -136,6 +141,9 @@ interface GroupSectionProps {
   // Open the new-process dialog pre-filled with this group's label ("" for
   // the Ungrouped bucket).
   onNewInGroup: (label: string) => void;
+  // Open the rename-group dialog for this group: every process of the group
+  // is moved to the name typed inside.
+  onRenameGroup: (g: Group) => void;
 }
 
 // One category section, following the "Frame with collapsible content" pattern
@@ -154,6 +162,7 @@ function GroupSection({
   onTogglePin,
   onClearUngrouped,
   onNewInGroup,
+  onRenameGroup,
 }: GroupSectionProps) {
   const { t } = useTranslation();
   const runningCount = g.processes.filter(canStopProcess).length;
@@ -196,6 +205,16 @@ function GroupSection({
               className="text-muted-foreground"
             >
               <PlusIcon />
+            </Button>
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label={t("processes.renameGroupAria")}
+              title={t("processes.renameGroupAria")}
+              onClick={() => onRenameGroup(g)}
+              className="text-muted-foreground"
+            >
+              <PencilIcon />
             </Button>
             {looksLikePath(g.label) && (
               <Button
@@ -321,6 +340,48 @@ export function ProcessList({
 
   function requestNewInGroup(label: string) {
     setNewIn({ open: true, group: label });
+  }
+
+  // Rename-group dialog state, snapshotted at click time. `ids` comes from the
+  // unfiltered list so an active status/name filter doesn't silently skip rows
+  // of the clicked group.
+  const [pendingRename, setPendingRename] = useState<PendingGroupRename | null>(
+    null,
+  );
+
+  function requestRenameGroup(g: Group) {
+    const isUngrouped = g.label === UNGROUPED;
+    const ids = processes
+      .filter((p) => groupKeyOf(p.group ?? undefined) === g.label)
+      .map((p) => p.id);
+    setPendingRename({
+      label: isUngrouped ? t("processes.ungrouped") : g.label,
+      seed: isUngrouped ? "" : g.label,
+      count: ids.length,
+      ids,
+    });
+  }
+
+  // Move every snapshotted process to the typed group ("" = Ungrouped). A name
+  // equal to the current one is a no-op; the WS push refreshes the list.
+  async function confirmRenameGroup(value: string) {
+    const pending = pendingRename;
+    setPendingRename(null);
+    if (!pending || value === pending.seed) return;
+    const results = await Promise.allSettled(
+      pending.ids.map((id) => updateProcess(id, { group: value || null })),
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    if (failed > 0) {
+      onToast(t("toasts.groupMoveFailed", { failed }), true);
+      return;
+    }
+    onToast(
+      t("toasts.groupMoved", {
+        count: pending.ids.length,
+        label: value || t("processes.ungrouped"),
+      }),
+    );
   }
 
   // Existing group labels offered by the dialog's group combobox.
@@ -462,6 +523,7 @@ export function ProcessList({
                 onOpenFolder={onOpenFolder}
                 onClearUngrouped={requestClearUngrouped}
                 onNewInGroup={requestNewInGroup}
+                onRenameGroup={requestRenameGroup}
                 pinnedIds={pinnedIds}
                 onTogglePin={togglePin}
               />
@@ -481,6 +543,7 @@ export function ProcessList({
                   onOpenFolder={onOpenFolder}
                   onClearUngrouped={requestClearUngrouped}
                   onNewInGroup={requestNewInGroup}
+                  onRenameGroup={requestRenameGroup}
                   pinnedIds={pinnedIds}
                   onTogglePin={togglePin}
                 />
@@ -500,6 +563,7 @@ export function ProcessList({
             onOpenFolder={onOpenFolder}
             onClearUngrouped={requestClearUngrouped}
             onNewInGroup={requestNewInGroup}
+            onRenameGroup={requestRenameGroup}
             pinnedIds={pinnedIds}
             onTogglePin={togglePin}
           />
@@ -548,6 +612,16 @@ export function ProcessList({
         groupOptions={groupOptions}
         onStarted={(id) => onToast(t("toasts.started", { id }))}
         onError={(m) => onToast(m, true)}
+      />
+
+      {/* Group-header pencil: move every process of the clicked group to the
+          typed group name (a rename is a whole-group move). */}
+      <RenameGroupDialog
+        group={pendingRename}
+        onOpenChange={(open) => {
+          if (!open) setPendingRename(null);
+        }}
+        onSubmit={confirmRenameGroup}
       />
     </div>
   );

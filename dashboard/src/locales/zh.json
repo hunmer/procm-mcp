@@ -116,7 +116,13 @@
     "runningCountTitle": "{{count}} 个运行中",
     "clearUngroupedTitle": "清空（结束运行中的进程并从列表移除）",
     "clearUngroupedQuestion": "要清空未分组吗？",
-    "clearUngroupedDescription": "将结束 {{running}} 个运行中的进程，并从列表移除全部 {{processes}} 条进程记录和 {{favorites}} 个收藏。此操作无法撤销。"
+    "clearUngroupedDescription": "将结束 {{running}} 个运行中的进程，并从列表移除全部 {{processes}} 条进程记录和 {{favorites}} 个收藏。此操作无法撤销。",
+    "renameGroupAria": "编辑分组",
+    "renameGroupTitle": "编辑分组",
+    "renameGroupDescription": "将“{{label}}”下的 {{count}} 个进程移动到目标分组。",
+    "renameGroupLabel": "目标分组",
+    "renameGroupPlaceholder": "分组名称",
+    "renameGroupHelp": "该分组下的所有进程都会移动到输入的分组；留空则移回“未分组”。"
   },
   "logFiles": {
     "listTitle": "日志文件",
@@ -404,6 +410,8 @@
     "deletedGroup_one": "已删除 {{count}} 个收藏",
     "deletedGroup_other": "已删除 {{count}} 个收藏",
     "clearedUngrouped": "已清空未分组（共 {{count}} 项）",
+    "groupMoved": "已将 {{count}} 个进程移动到“{{label}}”",
+    "groupMoveFailed": "{{failed}} 个进程移动失败",
     "started": "已启动：{{id}}",
     "cleared_one": "已清除 {{count}} 个进程",
     "cleared_other": "已清除 {{count}} 个进程",

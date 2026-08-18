@@ -68,6 +68,7 @@ export interface UpdateProcessBody {
   desc?: string | null;
   port?: number | null;
   envs?: Record<string, string>;
+  group?: string | null;
 }
 
 export function updateProcess(

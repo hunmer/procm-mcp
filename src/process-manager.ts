@@ -216,6 +216,7 @@ export type ProcessFieldUpdates = {
   desc?: string | null;
   port?: number | null;
   envs?: Record<string, string>;
+  group?: string | null;
 };
 
 export async function updateProcessFields(
@@ -231,6 +232,7 @@ export async function updateProcessFields(
     if (updates.desc !== undefined) live.desc = updates.desc;
     if (updates.port !== undefined) live.port = updates.port;
     if (updates.envs !== undefined) live.envs = updates.envs;
+    if (updates.group !== undefined) live.group = updates.group;
     await persist(live);
     dashboardEvents.emitProcessChange();
     return true;

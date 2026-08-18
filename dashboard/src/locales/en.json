@@ -116,7 +116,13 @@
     "runningCountTitle": "{{count}} running",
     "clearUngroupedTitle": "Clear (stop running processes and remove from list)",
     "clearUngroupedQuestion": "Clear the ungrouped list?",
-    "clearUngroupedDescription": "Stops {{running}} running process(es) and removes all {{processes}} process records and {{favorites}} favorites from the list. This cannot be undone."
+    "clearUngroupedDescription": "Stops {{running}} running process(es) and removes all {{processes}} process records and {{favorites}} favorites from the list. This cannot be undone.",
+    "renameGroupAria": "Edit group",
+    "renameGroupTitle": "Edit group",
+    "renameGroupDescription": "Moves all {{count}} process(es) under “{{label}}” to the target group.",
+    "renameGroupLabel": "Target group",
+    "renameGroupPlaceholder": "Group name",
+    "renameGroupHelp": "Every process in this group moves to the typed group name; leave blank to move them to Ungrouped."
   },
   "logFiles": {
     "listTitle": "Log files",
@@ -404,6 +410,8 @@
     "deletedGroup_one": "Deleted {{count}} favorite",
     "deletedGroup_other": "Deleted {{count}} favorites",
     "clearedUngrouped": "Cleared ungrouped ({{count}} items)",
+    "groupMoved": "Moved {{count}} process(es) to “{{label}}”",
+    "groupMoveFailed": "{{failed}} process(es) could not be moved",
     "started": "Started: {{id}}",
     "cleared_one": "Cleared {{count}} process",
     "cleared_other": "Cleared {{count}} processes",
