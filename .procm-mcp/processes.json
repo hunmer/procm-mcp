@@ -191,7 +191,7 @@
       ],
       "cwd": "D:\\mira_typescript",
       "status": "running",
-      "pid": 27580,
+      "pid": 25284,
       "exitCode": null,
       "error": null,
       "desc": null,
@@ -200,10 +200,10 @@
       "roomId": null,
       "favorite": true,
       "startedAt": 1787022189093,
-      "lastStartedAt": 1787051358808,
+      "lastStartedAt": 1787054288896,
       "stoppedAt": null,
-      "stdoutLogPath": "G:\\procm-mcp\\.procm-mcp\\x-PsTD(26700)\\processes\\rCbLQrj--stdout.log",
-      "stderrLogPath": "G:\\procm-mcp\\.procm-mcp\\x-PsTD(26700)\\processes\\rCbLQrj--stderr.log",
+      "stdoutLogPath": "G:\\procm-mcp\\.procm-mcp\\K88hxt(26376)\\processes\\rCbLQrj--stdout.log",
+      "stderrLogPath": "G:\\procm-mcp\\.procm-mcp\\K88hxt(26376)\\processes\\rCbLQrj--stderr.log",
       "envs": {}
     },
     {
@@ -343,7 +343,7 @@
       ],
       "cwd": "D:\\mira_typescript",
       "status": "running",
-      "pid": 22996,
+      "pid": 25608,
       "exitCode": null,
       "error": null,
       "desc": "pnpm -C packages/mira-client run electron:dev",
@@ -352,10 +352,10 @@
       "roomId": null,
       "favorite": true,
       "startedAt": 1787024128542,
-      "lastStartedAt": 1787051472389,
+      "lastStartedAt": 1787054582760,
       "stoppedAt": null,
-      "stdoutLogPath": "G:\\procm-mcp\\.procm-mcp\\x-PsTD(26700)\\processes\\Ppbt73_b-stdout.log",
-      "stderrLogPath": "G:\\procm-mcp\\.procm-mcp\\x-PsTD(26700)\\processes\\Ppbt73_b-stderr.log",
+      "stdoutLogPath": "G:\\procm-mcp\\.procm-mcp\\K88hxt(26376)\\processes\\Ppbt73_b-stdout.log",
+      "stderrLogPath": "G:\\procm-mcp\\.procm-mcp\\K88hxt(26376)\\processes\\Ppbt73_b-stderr.log",
       "envs": {}
     },
     {
@@ -395,7 +395,7 @@
         "G:\\procm-mcp\\tests\\example-process.js"
       ],
       "cwd": "G:\\procm-mcp",
-      "status": "running",
+      "status": "exited",
       "pid": 8776,
       "exitCode": null,
       "error": null,
@@ -406,7 +406,7 @@
       "favorite": false,
       "startedAt": 1787051318256,
       "lastStartedAt": 1787051318257,
-      "stoppedAt": null,
+      "stoppedAt": 1787054280883,
       "stdoutLogPath": "G:\\procm-mcp\\.procm-mcp\\IGUtyK(23924)\\processes\\AjL1uyU3-stdout.log",
       "stderrLogPath": "G:\\procm-mcp\\.procm-mcp\\IGUtyK(23924)\\processes\\AjL1uyU3-stderr.log",
       "envs": {

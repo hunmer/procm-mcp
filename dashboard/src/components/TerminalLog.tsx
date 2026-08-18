@@ -21,6 +21,12 @@ function isJsonValue(v: unknown): v is JsonValue {
   }
 }
 
+function isFlatArray(value: unknown): value is Array<string | number | boolean | null> {
+  return Array.isArray(value) && value.every(item =>
+    item === null || ['string', 'number', 'boolean'].includes(typeof item)
+  );
+}
+
 export { stripAnsi } from "./ansi";
 
 // Wrap every match of `regex` inside `text` in a <mark>. Stateless (uses
@@ -155,7 +161,13 @@ function TerminalLine({
       ) : (
         <AnsiText text={entry.message} highlight={highlight} />
       )}
+      {isFlatArray(entry.data) && (
+        <span className="ml-2 text-zinc-300">
+          {entry.data.map(item => String(item)).join(" ")}
+        </span>
+      )}
       {isJsonValue(entry.data) &&
+        !isFlatArray(entry.data) &&
         (showJson ? (
           <div className="my-1 ml-4 max-w-full overflow-x-auto border-l border-zinc-700 pl-1">
             <JsonViewer data={entry.data} rootName="data" defaultExpanded={true} mini />
