@@ -5,6 +5,20 @@ import { logToolStart, logToolEnd, logToolError } from "../server-log.js";
 import { toErrorMessage } from "../error.js";
 import { getProcess } from "../process-manager.js";
 import { ProcessStdoutChunk } from "../process-stdout-client.js";
+import { decodeStructuredLogLine, stripStructuredLogFrame } from "@hunmer/procm-mcp-sdk";
+
+function formatChunk(chunk: ProcessStdoutChunk, stream?: "stdout" | "stderr"): string {
+  const structured = decodeStructuredLogLine(chunk.message);
+  if (!structured) {
+    const prefix = stream ? ` (${stream})` : "";
+    return `[${chunk.timestamp.toISOString()}]${prefix} ${stripStructuredLogFrame(chunk.message)}`;
+  }
+
+  const timestamp = new Date(structured.timestamp).toISOString();
+  const data = structured.data === undefined ? "" : ` ${JSON.stringify(structured.data)}`;
+  const streamLabel = stream ? ` (${stream})` : "";
+  return `[${timestamp}]${streamLabel} ${structured.level.toUpperCase()} ${structured.clientName}: ${structured.message}${data}`;
+}
 
 export function registerProcessLogTools(server: McpServer) {
   // Unified logs tool: tail recent stdout/stderr OR grep them with a regex.
@@ -86,7 +100,7 @@ export function registerProcessLogTools(server: McpServer) {
           const body = trimmed
             .map(
               (r) =>
-                `[${r.chunk.timestamp.toISOString()}] (${r.stream}) ${r.chunk.message}`,
+                formatChunk(r.chunk, r.stream),
             )
             .join("\n");
 
@@ -106,7 +120,7 @@ export function registerProcessLogTools(server: McpServer) {
         }
 
         const text = chunks
-          .map((c) => `[${c.timestamp.toISOString()}] ${c.message}`)
+          .map((c) => formatChunk(c))
           .join("\n");
 
         logToolEnd("process-logs", { id, mode: "tail", stream: s, count: chunks.length });

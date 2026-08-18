@@ -191,7 +191,7 @@
       ],
       "cwd": "D:\\mira_typescript",
       "status": "running",
-      "pid": 176,
+      "pid": 27580,
       "exitCode": null,
       "error": null,
       "desc": null,
@@ -200,10 +200,10 @@
       "roomId": null,
       "favorite": true,
       "startedAt": 1787022189093,
-      "lastStartedAt": 1787028409498,
+      "lastStartedAt": 1787051358808,
       "stoppedAt": null,
-      "stdoutLogPath": "G:\\procm-mcp\\.procm-mcp\\nmXzVs(16656)\\processes\\rCbLQrj--stdout.log",
-      "stderrLogPath": "G:\\procm-mcp\\.procm-mcp\\nmXzVs(16656)\\processes\\rCbLQrj--stderr.log",
+      "stdoutLogPath": "G:\\procm-mcp\\.procm-mcp\\x-PsTD(26700)\\processes\\rCbLQrj--stdout.log",
+      "stderrLogPath": "G:\\procm-mcp\\.procm-mcp\\x-PsTD(26700)\\processes\\rCbLQrj--stderr.log",
       "envs": {}
     },
     {
@@ -343,7 +343,7 @@
       ],
       "cwd": "D:\\mira_typescript",
       "status": "running",
-      "pid": 16756,
+      "pid": 22996,
       "exitCode": null,
       "error": null,
       "desc": "pnpm -C packages/mira-client run electron:dev",
@@ -352,11 +352,66 @@
       "roomId": null,
       "favorite": true,
       "startedAt": 1787024128542,
-      "lastStartedAt": 1787035533326,
+      "lastStartedAt": 1787051472389,
       "stoppedAt": null,
-      "stdoutLogPath": "G:\\procm-mcp\\.procm-mcp\\nmXzVs(16656)\\processes\\Ppbt73_b-stdout.log",
-      "stderrLogPath": "G:\\procm-mcp\\.procm-mcp\\nmXzVs(16656)\\processes\\Ppbt73_b-stderr.log",
+      "stdoutLogPath": "G:\\procm-mcp\\.procm-mcp\\x-PsTD(26700)\\processes\\Ppbt73_b-stdout.log",
+      "stderrLogPath": "G:\\procm-mcp\\.procm-mcp\\x-PsTD(26700)\\processes\\Ppbt73_b-stderr.log",
       "envs": {}
+    },
+    {
+      "id": "vJ2N8ZcW",
+      "name": "procm-mcp",
+      "script": "node",
+      "args": [
+        "build/index.js",
+        "--server",
+        "--port",
+        "7332",
+        "--data-path",
+        ".procm-mcp-data"
+      ],
+      "cwd": "G:/procm-mcp",
+      "status": "exited",
+      "pid": 27200,
+      "exitCode": 1,
+      "error": null,
+      "desc": "Start the current project's procm-mcp backend on port 7332",
+      "group": "procm-mcp",
+      "port": null,
+      "roomId": null,
+      "favorite": false,
+      "startedAt": 1787051267782,
+      "lastStartedAt": 1787051267782,
+      "stoppedAt": null,
+      "stdoutLogPath": "G:\\procm-mcp\\.procm-mcp\\mcM_O7(25892)\\processes\\vJ2N8ZcW-stdout.log",
+      "stderrLogPath": "G:\\procm-mcp\\.procm-mcp\\mcM_O7(25892)\\processes\\vJ2N8ZcW-stderr.log",
+      "envs": {}
+    },
+    {
+      "id": "AjL1uyU3",
+      "name": "logger-1787051318242",
+      "script": "node",
+      "args": [
+        "G:\\procm-mcp\\tests\\example-process.js"
+      ],
+      "cwd": "G:\\procm-mcp",
+      "status": "running",
+      "pid": 8776,
+      "exitCode": null,
+      "error": null,
+      "desc": null,
+      "group": "test",
+      "port": null,
+      "roomId": null,
+      "favorite": false,
+      "startedAt": 1787051318256,
+      "lastStartedAt": 1787051318257,
+      "stoppedAt": null,
+      "stdoutLogPath": "G:\\procm-mcp\\.procm-mcp\\IGUtyK(23924)\\processes\\AjL1uyU3-stdout.log",
+      "stderrLogPath": "G:\\procm-mcp\\.procm-mcp\\IGUtyK(23924)\\processes\\AjL1uyU3-stderr.log",
+      "envs": {
+        "PROCM_MCP_TEST_VAR1": "PROCM_LOG_MARKER"
+      }
     }
   ]
 }
