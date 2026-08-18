@@ -34,7 +34,7 @@ export function registerApiOperationTools(server: McpServer): void {
 
   server.tool("select-directory", "Open the native directory picker and return the selected path.", { title: z.string().optional() }, async () => {
     try {
-      const selected = pickDirectory().trim();
+      const selected = (await pickDirectory()).trim();
       return textResult(JSON.stringify(selected && selected !== "UserCancelled" ? { canceled: false, path: selected } : { canceled: true, path: null }));
     } catch (error) {
       return textResult(JSON.stringify({ error: toErrorMessage(error) }));

@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const scripts = [
+  "native-directory.mjs",
   "lifecycle.mjs",
   "logs-grep.mjs",
   "http-api.mjs",

@@ -666,12 +666,11 @@ function createRequestHandler(token: string | undefined) {
       // POST /api/select-directory -> open the OS-native directory picker
       // (native-file-dialog, a Rust addon over the OS dialogs; Windows/macOS).
       // The browser can't do this, so the dashboard asks the backend. The
-      // picker is synchronous — it blocks the event loop until the user
-      // chooses, which is fine for this local single-user tool. Resolves
-      // { canceled: true } when the user dismisses the picker.
+      // The picker runs in a child process so the server remains responsive
+      // while the user chooses. Resolves { canceled: true } when dismissed.
       if (method === "POST" && pathname === "/api/select-directory") {
         try {
-          const dir = pickDirectory().trim();
+          const dir = (await pickDirectory()).trim();
           if (!dir || dir === "UserCancelled") {
             json(res, 200, { canceled: true, path: null });
             return;
