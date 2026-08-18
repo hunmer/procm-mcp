@@ -6,3 +6,4 @@ dashboard/dist
 .procm-mcp-data
 .procm-mcp/
 .tmp-cli-out.txt
+.procm-mcp/processes.json
