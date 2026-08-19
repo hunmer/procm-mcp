@@ -357,6 +357,19 @@ export function resolveSpawnTarget(
   return { command: script, shell: false };
 }
 
+// Package-manager lifecycle commands are non-interactive from procm's point
+// of view. On Windows, keeping a piped stdin handle through pnpm/npm -> cmd ->
+// tsx watch can prevent tsx's worker from starting; terminal launches use a
+// console handle instead. Leave stdin piped for all other commands so the
+// process-input API remains available where it is useful.
+export function shouldIgnoreStdin(script: string, args: string[] | undefined): boolean {
+  if (process.platform !== "win32") return false;
+  const base = path.basename(script).replace(/\.(cmd|bat|exe)$/i, "").toLowerCase();
+  if (!new Set(["pnpm", "npm", "yarn", "bun"]).has(base)) return false;
+  const firstArg = (args?.[0] || "").toLowerCase();
+  return firstArg === "run" || firstArg === "exec" || firstArg === "dlx";
+}
+
 export async function startProcess(
   processId: string,
   script: string,
@@ -384,9 +397,11 @@ export async function startProcess(
     };
     if (roomId) roomEnv.PROCM_ROOM_ID = roomId;
     const spawnTarget = resolveSpawnTarget(script, cwd);
+    const ignoreStdin = shouldIgnoreStdin(script, args);
     const childProcess = spawn(spawnTarget.command, args || [], {
       cwd,
       shell: spawnTarget.shell,
+      stdio: [ignoreStdin ? "ignore" : "pipe", "pipe", "pipe"],
       env: {
         ...process.env,
         ...envs,
@@ -400,13 +415,13 @@ export async function startProcess(
     const stdoutClientPromise = createProcessStdoutClient({
       id: processId,
       type: "stdout",
-      readable: childProcess.stdout,
+      readable: childProcess.stdout!,
       serverId: logServerId,
     });
     const stderrClientPromise = createProcessStdoutClient({
       id: processId,
       type: "stderr",
-      readable: childProcess.stderr,
+      readable: childProcess.stderr!,
       serverId: logServerId,
     });
 
