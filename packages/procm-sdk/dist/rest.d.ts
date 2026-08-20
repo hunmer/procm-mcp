@@ -10,6 +10,11 @@ export declare function clearProcessLogs(client: ProcmClient, id: string): Promi
     id: string;
     cleared: true;
 }>;
+/** Clear logs for the process represented by the client. */
+export declare function clearLogs(client: ProcmClient, id?: string | undefined): Promise<{
+    id: string;
+    cleared: true;
+}>;
 export declare function importProcessBatch(client: ProcmClient, items: ImportProcessItem[], group?: string): Promise<{
     imported: {
         id: string;

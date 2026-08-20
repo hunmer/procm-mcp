@@ -4,6 +4,7 @@ import {
   dashboardEvents,
   PROCESS_CHANGE,
   LOG_APPEND,
+  LOG_CLEAR,
   type LogAppendPayload,
 } from "./events.js";
 import { listProcessRecords } from "./process-manager.js";
@@ -114,13 +115,20 @@ export function attachWebsocketServer(
         ws.send(JSON.stringify({ type: "log", ...payload }));
       }
     };
+    const onLogClear = (payload: { processId: string }) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "logCleared", ...payload }));
+      }
+    };
 
     dashboardEvents.on(PROCESS_CHANGE, onProcessChange);
     dashboardEvents.on(LOG_APPEND, onLog);
+    dashboardEvents.on(LOG_CLEAR, onLogClear);
 
     const cleanup = () => {
       dashboardEvents.off(PROCESS_CHANGE, onProcessChange);
       dashboardEvents.off(LOG_APPEND, onLog);
+      dashboardEvents.off(LOG_CLEAR, onLogClear);
     };
     ws.on("close", () => {
       serverLog("WebSocket dashboard client disconnected");

@@ -133,4 +133,9 @@ export interface WsLogMessage {
   data?: unknown;
 }
 
-export type WsServerMessage = WsProcessesMessage | WsLogMessage;
+export interface WsLogClearedMessage {
+  type: "logCleared";
+  processId: string;
+}
+
+export type WsServerMessage = WsProcessesMessage | WsLogMessage | WsLogClearedMessage;

@@ -17,6 +17,7 @@ import type {
   LogEntry,
   ProcessView,
   WsLogMessage,
+  WsLogClearedMessage,
 } from "@/lib/types";
 import { stripAnsi } from "./TerminalLog";
 import {
@@ -37,7 +38,7 @@ interface LogPanelProps {
   onClose: () => void;
   // Register a handler that receives live log lines for THIS process (the
   // parent already filters by the open process id before forwarding).
-  onLiveLog: (cb: (m: WsLogMessage) => void) => void;
+  onLiveLog: (cb: (m: WsLogMessage | WsLogClearedMessage) => void) => void;
   onToast: (message: string, isError?: boolean) => void;
 }
 
@@ -408,8 +409,18 @@ export function LogPanel({ process, onClose, onLiveLog, onToast }: LogPanelProps
   // during render is cheap and always points at fresh state.
   const searchingRef = useRef(false);
   searchingRef.current = activeGrep !== "";
-  onLiveLog((m: WsLogMessage) => {
+  onLiveLog((m: WsLogMessage | WsLogClearedMessage) => {
     if (m.processId !== process.id) return;
+    if (m.type === "logCleared") {
+      reqId.current++;
+      appliedSearchRef.current = "";
+      setSearch("");
+      setActiveGrep("");
+      setEntries([]);
+      setError(null);
+      stickToBottom.current = true;
+      return;
+    }
     if (searchingRef.current) return; // suspend live tail while viewing grep results
     setEntries((cur) =>
       mergeEntries(cur, [

@@ -6,6 +6,7 @@ import { EventEmitter } from "events";
 
 export const PROCESS_CHANGE = "processChange";
 export const LOG_APPEND = "logAppend";
+export const LOG_CLEAR = "logClear";
 
 export type LogStream = "stdout" | "stderr";
 
@@ -40,6 +41,10 @@ class DashboardEventBus extends EventEmitter {
 
   emitLog(payload: LogAppendPayload): void {
     this.emit(LOG_APPEND, payload);
+  }
+
+  emitLogClear(processId: string): void {
+    this.emit(LOG_CLEAR, { processId });
   }
 }
 

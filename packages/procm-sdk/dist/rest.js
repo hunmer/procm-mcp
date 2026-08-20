@@ -25,6 +25,12 @@ async function request(client, method, path, body) {
 export function clearProcessLogs(client, id) {
     return request(client, "DELETE", `/api/processes/${encodeURIComponent(id)}/logs`);
 }
+/** Clear logs for the process represented by the client. */
+export function clearLogs(client, id = client.processId) {
+    if (!id)
+        throw new Error("process id is required to clear logs");
+    return clearProcessLogs(client, id);
+}
 export function importProcessBatch(client, items, group) {
     if (!items.length)
         throw new Error("items must be a non-empty array");

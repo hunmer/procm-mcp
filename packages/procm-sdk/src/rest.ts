@@ -36,6 +36,15 @@ export function clearProcessLogs(client: ProcmClient, id: string): Promise<{ id:
   return request(client, "DELETE", `/api/processes/${encodeURIComponent(id)}/logs`);
 }
 
+/** Clear logs for the process represented by the client. */
+export function clearLogs(
+  client: ProcmClient,
+  id: string | undefined = client.processId,
+): Promise<{ id: string; cleared: true }> {
+  if (!id) throw new Error("process id is required to clear logs");
+  return clearProcessLogs(client, id);
+}
+
 export function importProcessBatch(client: ProcmClient, items: ImportProcessItem[], group?: string): Promise<{ imported: { id: string; name: string; favorite: boolean }[] }> {
   if (!items.length) throw new Error("items must be a non-empty array");
   return request(client, "POST", "/api/processes/import-batch", { items, ...(group === undefined ? {} : { group }) });

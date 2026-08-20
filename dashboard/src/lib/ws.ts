@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type {
   WsProcessesMessage,
   WsLogMessage,
+  WsLogClearedMessage,
   ProcessStream,
 } from "./types";
 
@@ -13,6 +14,7 @@ export interface UseDashboardSocket {
   reconnectInMs: number | null;
   onProcessesMessage: (cb: (m: WsProcessesMessage) => void) => void;
   onLogMessage: (cb: (m: WsLogMessage) => void) => void;
+  onLogCleared: (cb: (m: WsLogClearedMessage) => void) => void;
 }
 
 // Connect to the dashboard WebSocket (same origin) and auto-reconnect with
@@ -24,6 +26,7 @@ export function useDashboardSocket(): UseDashboardSocket {
 
   const processesRef = useRef<((m: WsProcessesMessage) => void) | null>(null);
   const logRef = useRef<((m: WsLogMessage) => void) | null>(null);
+  const logClearedRef = useRef<((m: WsLogClearedMessage) => void) | null>(null);
 
   // Keep the latest callbacks without touching the socket lifecycle.
   const onProcessesMessage = (cb: (m: WsProcessesMessage) => void) => {
@@ -31,6 +34,9 @@ export function useDashboardSocket(): UseDashboardSocket {
   };
   const onLogMessage = (cb: (m: WsLogMessage) => void) => {
     logRef.current = cb;
+  };
+  const onLogCleared = (cb: (m: WsLogClearedMessage) => void) => {
+    logClearedRef.current = cb;
   };
 
   useEffect(() => {
@@ -66,6 +72,8 @@ export function useDashboardSocket(): UseDashboardSocket {
           processesRef.current?.(msg as WsProcessesMessage);
         } else if (type === "log") {
           logRef.current?.(msg as WsLogMessage);
+        } else if (type === "logCleared") {
+          logClearedRef.current?.(msg as WsLogClearedMessage);
         }
       };
 
@@ -113,7 +121,7 @@ export function useDashboardSocket(): UseDashboardSocket {
     };
   }, []);
 
-  return { status, reconnectInMs, onProcessesMessage, onLogMessage };
+  return { status, reconnectInMs, onProcessesMessage, onLogMessage, onLogCleared };
 }
 
 // Build a ws:// or wss:// URL from the current page origin (dashboard is

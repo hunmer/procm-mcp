@@ -48,6 +48,7 @@ import type {
   ProcessListResponse,
   ProcessView,
   WsLogMessage,
+  WsLogClearedMessage,
 } from "@/lib/types";
 
 export function App() {
@@ -88,7 +89,7 @@ export function App() {
   // Bumped after a bulk log clear so the mounted LogFilesView re-lists.
   const [logFilesReloadKey, setLogFilesReloadKey] = useState(0);
 
-  const { status, reconnectInMs, onProcessesMessage, onLogMessage } =
+  const { status, reconnectInMs, onProcessesMessage, onLogMessage, onLogCleared } =
     useDashboardSocket();
 
   // Whether the log panel is currently open (visible + not collapsed) and
@@ -98,7 +99,7 @@ export function App() {
   const openLogIdRef = useRef<string | null>(null);
   // Forwarder for live log lines to the active LogPanel. The panel registers
   // its callback here; everything else increments the unread counter.
-  const liveLogForwardRef = useRef<((m: WsLogMessage) => void) | null>(null);
+  const liveLogForwardRef = useRef<((m: WsLogMessage | WsLogClearedMessage) => void) | null>(null);
   // On first load, a `?proc=` from the URL waits for the WS row to arrive.
   const initialProcRef = useRef<string | null>(readUrlState().procId);
 
@@ -124,6 +125,14 @@ export function App() {
       liveLogForwardRef.current?.(m);
     } else {
       setUnread((cur) => ({ ...cur, [m.processId]: (cur[m.processId] ?? 0) + 1 }));
+    }
+  });
+
+  onLogCleared((m: WsLogClearedMessage) => {
+    if (m.processId === openLogIdRef.current) {
+      liveLogForwardRef.current?.(m);
+    } else {
+      setUnread((cur) => ({ ...cur, [m.processId]: 0 }));
     }
   });
 

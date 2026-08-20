@@ -8,6 +8,7 @@ import {
   readDashboardAsset,
 } from "./dashboard-html.js";
 import { serverLog, serverId, serverStartedAt } from "./server-log.js";
+import { dashboardEvents } from "./events.js";
 import {
   listProcesses,
   listProcessRecords,
@@ -1016,6 +1017,7 @@ function createRequestHandler(token: string | undefined) {
                   .map((filePath) => writeFile(filePath, "", "utf8")),
               );
             }
+            dashboardEvents.emitLogClear(idParam);
             json(res, 200, { id: idParam, cleared: true });
             return;
           }
