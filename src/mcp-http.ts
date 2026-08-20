@@ -17,6 +17,7 @@ import { registerProcessLogFileTools } from "./tools/process-log-files.js";
 import { registerProcmCommandsTools } from "./tools/procm-commands.js";
 import { registerRoomTools } from "./tools/room.js";
 import { registerTraceTools } from "./tools/trace.js";
+import { registerApiOperationTools } from "./tools/api-operations.js";
 
 // Register every tool onto a fresh McpServer. Called once per request in
 // stateless mode.
@@ -27,6 +28,7 @@ function registerAllTools(server: McpServer) {
   registerProcmCommandsTools(server);
   registerRoomTools(server);
   registerTraceTools(server);
+  registerApiOperationTools(server);
 }
 
 // Build a one-shot McpServer + stateless transport wired together.

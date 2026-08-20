@@ -33,6 +33,9 @@ export interface ProcessListResponse {
   serverId: string;
   pid: number;
   startedAt?: number;
+  // Port the backend HTTP server listens on. Null when the backend hasn't
+  // started one; absent on backends older than this field.
+  port?: number | null;
   processes: ProcessView[];
 }
 
@@ -116,6 +119,8 @@ export interface WsProcessesMessage {
   pid?: number;
   // Wall-clock ms when the backend started; used to compute uptime.
   startedAt?: number;
+  // Port the backend HTTP server listens on. Absent on older backends.
+  port?: number | null;
   data: ProcessView[];
   snapshot?: boolean;
 }

@@ -50,6 +50,12 @@ import { listProcessLogFiles, deleteProcessLogFiles } from "./process-log-files.
 
 const HOST = "127.0.0.1";
 
+// Port the dashboard HTTP server is listening on; null until it starts (or in
+// stdio-only mode). Reported via /api/meta, /api/processes and the WS
+// processes message so a proxied dashboard (e.g. the Vite dev server) can
+// show which backend it actually talks to.
+let httpPort: number | null = null;
+
 function json(res: http.ServerResponse, status: number, body: unknown) {
   const payload = JSON.stringify(body);
   res.writeHead(status, {
@@ -573,6 +579,7 @@ function createRequestHandler(token: string | undefined) {
           pid: process.pid,
           cwd: process.cwd(),
           startedAt: serverStartedAt,
+          port: httpPort,
         });
         return;
       }
@@ -879,6 +886,7 @@ function createRequestHandler(token: string | undefined) {
             serverId,
             pid: process.pid,
             startedAt: serverStartedAt,
+            port: httpPort,
             processes: filtered.map(toPublicRecord),
           });
           return;
@@ -1345,6 +1353,7 @@ export function startHttpServer(port: number): Promise<http.Server> {
     });
 
     server.listen(port, HOST, () => {
+      httpPort = port;
       serverLog(
         `Dashboard HTTP server listening on http://${HOST}:${port}` +
           (token ? " (token protected)" : ""),
@@ -1354,6 +1363,7 @@ export function startHttpServer(port: number): Promise<http.Server> {
         serverId,
         pid: process.pid,
         startedAt: serverStartedAt,
+        port,
       });
       resolve(server);
     });

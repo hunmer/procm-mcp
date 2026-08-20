@@ -110,6 +110,7 @@ export function App() {
       serverId: message.serverId ?? current?.serverId ?? "",
       pid: message.pid ?? current?.pid ?? 0,
       startedAt: message.startedAt ?? current?.startedAt,
+      port: message.port ?? current?.port ?? null,
       processes: message.data,
     }));
     if (message.startedAt != null) setServerStartedAt(message.startedAt);
@@ -413,6 +414,23 @@ export function App() {
                 </TabsList>
               </Tabs>
               <div className="ml-auto flex items-center gap-2">
+                {/* Backend identity: prefer the port the backend itself reports
+                    (accurate behind the Vite dev proxy); fall back to this
+                    page's host for backends that don't report one yet. The
+                    serverId(pid) suffix disambiguates instances even when two
+                    share the same port across restarts. */}
+                {data && (
+                  <Badge
+                    variant="outline"
+                    className="font-mono text-xs"
+                    title={`backend ${
+                      data.port ? `127.0.0.1:${data.port}` : window.location.host
+                    } · serverId ${data.serverId} · pid ${data.pid}`}
+                  >
+                    {data.port ? `127.0.0.1:${data.port}` : window.location.host}{" "}
+                    · {data.serverId}({data.pid})
+                  </Badge>
+                )}
                 {activeTab === "processes" && runningCount > 0 && (
                   <Badge variant="success" className="gap-1.5">
                     <span className="inline-block size-1.5 rounded-full bg-current" />

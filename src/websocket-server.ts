@@ -43,7 +43,7 @@ function toPublicView(p: ProcessRecord) {
 export function attachWebsocketServer(
   server: http.Server,
   token: string | undefined,
-  opts: { serverId: string; pid: number; startedAt: number },
+  opts: { serverId: string; pid: number; startedAt: number; port?: number | null },
 ) {
   const buildProcessesMessage = async (snapshot = false): Promise<string> => {
     const records = await listProcessRecords();
@@ -52,6 +52,7 @@ export function attachWebsocketServer(
       serverId: opts.serverId,
       pid: opts.pid,
       startedAt: opts.startedAt,
+      port: opts.port ?? null,
       data: records.map(toPublicView),
       ...(snapshot ? { snapshot: true } : {}),
     });

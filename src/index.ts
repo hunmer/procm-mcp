@@ -93,6 +93,25 @@ try {
     exitProcess(0);
   }
 
+  // Startup config echo: raw argv + resolved effective settings, so an operator
+  // can confirm how this backend was launched. stderr keeps stdout free for MCP.
+  const startupInfo = {
+    argv: process.argv.slice(2),
+    mode: cli.server ? "http-server" : "stdio",
+    cliPort: Number.isFinite(cli.port) && cli.port > 0 ? cli.port : undefined,
+    envHttpPort: process.env.PROCM_HTTP_PORT,
+    dataDir: process.env.PROCM_MCP_DIR ?? "(cwd default)",
+    cwd: process.cwd(),
+  };
+  const startupLine = JSON.stringify(startupInfo);
+  serverLog(`Startup config: ${startupLine}`);
+  // HTTP mode owns stdout (no MCP protocol on it), so print there and the line
+  // stays clear of the dashboard's [stderr] tag; stdio mode must keep stderr
+  // because stdout there is reserved for the JSON-RPC protocol.
+  (cli.server ? console.log : console.error)(
+    `procm-mcp starting: ${startupLine}`,
+  );
+
   // --server: run as a standalone HTTP backend (no MCP stdio transport).
   // The dashboard is always started; the process stays alive to serve it.
   if (cli.server) {

@@ -28,6 +28,8 @@
     "inspect": "npx @modelcontextprotocol/inspector",
     "start:server": "node ./build/index.js --server",
     "start:server:port": "node ./build/index.js --server --port",
+    "test-procm": "node ./build/index.js --server --port 7332 --data-path .procm-mcp-test",
+    "test-dashboard": "PROCM_DEV_BACKEND=http://127.0.0.1:7332 npm --prefix dashboard run dev -- --port 5178 --strictPort",
     "link": "node ./scripts/link-global.mjs",
     "link:sdk": "node ./scripts/link-sdk.mjs",
     "publish:sdk": "node ./scripts/publish-sdk.mjs",
@@ -36,6 +38,7 @@
     "test:logs": "npm run build && node ./tests/logs-grep.mjs",
     "test:http": "npm run build && node ./tests/http-api.mjs",
     "test:mcp": "npm run build && node ./tests/mcp-http.mjs",
+    "test:log-clear-notification": "node ./tests/log-clear-notification.mjs",
     "test:custom-noise": "npm run build && node ./tests/noisy-custom-execution.mjs",
     "test:cli": "npm run build && node ./tests/cli-roundtrip.mjs",
     "test:trace": "npm run build && node ./tests/trace-memory.mjs"
