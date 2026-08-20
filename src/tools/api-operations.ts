@@ -5,11 +5,13 @@ import { clearProcessLogs } from "../process-log-files.js";
 import { pickDirectory } from "../native-directory.js";
 import { textResult } from "../tool-helpers.js";
 import { toErrorMessage } from "../error.js";
+import { dashboardEvents } from "../events.js";
 
 export function registerApiOperationTools(server: McpServer): void {
   server.tool("clear-process-logs", "Clear stdout and stderr history for a process.", { id: z.string().min(1) }, async ({ id }) => {
     try {
       if (!await clearProcessLogs(id)) return textResult(JSON.stringify({ error: "Process not found" }));
+      dashboardEvents.emitLogClear(id);
       return textResult(JSON.stringify({ id, cleared: true }));
     } catch (error) {
       return textResult(JSON.stringify({ error: toErrorMessage(error) }));
