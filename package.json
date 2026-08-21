@@ -41,7 +41,10 @@
     "test:log-clear-notification": "node ./tests/log-clear-notification.mjs",
     "test:custom-noise": "npm run build && node ./tests/noisy-custom-execution.mjs",
     "test:cli": "npm run build && node ./tests/cli-roundtrip.mjs",
-    "test:trace": "npm run build && node ./tests/trace-memory.mjs"
+    "test:trace": "npm run build && node ./tests/trace-memory.mjs",
+    "example:automation:single": "npm run build:sdk && tsc && node ./examples/automation-testing/single-process/run.mjs",
+    "example:automation:multi": "npm run build:sdk && tsc && node ./examples/automation-testing/multi-process/run.mjs",
+    "example:automation": "npm run build:sdk && tsc && node ./examples/automation-testing/single-process/run.mjs && node ./examples/automation-testing/multi-process/run.mjs"
   },
   "keywords": [],
   "dependencies": {

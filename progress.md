@@ -1,0 +1,25 @@
+# Progress
+
+- 已读取 `code-architecture-research`、`procm-rooms`、`planning-with-files` 技能说明及相关示例。
+- 已通过 CodeGraph 获取 SDK 客户端上下文。
+- 已通过 CodeGraph Explore 核验 SDK 客户端与 Logger 的主要能力。
+- 已确认仓库尚无 `documents/docs/research/` 与 `documents/sidebars.ts`。
+- 已盘点 `tests/`、`demo/` 与 `packages/procm-sdk/` 下的测试和示例文件。
+- 已读取总测试入口、room SDK 测试、trace logger 测试和 custom execution 示例。
+- 已从源码索引/现有工程文档核对 hook、trace、custom execution 与运行时限制。
+- 已核验 `_helpers.mjs` 的隔离测试生命周期和 noisy 双进程联合测试。
+- 已核验持久命令、demo Node/Electron 的 readiness、消息关联、custom execution、日志和 trace 链路。
+- 已新增 `documents/docs/research/automation-testing-strategy.mdx` 和 `documents/sidebars.ts`。
+- `git diff --check` 通过，文档引用的关键源码路径全部存在。
+- 仓库无 `documents/package.json`，没有可执行的 docs build 命令。
+- 新文件尾随空白检查通过；直接 `node --check documents/sidebars.ts` 因扩展名不受支持，改用 stdin ESM 检查。
+- 侧边栏 stdin ESM 语法检查通过，最终静态校验完成。
+- 开始实现 `examples/automation-testing/` 可运行示例。
+- 已完成 example 目录、运行协议和验证输出设计。
+- 已实现共享 runner、单进程示例、多进程示例、README、npm scripts 和研究文档入口。
+- 静态语法检查通过；首次单进程运行在第 4 步等待 `counter:result` 超时，已进入诊断。
+- 已确认 welcome/open/订阅重放竞态并修复 target readiness 时序；失败路径新增进程日志输出。
+- `npm run example:automation:single` 通过，6/6 验证及 cleanup 成功。
+- `npm run example:automation:multi` 通过，6/6 验证及 cleanup 成功。
+- `npm run example:automation` 通过，两个示例合计 12/12 验证及 cleanup 成功。
+- 新增脚本语法、JSON、尾随空白和 `git diff --check` 全部通过，任务完成。
