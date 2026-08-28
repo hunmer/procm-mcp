@@ -1,0 +1,10 @@
+{
+  "name": "procm-room-demo",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install --prefix node-server && pnpm --dir electron-client install && pnpm --dir electron-client rebuild electron",
+    "start:backend": "npm --prefix node-server start",
+    "start:electron": "pnpm --dir electron-client start",
+    "test:custom-execution": "node --env-file=node-server/.env.defaults custom-execution-test.mjs"
+  }
+}

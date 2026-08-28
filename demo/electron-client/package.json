@@ -1,0 +1,14 @@
+{
+  "name": "procm-room-demo-electron",
+  "private": true,
+  "type": "module",
+  "main": "main.js",
+  "scripts": { "start": "node --env-file=.env.defaults ./node_modules/electron/cli.js ." },
+  "dependencies": {
+    "@hunmer/procm-mcp-sdk": "link:../../packages/procm-sdk",
+    "electron": "^37.2.6"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["electron"]
+  }
+}

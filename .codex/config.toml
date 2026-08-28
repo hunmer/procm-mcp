@@ -1,0 +1,29 @@
+# Project-specific Codex configuration
+
+[mcp_servers."procm-mcp"]
+command = "node"
+args = ["./build/index.js"]
+
+[mcp_servers."procm-mcp".tools.start-process]
+approval_mode = "approve"
+
+[mcp_servers."procm-mcp".tools.list-processes]
+approval_mode = "approve"
+
+[mcp_servers."procm-mcp".tools.get-process-info]
+approval_mode = "approve"
+
+[mcp_servers."procm-mcp".tools.get-process-stdout]
+approval_mode = "approve"
+
+[mcp_servers."procm-mcp".tools.get-process-stderr]
+approval_mode = "approve"
+
+[mcp_servers."procm-mcp".tools.restart-process]
+approval_mode = "approve"
+
+[mcp_servers."procm-mcp".tools.delete-process]
+approval_mode = "approve"
+
+[mcp_servers."procm-mcp".tools.get-server-id]
+approval_mode = "approve"

@@ -1,0 +1,7 @@
+{
+  "name": "procm-room-demo-server",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node --env-file=.env.defaults index.js" },
+  "dependencies": { "@hunmer/procm-mcp-sdk": "file:../../packages/procm-sdk" }
+}

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.hunmer/procm-mcp",
+  "title": "Procm",
+  "description": "A Model Context Protocol (MCP) server for process management.",
+  "repository": {
+    "url": "https://github.com/hunmer/procm-mcp",
+    "source": "github"
+  },
+  "version": "0.0.44",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@hunmer/procm-mcp",
+      "version": "0.0.44",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

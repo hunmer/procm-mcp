@@ -1,0 +1,164 @@
+---
+title: 当前自动化测试方案
+---
+
+# 当前自动化测试方案
+
+## 范围
+
+本文基于当前 `tests/`、`demo/` 和 `@hunmer/procm-mcp-sdk` 源码，说明目前可以落地的自动化测试方式。这里的“单进程/多进程”指被测业务进程数量；procm-mcp 后端和测试驱动脚本不计入业务进程。
+
+当前建议保留两类运行形态：
+
+- 自包含回归：测试脚本自行启动随机端口后端，使用独立临时 `PROCM_MCP_DIR`，结束后清理。适合 CI 和稳定复现。
+- 持久化调试：通过 `procm-command` 或 `batch-process` 启动进程，保留进程日志和房间现场。适合开发期联合排障。
+
+## 现有测试基础
+
+| 入口 | 当前作用 |
+| --- | --- |
+| `npm test` | build 后串行执行 `tests/run-all.mjs` 注册的 13 个套件；每套使用独立临时数据目录 |
+| `npm run test:custom-noise` | 启动两个同房间的高噪音进程，验证定向 custom execution 与日志隔离 |
+| `npm run test:trace` | 验证 trace 写入、读取、并发关联、TTL、大小限制、超时和取消 |
+| `node tests/room-sdk.mjs` | 验证房间消息、prefix 订阅、retain、`waitFor`、`correlationId`、日志和批量进程结果；运行前需 build |
+| `node tests/sdk-hook.mjs` | 验证函数/属性 hook、调用链、同步/异步结果和异常语义；运行前需 build |
+| `npm --prefix demo run test:custom-execution` | 在已启动的 Node + Electron demo 上做跨进程白盒验收 |
+
+`tests/_helpers.mjs` 已提供随机端口后端、HTTP/MCP 调用、轮询就绪、断言汇总和清理能力，因此新增自包含测试时可以直接沿用当前无测试框架模式。
+
+## SDK 可用于测试的能力
+
+| 能力 | 用途 | 适合的断言 |
+| --- | --- | --- |
+| `subscribe()` / `publish()` | 精确或前缀 topic 消息 | 事件是否发生、payload 是否正确 |
+| `waitFor()` | 一次性等待，支持 filter、timeout、AbortSignal | 进程就绪、异步任务完成、指定响应到达 |
+| retained message | 保存某 topic 的最新状态供晚到客户端读取 | backend/frontend readiness |
+| `correlationId` | 关联并发请求和响应 | 确认响应属于本次测试触发 |
+| `setupLoggerFromEnv()` / `createLogger()` | 输出可读日志和结构化日志帧 | 错误级别、消息、data、traceId |
+| `subscribeLogs()` | 订阅实时结构化日志 | 运行中的即时失败检测 |
+| `collectLogs()` / `room-logs` | 回收测试时间窗内已落盘日志 | 测试后统一检查跨进程错误 |
+| `createHook()` / `hookProperty()` | 低侵入观察函数调用、参数、结果和异常 | 单进程内部调用链与状态变化 |
+| `saveTrace()` / `getTrace()` | 保存并读取完整诊断数据 | 失败路径、调用链、阶段性上下文 |
+| `exposeCustomExecution()` / `executeCustom()` | 在指定 target 上执行白盒查询 | 读取进程内状态、Electron renderer 状态 |
+| `batch-process` | 有界并发启动或重启多个托管进程 | 多进程环境编排和逐项启动结果 |
+
+## 单进程调试方案
+
+适用于一个 API 服务、worker、CLI 常驻进程或单个 Electron main 进程。
+
+```text
+测试驱动
+  -> 启动隔离的 procm-mcp 后端
+  -> 启动一个带 roomId 的被测进程
+  -> waitFor("target:ready", timeout)
+  -> 通过 HTTP / topic / executeCustom 触发行为
+  -> 断言业务结果 + 结构化日志 + trace
+  -> 停止进程、关闭客户端、停止后端
+```
+
+被测进程的最小接入方式：
+
+```ts
+import {
+  createProcmClient,
+  exposeCustomExecution,
+  setupLoggerFromEnv,
+} from "@hunmer/procm-mcp-sdk";
+
+const client = createProcmClient({ clientName: "orders" });
+const logger = setupLoggerFromEnv({ client, clientName: "orders" });
+
+client.onState((state) => {
+  if (state !== "open") return;
+  exposeCustomExecution(client, {
+    target: "orders",
+    context: { snapshot: () => ({ queueSize: 0 }) },
+  });
+  client.publish("orders:ready", { pid: process.pid }, { retain: true });
+  logger.info("orders ready");
+});
+```
+
+测试驱动按以下顺序执行：
+
+1. 记录 `startedAt`，创建同一 `roomId` 的 SDK client，并等待连接 open。
+2. `waitFor("orders:ready", { timeout })`，避免用固定 sleep 判断服务可用。
+3. 从公开入口触发业务行为；需要进程内断言时，再用 `executeCustom(client, "orders", ...)` 获取最小状态快照。
+4. 使用返回值或公开 API 做主断言；使用 `collectLogs({ startTime: startedAt })`、trace 做诊断断言。
+5. 在 `finally` 中关闭 SDK、停止被测进程和测试后端。
+
+可直接参考 `tests/room-sdk.mjs` 的隔离后端生命周期、`tests/sdk-hook.mjs` 的单函数追踪，以及 `demo/custom-execution-test.mjs` 的白盒状态检查。
+
+## 多进程联合调试方案
+
+适用于 frontend + backend、API + worker、多个微服务，或 Node backend + Electron 的联合流程。
+
+```text
+测试驱动
+  -> batch-process 启动多个进程（相同 roomId，不同 clientName/target）
+  -> 分别等待 backend:ready、frontend:ready、worker:ready
+  -> 携带 correlationId 触发端到端行为
+  -> 各进程通过 topic 交换状态/结果
+  -> executeCustom 定向读取必要的进程内状态
+  -> collectLogs/room-logs 按 room 聚合证据
+  -> 逐项停止所有已成功启动的进程
+```
+
+推荐约定：
+
+- 每次测试生成唯一 `roomId`，例如 `checkout-e2e-<runId>`，避免并发任务互相收到消息。
+- 每个进程使用唯一 `clientName` 和 custom execution target，例如 `api`、`worker`、`frontend`。
+- 每个进程在真实初始化完成后发布独立 retained readiness topic；测试驱动对每个 topic 设置明确超时。
+- 请求和响应统一透传同一个 `correlationId`，并用 filter 只接收本次触发对应的响应。
+- 用公开 API/最终输出作为成功标准；`executeCustom`、日志和 trace 用于补充进程内部证据与失败定位。
+- 记录测试起止时间，通过 `collectLogs()` 或 `room-logs` 聚合该窗口内各托管进程日志，并按 `clientName`、level、traceId 过滤。
+- `batch-process` 是 best-effort，没有事务回滚。必须检查每一项 `ok/error`，并清理所有已成功启动的进程。
+
+当前最完整的参考是 `tests/noisy-custom-execution.mjs`：它在一个房间中启动 `noisy-alpha`、`noisy-beta` 两个托管进程，分别执行定向白盒调用，同时证明高频 stdout/stderr 不会污染 RPC 结果。`demo/node-server/index.js` 与 `demo/electron-client/main.js` 则展示了 retained readiness、请求响应关联、跨 Electron renderer 状态读取、结构化日志和 hook trace 的组合方式。
+
+## 建议的断言分层
+
+1. 主断言：HTTP/CLI/UI 可观察结果，确认用户行为成功。
+2. 协同断言：room topic、payload、`correlationId`，确认进程间协议正确。
+3. 状态断言：`executeCustom` 返回的最小快照，确认目标进程内部状态。
+4. 诊断断言：结构化日志与 trace，确认调用路径或解释失败原因。
+
+主断言不应只依赖日志文本；日志和 trace 更适合作为失败证据，避免实现细节变化导致大量脆弱测试。
+
+## 当前限制
+
+- `publish()` 只能在连接 open 后调用；`subscribe()`/`waitFor()` 可以提前注册。所有等待都必须设置 timeout 或 AbortSignal。
+- 普通 room message 不持久化；retained 只保存每个 room/topic 的最后一条，并在 procm-mcp 重启后消失。
+- `room-logs` 的历史数据来自托管进程 stdout/stderr 文件。仅使用 SDK 接入、但未由 procm 管理的外部进程没有可回收的持久日志。
+- trace 存于当前 procm-mcp 实例的内存 LRU，默认 24 小时、单条最大 256 KiB、总量 64 MiB；重启清空，跨实例不共享。
+- `custom-execution` 会在目标端 `eval` 测试驱动发送的函数源码，等价于远程代码执行。只能在带鉴权、完全受信任的本地测试房间启用。
+- `createHook` 的 before/after handler 必须同步；参数和结果采集默认关闭，避免改变业务语义或意外采集敏感数据。
+- 当前 `tests/run-all.mjs` 串行运行套件，不提供跨套件并行调度；SDK package 本身也没有独立 test script，实际覆盖位于根 `tests/`。
+
+## 推荐落地顺序
+
+1. 先把新增场景写成 `tests/<scenario>.mjs` 自包含测试，复用 `_helpers.mjs`，加入 `run-all.mjs`。
+2. 单进程先接入 readiness + Logger；确有进程内断言需求时再增加 hook/trace 或 custom execution。
+3. 多进程统一 roomId、target、readiness topic 和 correlationId 命名，再增加 `batch-process` 编排。
+4. 对必须人工观察或需保留现场的场景，在 `procm-commands.json` 增加命名命令，作为持久化调试入口，不替代自包含回归。
+
+## 可运行示例
+
+仓库已提供 `examples/automation-testing/`：
+
+- `npm run example:automation:single`：运行单进程调试示例。
+- `npm run example:automation:multi`：运行多进程联合调试示例。
+- `npm run example:automation`：构建一次并顺序运行两个示例。
+
+示例使用随机端口和短生命周期数据目录，不依赖或修改持久化调试服务。每个步骤输出明确的 `PASS/FAIL`、关键验证数据和最终清理结果。
+
+## 关键源码
+
+- `tests/_helpers.mjs`：隔离后端、HTTP/MCP 客户端和测试生命周期。
+- `tests/room-sdk.mjs`：房间、retain、custom execution、日志和 batch 的端到端覆盖。
+- `tests/noisy-custom-execution.mjs`：双进程联合调试参考。
+- `packages/procm-sdk/src/client.ts`：连接、消息、`waitFor`、成员状态和重连。
+- `packages/procm-sdk/src/logger.ts`：实时/历史结构化日志。
+- `packages/procm-sdk/src/custom-execution.ts`：定向白盒执行及其信任边界。
+- `packages/procm-sdk/src/hook.ts`、`packages/procm-sdk/src/trace.ts`：函数观测和 trace。
+- `procm-commands.json`：当前持久化调试进程定义。

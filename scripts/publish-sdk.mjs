@@ -1,0 +1,29 @@
+#!/usr/bin/env node
+
+import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const sdkDir = resolve(here, "..", "packages", "procm-sdk");
+const rawArgs = process.argv.slice(2);
+const skipBuild = rawArgs.includes("--no-build");
+const publishArgs = rawArgs.filter((arg) => arg !== "--no-build");
+const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+
+function run(args) {
+  const result = spawnSync(npm, args, { cwd: sdkDir, stdio: "inherit" });
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}
+
+if (!skipBuild) run(["run", "build"]);
+
+const entry = resolve(sdkDir, "dist", "index.js");
+if (!existsSync(entry)) {
+  console.error(`Expected SDK build output not found: ${entry}`);
+  console.error("Run without --no-build or build @hunmer/procm-mcp-sdk first.");
+  process.exit(1);
+}
+
+run(["publish", "--access", "public", ...publishArgs]);

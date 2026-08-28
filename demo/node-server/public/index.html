@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>procm backend console</title>
+    <style>
+      :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #101114; color: #f1f3f5; }
+      * { box-sizing: border-box; }
+      body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: #101114; }
+      header { flex: none; min-height: 76px; padding: 14px 24px; border-bottom: 1px solid #2a2d33; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: #15171b; }
+      h1, h2, p { margin: 0; letter-spacing: 0; }
+      h1 { font-size: 18px; font-weight: 650; }
+      header p { margin-top: 4px; color: #8e949d; font: 12px/1.3 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
+      .connection { display: flex; align-items: center; gap: 8px; color: #b8bdc5; font-size: 13px; white-space: nowrap; }
+      #status-dot { width: 8px; height: 8px; border-radius: 50%; background: #e6a23c; box-shadow: 0 0 0 3px rgba(230,162,60,.12); }
+      #status-dot.open { background: #38c172; box-shadow: 0 0 0 3px rgba(56,193,114,.12); }
+      #status-dot.closed { background: #e05252; box-shadow: 0 0 0 3px rgba(224,82,82,.12); }
+      main.layout { flex: 1; min-height: 0; display: grid; grid-template-columns: 240px minmax(0, 1.25fr) minmax(300px, 1fr); }
+      button { min-height: 34px; padding: 0 13px; border: 1px solid #3d67d8; border-radius: 6px; background: #315cc9; color: white; font: 600 12px/1 system-ui, sans-serif; cursor: pointer; }
+      button:hover { background: #3a68df; }
+      button:disabled { cursor: wait; opacity: .65; }
+      button:focus-visible { outline: 2px solid #8eafff; outline-offset: 2px; }
+      button.secondary { border-color: #383c44; background: #202329; color: #c7cbd2; }
+      button.secondary:hover { background: #2a2e35; }
+      button.small { min-height: 26px; padding: 0 10px; font-size: 11px; }
+      .actions { border-right: 1px solid #272a30; overflow-y: auto; padding: 16px 14px; }
+      .action-group { margin-bottom: 18px; }
+      .action-group:last-child { margin-bottom: 0; }
+      .action-group h3 { margin: 0 0 8px; font: 600 11px/1 system-ui, sans-serif; color: #858b95; text-transform: uppercase; letter-spacing: .08em; }
+      .action-group button { display: block; width: 100%; margin-bottom: 8px; text-align: left; }
+      .action-group button:last-child { margin-bottom: 0; }
+      .results, .console-panel { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+      .console-panel { border-left: 1px solid #272a30; }
+      .panel-head { flex: none; min-height: 46px; padding: 8px 18px; border-bottom: 1px solid #272a30; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+      .panel-head h2 { font-size: 13px; }
+      .panel-head .live { color: #4ed184; font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; text-transform: uppercase; }
+      .group-list { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 18px 24px; }
+      .group { border: 1px solid #2a2d33; border-radius: 8px; background: #15171b; margin-bottom: 12px; }
+      .group-head { display: flex; align-items: baseline; gap: 10px; padding: 10px 14px; border-bottom: 1px solid #202329; }
+      .group-head .gid { color: #8fb1ff; font: 600 11px ui-monospace, SFMono-Regular, Consolas, monospace; }
+      .group-head b { font-size: 12.5px; }
+      .group-head time { margin-left: auto; color: #656c76; font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; }
+      .group-head .gstatus { color: #858b95; font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; }
+      .copy-btn { flex: none; align-self: center; min-height: 22px; width: 26px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #383c44; border-radius: 5px; background: transparent; color: #8e949d; cursor: pointer; }
+      .copy-btn:hover { background: #202329; color: #c7cbd2; }
+      .copy-btn.copied { color: #38c172; border-color: #2c5a41; }
+      .copy-btn svg { width: 13px; height: 13px; }
+      .group-body { padding: 4px 14px 12px; }
+      .group-body pre { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; color: #c9cdd4; font: 12px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; }
+      .group-items { list-style: none; margin: 0; padding: 0; }
+      .group-items li { display: block; padding: 8px 0; border-bottom: 1px solid #202329; font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
+      .group-items li:last-child { border-bottom: 0; }
+      .msg-head { display: flex; align-items: center; gap: 10px; }
+      .msg-head time { color: #656c76; font-size: 11px; }
+      .msg-head b { color: #73a1ff; font-weight: 600; overflow-wrap: anywhere; }
+      .group-items pre { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; color: #c9cdd4; font: inherit; }
+      #logs { flex: 1; min-height: 0; overflow-y: auto; margin: 0; padding: 6px 18px 16px; list-style: none; font: 12px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; }
+      #logs li { display: flex; gap: 10px; align-items: baseline; padding: 3px 0; border-bottom: 1px solid #1c1f24; }
+      #logs li:last-child { border-bottom: 0; }
+      #logs time { flex: none; color: #6d737d; font-size: 11px; }
+      #logs b { flex: none; min-width: 52px; font-size: 11px; text-transform: uppercase; }
+      #logs b.debug { color: #7aa2f7; } #logs b.info { color: #38c172; }
+      #logs b.warn { color: #e6a23c; } #logs b.error { color: #e05252; }
+      #logs code { min-width: 0; color: #c9cdd4; overflow-wrap: anywhere; white-space: pre-wrap; }
+      @media (max-width: 980px) {
+        body { height: auto; min-height: 100vh; }
+        main.layout { grid-template-columns: 1fr; }
+        .actions { display: flex; gap: 16px; border-right: 0; border-bottom: 1px solid #272a30; overflow: visible; }
+        .action-group { margin: 0; min-width: 150px; }
+        .results { border-bottom: 1px solid #272a30; min-height: 320px; }
+        .console-panel { border-left: 0; min-height: 260px; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>Backend console</h1>
+        <p id="identity">Connecting...</p>
+      </div>
+      <div class="connection"><span id="status-dot"></span><span id="status">connecting</span></div>
+    </header>
+    <main class="layout">
+      <aside class="actions" aria-label="Trigger actions">
+        <div class="action-group">
+          <h3>数据</h3>
+          <button id="load-electron" type="button">获取 Electron 数据</button>
+        </div>
+        <div class="action-group">
+          <h3>Trace</h3>
+          <button id="hook-trace" type="button">生成 Hook Trace</button>
+        </div>
+      </aside>
+      <section class="results" aria-label="Trigger results">
+        <div class="panel-head"><h2>触发结果</h2><button id="clear" class="secondary small" type="button">清空</button></div>
+        <div id="groups" class="group-list"></div>
+      </section>
+      <section class="console-panel" aria-label="Backend console">
+        <div class="panel-head"><h2>Backend console</h2><span class="live">live · 持续追加</span></div>
+        <ol id="logs"></ol>
+      </section>
+    </main>
+    <script>
+      // ---- trigger groups ------------------------------------------------
+      // Every button click starts a numbered group; responses of that trigger
+      // land inside the group card. Groups are kept until cleared manually.
+      let groupSeq = 0;
+      const COPY_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5v-2A1.5 1.5 0 0 0 9 2H4A1.5 1.5 0 0 0 2.5 3.5V9A1.5 1.5 0 0 0 4 10.5h1.5"/></svg>';
+      const CHECK_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 8.5 6.5 12 13 4.5"/></svg>';
+      function copyButton(getText) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "copy-btn";
+        button.title = "复制 JSON";
+        button.innerHTML = COPY_ICON;
+        button.addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(getText());
+            button.classList.add("copied");
+            button.innerHTML = CHECK_ICON;
+            setTimeout(() => {
+              button.classList.remove("copied");
+              button.innerHTML = COPY_ICON;
+            }, 1200);
+          } catch { /* clipboard unavailable in this context */ }
+        });
+        return button;
+      }
+      function startGroup(title) {
+        groupSeq += 1;
+        const group = document.createElement("article");
+        group.className = "group";
+        const head = document.createElement("div");
+        head.className = "group-head";
+        const gid = document.createElement("span");
+        gid.className = "gid";
+        gid.textContent = `#${groupSeq}`;
+        const name = document.createElement("b");
+        name.textContent = title;
+        const time = document.createElement("time");
+        time.textContent = new Date().toLocaleTimeString();
+        const status = document.createElement("span");
+        status.className = "gstatus";
+        status.textContent = "pending";
+        const body = document.createElement("div");
+        body.className = "group-body";
+        head.append(gid, name, time, copyButton(() => body.textContent), status);
+        group.append(head, body);
+        document.querySelector("#groups").prepend(group);
+        return { status, body };
+      }
+      function finishGroup(ctx, label, value) {
+        ctx.status.textContent = label;
+        const pre = document.createElement("pre");
+        pre.textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+        ctx.body.replaceChildren(pre);
+      }
+      async function runAction(selector, title, action) {
+        const button = document.querySelector(selector);
+        button.disabled = true;
+        const ctx = startGroup(title);
+        try {
+          await action(ctx);
+        } catch (error) {
+          finishGroup(ctx, "error", String(error));
+        } finally {
+          button.disabled = false;
+        }
+      }
+      document.querySelector("#clear").addEventListener("click", () => document.querySelector("#groups").replaceChildren());
+
+      document.querySelector("#load-electron").addEventListener("click", () =>
+        runAction("#load-electron", "获取 Electron 数据", async (ctx) => {
+          const response = await fetch("/api/electron-data");
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+          finishGroup(ctx, "ok", result.electron);
+        }),
+      );
+      document.querySelector("#hook-trace").addEventListener("click", () =>
+        runAction("#hook-trace", "生成 Hook Trace", async (ctx) => {
+          const response = await fetch("/api/hook-trace");
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+          finishGroup(ctx, result.detail?.error ? "error" : "ok", result);
+        }),
+      );
+
+      // ---- backend console -------------------------------------------------
+      // Incremental polling by sequence number, appended to a scrollable list
+      // and never cleared. Auto-scroll sticks to the bottom only while the
+      // user is already at the bottom.
+      let logCursor = 0;
+      function appendLogEntries(entries) {
+        const list = document.querySelector("#logs");
+        const stick = list.scrollTop + list.clientHeight >= list.scrollHeight - 24;
+        for (const entry of entries) {
+          const row = document.createElement("li");
+          const time = document.createElement("time");
+          time.textContent = new Date(entry.timestamp ?? Date.now()).toLocaleTimeString();
+          const level = document.createElement("b");
+          level.textContent = entry.level ?? "info";
+          level.className = level.textContent;
+          const body = document.createElement("code");
+          const trace = entry.traceId ? `  [trace ${entry.traceId}]` : "";
+          body.textContent = `${entry.message ?? ""}${entry.data === undefined ? "" : ` ${JSON.stringify(entry.data)}`}${trace}`;
+          row.append(time, level, body);
+          list.appendChild(row);
+        }
+        if (stick) list.scrollTop = list.scrollHeight;
+      }
+      async function pollLogs() {
+        try {
+          const response = await fetch(`/api/logs?after=${logCursor}`);
+          const result = await response.json();
+          if (!Array.isArray(result.logs) || result.logs.length === 0) return;
+          logCursor = result.logs[result.logs.length - 1].seq;
+          appendLogEntries(result.logs);
+        } catch { /* retry on the next tick */ }
+      }
+      pollLogs();
+      setInterval(pollLogs, 1500);
+
+      fetch("/api/snapshot").then((response) => response.json()).then((snapshot) => {
+        document.querySelector("#identity").textContent = `${snapshot.roomId} / ${snapshot.memberId}`;
+        document.querySelector("#status").textContent = snapshot.state;
+        document.querySelector("#status-dot").className = snapshot.state;
+      });
+    </script>
+  </body>
+</html>

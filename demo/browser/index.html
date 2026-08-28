@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>procm-mcp browser SDK demo</title>
+  <style>
+    :root { color-scheme: dark; font: 16px/1.5 system-ui, sans-serif; }
+    body { max-width: 760px; margin: 40px auto; padding: 0 20px; background: #111827; color: #e5e7eb; }
+    button, input { font: inherit; padding: 8px 10px; border-radius: 6px; border: 1px solid #374151; background: #1f2937; color: inherit; }
+    button { cursor: pointer; background: #2563eb; border-color: #3b82f6; }
+    label { display: grid; gap: 6px; margin: 12px 0; }
+    #log { min-height: 180px; padding: 12px; white-space: pre-wrap; background: #030712; border-radius: 6px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <h1>procm-mcp browser SDK</h1>
+  <label>Room ID <input id="room" value="room-demo"></label>
+  <label>WebSocket URL <input id="url" value="ws://127.0.0.1:7331/room"></label>
+  <button id="connect">Connect</button>
+  <button id="sample" disabled>Write sample log</button>
+  <p id="status">Disconnected</p>
+  <pre id="log"></pre>
+  <script type="module">
+    import { createProcmClient, setupLogger } from '../../packages/procm-sdk/dist/browser.js';
+
+    const status = document.querySelector('#status');
+    const output = document.querySelector('#log');
+    const connect = document.querySelector('#connect');
+    const sample = document.querySelector('#sample');
+    let logger;
+
+    const append = (line) => { output.textContent += `${line}\n`; output.scrollTop = output.scrollHeight; };
+    connect.onclick = () => {
+      const client = createProcmClient({
+        roomId: document.querySelector('#room').value.trim(),
+        url: document.querySelector('#url').value.trim(),
+        clientName: 'browser-demo',
+      });
+      logger = setupLogger({ client, clientName: 'browser-demo', onLog: (entry) => append(`[${entry.level}] ${entry.message}`) });
+      client.onState((state) => {
+        status.textContent = `Connection: ${state}`;
+        sample.disabled = state !== 'open';
+      });
+      sample.onclick = () => logger.info('Browser sample log', { at: new Date().toISOString() });
+    };
+  </script>
+</body>
+</html>

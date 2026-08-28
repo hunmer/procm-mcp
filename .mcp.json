@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "procm-mcp": {
+      "command": "node",
+      "args": ["./build/index.js", "--secure"],
+      "env": {}
+    }
+  }
+}

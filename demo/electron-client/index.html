@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>procm room console</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>Room console</h1>
+        <p id="identity">Connecting...</p>
+      </div>
+      <div class="connection"><span id="status-dot"></span><span id="status">connecting</span></div>
+    </header>
+    <main class="layout">
+      <aside class="actions" aria-label="Trigger actions">
+        <div class="action-group">
+          <h3>Room</h3>
+          <button id="wait-ready" type="button">Wait for backend</button>
+          <button id="ping" type="button">Send ping</button>
+        </div>
+        <div class="action-group">
+          <h3>Logs</h3>
+          <button id="sample-logs" type="button">Emit log sample</button>
+        </div>
+        <div class="action-group">
+          <h3>Trace</h3>
+          <button id="hook-trace" type="button">Emit hook trace</button>
+        </div>
+      </aside>
+      <section class="results" aria-label="Trigger results">
+        <div class="panel-head"><h2>Trigger results</h2><button id="clear" class="secondary small" type="button">Clear</button></div>
+        <div id="groups" class="group-list"></div>
+      </section>
+      <section class="console-panel" aria-label="Project console">
+        <div class="panel-head"><h2>Console</h2><span class="live">live · never cleared</span></div>
+        <ol id="console"></ol>
+      </section>
+    </main>
+    <!-- Hidden selector target queried by the backend's custom execution demo. -->
+    <span id="ui-value" hidden>electron-demo-value</span>
+    <script src="renderer.js"></script>
+  </body>
+</html>

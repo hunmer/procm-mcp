@@ -1,0 +1,73 @@
+{
+  "type": "module",
+  "version": "0.0.44",
+  "name": "@hunmer/procm-mcp",
+  "mcpName": "io.github.hunmer/procm-mcp",
+  "description": "A Model Context Protocol (MCP) server for process management.",
+  "author": "Katsuyuki Oeda <coder.ka.issues@gmail.com>",
+  "repository": "hunmer/procm-mcp",
+  "license": "MIT",
+  "bin": {
+    "procm-mcp": "./build/index.js"
+  },
+  "files": [
+    "build",
+    "dashboard/dist"
+  ],
+  "main": "index.js",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build:sdk && npm run sync:demos && npm run build:dashboard && tsc",
+    "verify:package": "node ./scripts/verify-package.mjs",
+    "prepare": "npm run build",
+    "prepack": "npm run build && npm run verify:package",
+    "build:sdk": "npm --prefix packages/procm-sdk run build && npm --prefix packages/procm-sdk run build:browser",
+    "sync:demos": "pnpm -C demo/electron-client install",
+    "watch": "tsc -w",
+    "build:dashboard": "npm --prefix dashboard run build",
+    "dev:dashboard": "npm --prefix dashboard run dev",
+    "inspect": "npx @modelcontextprotocol/inspector",
+    "start:server": "node ./build/index.js --server",
+    "start:server:port": "node ./build/index.js --server --port",
+    "test-procm": "node ./build/index.js --server --port 7332 --data-path .procm-mcp-test",
+    "test-dashboard": "PROCM_DEV_BACKEND=http://127.0.0.1:7332 npm --prefix dashboard run dev -- --port 5178 --strictPort",
+    "link": "node ./scripts/link-global.mjs",
+    "link:sdk": "node ./scripts/link-sdk.mjs",
+    "publish:sdk": "node ./scripts/publish-sdk.mjs",
+    "test": "npm run build && node ./tests/run-all.mjs",
+    "test:lifecycle": "npm run build && node ./tests/lifecycle.mjs",
+    "test:logs": "npm run build && node ./tests/logs-grep.mjs",
+    "test:http": "npm run build && node ./tests/http-api.mjs",
+    "test:mcp": "npm run build && node ./tests/mcp-http.mjs",
+    "test:log-clear-notification": "node ./tests/log-clear-notification.mjs",
+    "test:custom-noise": "npm run build && node ./tests/noisy-custom-execution.mjs",
+    "test:cli": "npm run build && node ./tests/cli-roundtrip.mjs",
+    "test:trace": "npm run build && node ./tests/trace-memory.mjs",
+    "example:automation:single": "npm run build:sdk && tsc && node ./examples/automation-testing/single-process/run.mjs",
+    "example:automation:multi": "npm run build:sdk && tsc && node ./examples/automation-testing/multi-process/run.mjs",
+    "example:automation": "npm run build:sdk && tsc && node ./examples/automation-testing/single-process/run.mjs && node ./examples/automation-testing/multi-process/run.mjs"
+  },
+  "keywords": [],
+  "dependencies": {
+    "@hunmer/procm-mcp-sdk": "^0.1.0",
+    "@modelcontextprotocol/sdk": "^1.12.3",
+    "find-process": "^2.1.1",
+    "get-ports-natively": "^1.0.13",
+    "lowdb": "^7.0.1",
+    "lru-cache": "11.5.2",
+    "mkdirp": "^3.0.1",
+    "nanoid": "^5.1.5",
+    "ps-list": "^9.0.0",
+    "tree-kill": "^1.2.2",
+    "ws": "^8.21.1",
+    "zod": "^3.25.64"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/inspector": "^1.0.1",
+    "@types/node": "^24.0.1",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.8.3"
+  }
+}

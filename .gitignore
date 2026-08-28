@@ -1,0 +1,11 @@
+node_modules
+build
+settings.local.json
+dashboard/node_modules
+dashboard/dist
+.procm-mcp-data
+.procm-mcp/
+.tmp-cli-out.txt
+.procm-mcp/processes.json
+.procm-mcp-test/
+projects/

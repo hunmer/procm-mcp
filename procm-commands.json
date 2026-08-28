@@ -1,0 +1,40 @@
+{
+  "commands": {
+    "procm-mcp": {
+      "script": "node",
+      "args": ["build/index.js", "--server", "--port", "7332", "--data-path", ".procm-mcp-data"],
+      "group": "procm-mcp",
+      "desc": "Start the current project's procm-mcp backend on port 7332"
+    },
+    "dashboard": {
+      "script": "npm",
+      "args": ["run", "dev"],
+      "cwd": "dashboard",
+      "envs": {
+        "PROCM_DEV_BACKEND": "http://127.0.0.1:7332"
+      },
+      "group": "procm-mcp",
+      "desc": "Start the dashboard development server"
+    },
+    "demo-node-server": {
+      "script": "pnpm",
+      "args": ["start"],
+      "cwd": "demo/node-server",
+      "envs": {
+        "PROCM_WS_URL": "ws://127.0.0.1:7332/room",
+        "PROCM_DEMO_WS_URL": "ws://127.0.0.1:7332/room"
+      },
+      "desc": "Start the demo Node.js server"
+    },
+    "demo-electron-client": {
+      "script": "pnpm",
+      "args": ["start"],
+      "cwd": "demo/electron-client",
+      "envs": {
+        "PROCM_WS_URL": "ws://127.0.0.1:7332/room",
+        "PROCM_DEMO_WS_URL": "ws://127.0.0.1:7332/room"
+      },
+      "desc": "Start the demo Electron client"
+    }
+  }
+}
