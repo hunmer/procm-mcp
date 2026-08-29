@@ -307,6 +307,24 @@ export function LogPanel({ process, entries: externalEntries, roomMode = false, 
     return () => el.removeEventListener("scroll", onScroll);
   }, []);
 
+  // Ctrl/Cmd+F focuses the search box while the panel is open, overriding the
+  // browser's own find bar. The header's search input is the only <input>
+  // inside the panel's <header>.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "f") return;
+      const input = asideRef.current?.querySelector<HTMLInputElement>(
+        "header input",
+      );
+      if (!input) return;
+      e.preventDefault();
+      input.focus();
+      input.select();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   // Re-enabling auto-scroll snaps the view back to the bottom right away and
   // restores the stick-to-bottom tracking that had been released on pause.
   useEffect(() => {

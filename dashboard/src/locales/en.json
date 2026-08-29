@@ -200,7 +200,11 @@
     "portFind": "Find",
     "invalidPortToast": "Enter a port between 1 and 65535",
     "portNotFoundToast": "No process is listening on port {{port}}",
-    "portLookupFailedToast": "Port lookup failed: {{error}}"
+    "portLookupFailedToast": "Port lookup failed: {{error}}",
+    "filterNameLabel": "Name",
+    "filterPathLabel": "Path",
+    "filterCmdLabel": "Command line",
+    "clearFilter": "Clear filter"
   },
   "logs": {
     "panelTitle": "Logs: {{name}}",
@@ -302,7 +306,17 @@
     "snippetNo": "no",
     "snippetExit": "exit",
     "snippetClear": "clear",
-    "filterByLevel": "Filter level: {{level}}"
+    "filterByLevel": "Filter level: {{level}}",
+    "filterLevel": "Level",
+    "filterClient": "Client",
+    "filterAll": "All",
+    "clearFilterAria": "Clear filter",
+    "selectLevelsAria": "Select levels",
+    "selectClientsAria": "Select clients",
+    "searchLevels": "Search levels...",
+    "searchClients": "Search clients...",
+    "noLevelsFound": "No levels found.",
+    "noClientsFound": "No clients found."
   },
   "dialogs": {
     "newProcess": {

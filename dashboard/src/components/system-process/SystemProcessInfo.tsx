@@ -7,9 +7,10 @@ import { exePathOfRow } from "./utils";
 
 // The read-only process info body rendered inside the "View info" dialog and
 // the right-hand panel. A definition-list grid of the row's shared identity
-// fields (the long path value gets a copy button). Merged rows replace the
-// single PID/command entries with a brief per-member list — pid + command
-// line, the only fields that differ within a group — kept action-free.
+// fields — every value is right-aligned and gets a copy button revealed on
+// row hover. Merged rows replace the single PID/command entries with a brief
+// per-member list — pid + command line, the only fields that differ within a
+// group — with the same hover-to-copy affordance on the command.
 export function SystemProcessInfo({
   row,
   onCopy,
@@ -24,7 +25,12 @@ export function SystemProcessInfo({
   return (
     <div className="flex flex-col gap-1 py-1 p-3">
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2.5 text-sm">
-        <InfoRow label={t("system.colName")}>
+        <InfoRow
+          label={t("system.colName")}
+          copyValue={row.name}
+          copyLabel={t("common.copy")}
+          onCopy={onCopy}
+        >
           <span className="font-medium">{row.name}</span>
           {protectedPid && (
             <Badge variant="outline" size="sm" className="ml-2">
@@ -32,33 +38,55 @@ export function SystemProcessInfo({
             </Badge>
           )}
         </InfoRow>
-        <InfoRow label={t("system.colPid")} mono={!merged}>
+        <InfoRow
+          label={t("system.colPid")}
+          mono={!merged}
+          copyValue={
+            merged
+              ? row.members.map((m) => String(m.pid)).join(", ")
+              : String(row.pid)
+          }
+          copyLabel={t("common.copy")}
+          onCopy={onCopy}
+        >
           {merged
             ? t("system.groupCount", { count: row.members.length })
             : String(row.pid)}
         </InfoRow>
-        <InfoRow label={t("system.colPpid")} mono>
+        <InfoRow
+          label={t("system.colPpid")}
+          mono
+          copyValue={String(row.ppid)}
+          copyLabel={t("common.copy")}
+          onCopy={onCopy}
+        >
           {String(row.ppid)}
         </InfoRow>
-        <InfoRow label={t("system.colPath")}>
+        <InfoRow
+          label={t("system.colPath")}
+          copyValue={exe ?? undefined}
+          copyLabel={t("system.copyPath")}
+          onCopy={onCopy}
+        >
           {exe ? (
-            <CopyableText
-              value={exe}
-              onCopy={() => onCopy(exe, t("system.colPath"))}
-              copyLabel={t("system.copyPath")}
-            />
+            <code className="bg-muted block w-full break-all rounded px-2 py-1 text-right font-mono text-xs">
+              {exe}
+            </code>
           ) : (
             <span className="text-muted-foreground/50 text-xs">—</span>
           )}
         </InfoRow>
         {!merged && (
-          <InfoRow label={t("system.colCommand")}>
+          <InfoRow
+            label={t("system.colCommand")}
+            copyValue={row.cmd ?? undefined}
+            copyLabel={t("system.copyCommand")}
+            onCopy={onCopy}
+          >
             {row.cmd ? (
-              <CopyableText
-                value={row.cmd}
-                onCopy={() => onCopy(row.cmd as string, t("system.colCommand"))}
-                copyLabel={t("system.copyCommand")}
-              />
+              <code className="bg-muted block w-full break-all rounded px-2 py-1 text-right font-mono text-xs">
+                {row.cmd}
+              </code>
             ) : (
               <span className="text-muted-foreground/50 text-xs">—</span>
             )}
@@ -71,7 +99,7 @@ export function SystemProcessInfo({
             {t("system.groupMembers")}
           </div>
           {row.members.map((m) => (
-            <div key={m.pid} className="flex items-center gap-2 text-xs">
+            <div key={m.pid} className="group flex items-center gap-2 text-xs">
               <span className="text-muted-foreground shrink-0 font-mono tabular-nums">
                 {m.pid}
               </span>
@@ -85,7 +113,7 @@ export function SystemProcessInfo({
                 <Button
                   size="icon-sm"
                   variant="ghost"
-                  className="text-muted-foreground shrink-0"
+                  className="text-muted-foreground shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
                   aria-label={t("system.copyCommand")}
                   title={t("system.copyCommand")}
                   onClick={() =>
@@ -103,53 +131,47 @@ export function SystemProcessInfo({
   );
 }
 
-// A label/value row in the info grid. `mono` renders the value in a monospace
-// face (used for numeric PIDs).
+// A label/value row in the info grid. The value is right-aligned; when
+// `copyValue` is set, a copy button appears beside it on row hover (kept in
+// place with opacity so the layout never shifts). `mono` renders the value in
+// a monospace face (used for numeric PIDs).
 function InfoRow({
   label,
   mono,
+  copyValue,
+  copyLabel,
+  onCopy,
   children,
 }: {
   label: string;
   mono?: boolean;
+  copyValue?: string;
+  copyLabel: string;
+  onCopy: (value: string, label: string) => void;
   children: React.ReactNode;
 }) {
   return (
     <>
       <dt className="text-muted-foreground pt-0.5 whitespace-nowrap">{label}</dt>
-      <dd className={mono ? "font-mono text-xs tabular-nums" : undefined}>
-        {children}
+      <dd
+        className={`group flex items-start justify-end gap-1 ${
+          mono ? "font-mono text-xs tabular-nums" : ""
+        }`}
+      >
+        <div className="min-w-0 flex-1 text-right">{children}</div>
+        {copyValue && (
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            className="text-muted-foreground -mt-1 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+            aria-label={copyLabel}
+            title={copyLabel}
+            onClick={() => onCopy(copyValue, label)}
+          >
+            <CopyIcon />
+          </Button>
+        )}
       </dd>
     </>
-  );
-}
-
-// A long, copyable value: monospace, wraps with break-all, with a trailing
-// copy icon button so paths/commands can be grabbed verbatim.
-function CopyableText({
-  value,
-  onCopy,
-  copyLabel,
-}: {
-  value: string;
-  onCopy: () => void;
-  copyLabel: string;
-}) {
-  return (
-    <div className="flex items-start gap-1.5">
-      <code className="bg-muted block min-w-0 flex-1 break-all rounded px-2 py-1 font-mono text-xs">
-        {value}
-      </code>
-      <Button
-        size="icon-sm"
-        variant="ghost"
-        className="text-muted-foreground shrink-0"
-        aria-label={copyLabel}
-        title={copyLabel}
-        onClick={onCopy}
-      >
-        <CopyIcon />
-      </Button>
-    </div>
   );
 }

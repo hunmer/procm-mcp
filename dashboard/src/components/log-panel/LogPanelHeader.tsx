@@ -9,8 +9,8 @@ import {
 } from "lucide-react";
 import { CopyIconButton } from "@/components/CopyIconButton";
 import { deviceColor } from "../TerminalLog";
+import { FilterGroup } from "@/components/FilterGroup";
 import { Button } from "@/registry/default/ui/button";
-import { Badge } from "@/registry/default/ui/badge";
 import { Input } from "@/registry/default/ui/input";
 import { Slider } from "@/registry/default/ui/slider";
 import { LEVEL_FILTERS } from "./constants";
@@ -18,8 +18,8 @@ import { LogPanelViewSettings } from "./LogPanelViewSettings";
 import type { FontSize, LevelFilter } from "./types";
 
 // The panel header: title + id row with run/restart/stop controls, the search
-// box, the grep context-lines slider and the structured-level quick filter
-// (with the view-settings popover pinned to its right). Stateless — all
+// box, the grep context-lines slider and the level/client quick filters
+// (with the view-settings popover pinned after them). Stateless — all
 // values/setters come in as props so LogPanel owns the state.
 export function LogPanelHeader({
   processName,
@@ -213,41 +213,61 @@ export function LogPanelHeader({
         </div>
       )}
 
-      {/* Structured-level quick filter: multiple levels may be combined. None
-          active shows every line, including legacy plain output without a
-          level. Each badge is a toggle button styled like StatusBadge
-          (p-badge-17): a level-colored status dot plus semantic tinted fill
-          and matching border while active, outline otherwise. */}
-      <div
-        role="group"
-        aria-label="Log level"
-        className="flex flex-row flex-nowrap items-center gap-1.5 overflow-x-auto"
-      >
-        {LEVEL_FILTERS.map((f) => {
-          const checked = selectedLevels.has(f.level);
-          const count = levelCounts[f.level];
-          return (
-            <Badge
-              key={f.level}
-              variant={checked ? f.variant : "outline"}
-              className={checked ? "border-current/40" : undefined}
-              render={
-                <button
-                  type="button"
-                  aria-pressed={checked}
-                  title={t("logs.filterByLevel", { level: f.label })}
-                  onClick={() => onToggleLevel(f.level)}
-                />
-              }
-            >
-              <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${f.dotClass}`} />
-              {f.label}
-              {count > 0 && (
-                <span className="font-normal opacity-60 tabular-nums">{count}</span>
-              )}
-            </Badge>
-          );
-        })}
+      {/* Level + client filters, each a p-group-23-style group: funnel label,
+          multi-select combobox (searchable popup, first selection + "+N" in
+          the trigger) and a clear button. Selections combine; an empty
+          selection shows every line, including legacy plain output without a
+          level. The view-settings popover sits at the end of the row. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <FilterGroup
+          allLabel={t("logs.filterAll")}
+          ariaLabel={t("logs.selectLevelsAria")}
+          emptyText={t("logs.noLevelsFound")}
+          itemCount={(f) => levelCounts[f.level]}
+          itemLabel={(f) => f.label}
+          items={LEVEL_FILTERS}
+          label={t("logs.filterLevel")}
+          onClear={() => {
+            LEVEL_FILTERS.forEach((f) => {
+              if (selectedLevels.has(f.level)) onToggleLevel(f.level);
+            });
+          }}
+          onToggle={(f) => onToggleLevel(f.level)}
+          placeholder={t("logs.searchLevels")}
+          renderDot={(f) => (
+            <span
+              aria-hidden="true"
+              className={`size-2 shrink-0 rounded-full ${f.dotClass}`}
+            />
+          )}
+          selected={LEVEL_FILTERS.filter((f) => selectedLevels.has(f.level))}
+        />
+        {devices.length > 0 && (
+          <FilterGroup
+            allLabel={t("logs.filterAll")}
+            ariaLabel={t("logs.selectClientsAria")}
+            emptyText={t("logs.noClientsFound")}
+            itemCount={(name) => deviceCounts[name] ?? 0}
+            itemLabel={(name) => name}
+            items={devices}
+            label={t("logs.filterClient")}
+            onClear={() => {
+              devices.forEach((name) => {
+                if (selectedDevices.has(name)) onToggleDevice(name);
+              });
+            }}
+            onToggle={onToggleDevice}
+            placeholder={t("logs.searchClients")}
+            renderDot={(name) => (
+              <span
+                aria-hidden="true"
+                className="size-2 shrink-0 rounded-full"
+                style={{ backgroundColor: deviceColor(name) }}
+              />
+            )}
+            selected={devices.filter((name) => selectedDevices.has(name))}
+          />
+        )}
         <LogPanelViewSettings
           showTime={showTime}
           onShowTimeChange={onShowTimeChange}
@@ -263,35 +283,6 @@ export function LogPanelHeader({
           onColorizeBackgroundChange={onColorizeBackgroundChange}
         />
       </div>
-      {devices.length > 0 && (
-        <div
-          role="group"
-          aria-label="Devices"
-          className="flex flex-row flex-nowrap items-center gap-1.5 overflow-x-auto"
-        >
-          {devices.map((name) => {
-            const checked = selectedDevices.has(name);
-            return (
-              <Badge
-                key={name}
-                variant={checked ? "secondary" : "outline"}
-                className={checked ? "border-current/40" : undefined}
-                render={
-                  <button
-                    type="button"
-                    aria-pressed={checked}
-                    onClick={() => onToggleDevice(name)}
-                  />
-                }
-              >
-                {name}
-                <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: deviceColor(name) }} />
-                <span className="font-normal opacity-60 tabular-nums">{deviceCounts[name] ?? 0}</span>
-              </Badge>
-            );
-          })}
-        </div>
-      )}
     </header>
   );
 }

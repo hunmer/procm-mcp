@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
-import { NetworkIcon, RefreshCwIcon, SearchIcon } from "lucide-react";
+import { NetworkIcon, RefreshCwIcon } from "lucide-react";
+import { FilterSearchGroup } from "@/components/FilterGroup";
 import { Button } from "@/registry/default/ui/button";
-import { Input } from "@/registry/default/ui/input";
 import { Switch } from "@/registry/default/ui/switch";
 import {
   Select,
@@ -16,32 +16,6 @@ import { INTERVAL_OPTIONS } from "./types";
 // Refresh-interval select labels: render "Ns" for each option.
 function intervalLabel(ms: number): string {
   return `${ms / 1000}s`;
-}
-
-// A labeled search input with a leading icon. Used for the three filters; the
-// icon slot keeps the bar compact while each field stays independently scoped.
-function FilterInput({
-  value,
-  onChange,
-  placeholder,
-  icon,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-  icon: React.ReactNode;
-}) {
-  return (
-    <div className="relative min-w-[150px] flex-1">
-      {icon}
-      <Input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="h-8 pl-8 text-xs"
-      />
-    </div>
-  );
 }
 
 // Filter + refresh bar. Three independent substring filters, a manual refresh
@@ -90,23 +64,29 @@ export function SystemProcessFilterBar({
         {t("system.countOfTotal", { shown, total })}
       </span>
 
-      <FilterInput
+      {/* Three substring filters, each a labeled p-group-23-style search
+          group (search-icon label | input | clear) so the bar matches the
+          log-panel filter groups. */}
+      <FilterSearchGroup
         value={nameFilter}
         onChange={onNameFilterChange}
+        onClear={() => onNameFilterChange("")}
+        label={t("system.filterNameLabel")}
         placeholder={t("system.filterName")}
-        icon={<SearchIcon className="text-foreground/50 pointer-events-none absolute top-1/2 left-2.5 z-10 size-3.5 -translate-y-1/2" />}
       />
-      <FilterInput
+      <FilterSearchGroup
         value={pathFilter}
         onChange={onPathFilterChange}
+        onClear={() => onPathFilterChange("")}
+        label={t("system.filterPathLabel")}
         placeholder={t("system.filterPath")}
-        icon={<SearchIcon className="text-foreground/50 pointer-events-none absolute top-1/2 left-2.5 z-10 size-3.5 -translate-y-1/2" />}
       />
-      <FilterInput
+      <FilterSearchGroup
         value={cmdFilter}
         onChange={onCmdFilterChange}
+        onClear={() => onCmdFilterChange("")}
+        label={t("system.filterCmdLabel")}
         placeholder={t("system.filterCmd")}
-        icon={<SearchIcon className="text-foreground/50 pointer-events-none absolute top-1/2 left-2.5 z-10 size-3.5 -translate-y-1/2" />}
       />
 
       {/* Ports-only view: keeps just the processes listening on a TCP port

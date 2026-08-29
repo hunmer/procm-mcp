@@ -200,7 +200,11 @@
     "portFind": "查找",
     "invalidPortToast": "请输入 1 到 65535 之间的端口号",
     "portNotFoundToast": "没有进程在监听端口 {{port}}",
-    "portLookupFailedToast": "端口查找失败：{{error}}"
+    "portLookupFailedToast": "端口查找失败：{{error}}",
+    "filterNameLabel": "Name",
+    "filterPathLabel": "Path",
+    "filterCmdLabel": "Command line",
+    "clearFilter": "Clear filter"
   },
   "logs": {
     "panelTitle": "日志：{{name}}",
@@ -302,7 +306,17 @@
     "snippetNo": "no",
     "snippetExit": "exit",
     "snippetClear": "clear",
-    "filterByLevel": "筛选级别：{{level}}"
+    "filterByLevel": "筛选级别：{{level}}",
+    "filterLevel": "级别",
+    "filterClient": "客户端",
+    "filterAll": "全部",
+    "clearFilterAria": "清除筛选",
+    "selectLevelsAria": "选择级别",
+    "selectClientsAria": "选择客户端",
+    "searchLevels": "搜索级别...",
+    "searchClients": "搜索客户端...",
+    "noLevelsFound": "未找到级别",
+    "noClientsFound": "未找到客户端"
   },
   "dialogs": {
     "newProcess": {

@@ -171,14 +171,18 @@ export function App() {
     }
   }, [data, selected]);
 
+  // Once the first process snapshot lands, settle the ?proc= deep link:
+  // select the referenced process (collapsed state comes from the URL too, so
+  // it is restored as-is), or drop the param when the id is unknown. Without
+  // this the selection-sync effect below would clear the param on mount
+  // before anything restores the selection.
   useEffect(() => {
-    if (data && initialProcRef.current && data.processes.length > 0) {
-      const id = initialProcRef.current;
-      if (!data.processes.some((process) => process.id === id)) {
-        initialProcRef.current = null;
-        writeUrlState({ procId: null });
-      }
-    }
+    if (!data || !initialProcRef.current || data.processes.length === 0) return;
+    const id = initialProcRef.current;
+    initialProcRef.current = null;
+    const process = data.processes.find((p) => p.id === id);
+    if (process) setSelected(process);
+    else writeUrlState({ procId: null });
   }, [data]);
 
   useEffect(() => {
@@ -230,7 +234,12 @@ export function App() {
   }, [selected, logCollapsed, activeTab]);
 
   useEffect(() => {
-    writeUrlState({ procId: selected?.id ?? null, collapsed: logCollapsed });
+    // Don't overwrite procId until the ?proc= deep link has settled — the
+    // mount-time run still has selected=null and would erase the param.
+    writeUrlState({
+      procId: initialProcRef.current ? undefined : (selected?.id ?? null),
+      collapsed: logCollapsed,
+    });
   }, [selected, logCollapsed]);
 
   const showToast = useCallback(
