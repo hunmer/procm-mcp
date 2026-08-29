@@ -11,10 +11,12 @@ export function SystemProcessInfoPanel({
   row,
   onClose,
   onCopy,
+  onReveal,
 }: {
   row: ProcessRow;
   onClose: () => void;
   onCopy: (value: string, label: string) => void;
+  onReveal: (row: ProcessRow) => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -41,7 +43,7 @@ export function SystemProcessInfoPanel({
         </Button>
       </div>
       <div className="min-h-0 flex-1 overflow-auto p-1">
-        <SystemProcessInfo row={row} onCopy={onCopy} />
+        <SystemProcessInfo row={row} onCopy={onCopy} onReveal={onReveal} />
       </div>
     </aside>
   );

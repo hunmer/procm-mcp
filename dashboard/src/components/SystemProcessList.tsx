@@ -34,6 +34,7 @@ import {
   type RowActions,
 } from "./system-process/types";
 import {
+  clusterFamilyRows,
   compareProcessRows,
   exePathOfRow,
   groupProcesses,
@@ -238,10 +239,20 @@ export function SystemProcessList({
   // then the user's selected column (if any), then by name as a tiebreaker.
   // The table uses getCoreRowModel only (no getSortedRowModel) so this order
   // is authoritative; the sorting state still drives the header indicators.
-  const sortedData = useMemo(
-    () => [...filteredData].sort((a, b) => compareProcessRows(a, b, sorting)),
-    [filteredData, sorting],
-  );
+  // Related processes (parent/child chains) are clustered adjacent with a
+  // shared background tint only while NO column sort is active — an explicit
+  // sort always shows the plain authoritative order, untinted.
+  const { rows: sortedData, tintOf } = useMemo(() => {
+    if (sorting.length > 0) {
+      return {
+        rows: [...filteredData].sort((a, b) =>
+          compareProcessRows(a, b, sorting),
+        ),
+        tintOf: new Map<string, number>(),
+      };
+    }
+    return clusterFamilyRows(filteredData, sorting);
+  }, [filteredData, sorting]);
 
   const columns = useSystemProcessColumns({
     killingPid,
@@ -454,6 +465,7 @@ export function SystemProcessList({
         ) : (
           <SystemProcessTableView
             table={table}
+            tintOf={tintOf}
             columns={columns}
             selectedKey={selected?.key ?? null}
             hasData={processes.length > 0}
@@ -468,6 +480,7 @@ export function SystemProcessList({
           row={selected}
           onClose={() => setSelected(null)}
           onCopy={handleCopy}
+          onReveal={handleReveal}
         />
       )}
 
@@ -480,6 +493,7 @@ export function SystemProcessList({
         viewing={viewing}
         onDismiss={() => setViewing(null)}
         onCopy={handleCopy}
+        onReveal={handleReveal}
       />
       <PortLookupDialog
         open={portLookupOpen}

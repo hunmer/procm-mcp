@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { CopyIcon } from "lucide-react";
+import { CopyIcon, FolderSearchIcon } from "lucide-react";
 import { Badge } from "@/registry/default/ui/badge";
 import { Button } from "@/registry/default/ui/button";
 import type { ProcessRow } from "./types";
@@ -14,9 +14,13 @@ import { exePathOfRow } from "./utils";
 export function SystemProcessInfo({
   row,
   onCopy,
+  onReveal,
 }: {
   row: ProcessRow;
   onCopy: (value: string, label: string) => void;
+  // Opens the executable's folder in the OS file manager; the path row's
+  // locate-folder button is hidden when absent or no path resolves.
+  onReveal?: (row: ProcessRow) => void;
 }) {
   const { t } = useTranslation();
   const merged = row.members.length > 1;
@@ -67,6 +71,20 @@ export function SystemProcessInfo({
           copyValue={exe ?? undefined}
           copyLabel={t("system.copyPath")}
           onCopy={onCopy}
+          action={
+            exe && onReveal ? (
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                className="text-muted-foreground -mt-1 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                aria-label={t("system.ctxOpenLocation")}
+                title={t("system.ctxOpenLocation")}
+                onClick={() => onReveal(row)}
+              >
+                <FolderSearchIcon />
+              </Button>
+            ) : undefined
+          }
         >
           {exe ? (
             <code className="bg-muted block w-full break-all rounded px-2 py-1 text-right font-mono text-xs">
@@ -133,14 +151,16 @@ export function SystemProcessInfo({
 
 // A label/value row in the info grid. The value is right-aligned; when
 // `copyValue` is set, a copy button appears beside it on row hover (kept in
-// place with opacity so the layout never shifts). `mono` renders the value in
-// a monospace face (used for numeric PIDs).
+// place with opacity so the layout never shifts). `action` renders an extra
+// hover button before the copy one (the path row's locate-folder). `mono`
+// renders the value in a monospace face (used for numeric PIDs).
 function InfoRow({
   label,
   mono,
   copyValue,
   copyLabel,
   onCopy,
+  action,
   children,
 }: {
   label: string;
@@ -148,17 +168,21 @@ function InfoRow({
   copyValue?: string;
   copyLabel: string;
   onCopy: (value: string, label: string) => void;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <>
-      <dt className="text-muted-foreground pt-0.5 whitespace-nowrap">{label}</dt>
+      <dt className="text-muted-foreground pt-0.5 whitespace-nowrap">
+        {label}
+      </dt>
       <dd
         className={`group flex items-start justify-end gap-1 ${
           mono ? "font-mono text-xs tabular-nums" : ""
         }`}
       >
         <div className="min-w-0 flex-1 text-right">{children}</div>
+        {action}
         {copyValue && (
           <Button
             size="icon-sm"

@@ -39,9 +39,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/registry/default/ui/select";
+import { cn } from "@/registry/default/lib/utils";
 import { Skeleton } from "@/registry/default/ui/skeleton";
 import { PAGE_SIZE_OPTIONS, type ProcessRow, type RowActions } from "./types";
-import { colWidthClass, pinnedColAttrs } from "./utils";
+import { colWidthClass, familyTint, pinnedColAttrs } from "./utils";
 import { SystemProcessContextMenu } from "./SystemProcessContextMenu";
 
 // How many placeholder rows the first-load skeleton shows.
@@ -173,9 +174,11 @@ function TablePaginationFooter({
 // during horizontal scroll via pinnedColAttrs; colWidthClass applies the
 // per-column fixed widths from the columnDef meta. `isolate` scopes pinned
 // cells' z-index to the table. Each row is a ContextMenu trigger (click
-// selects it for the right-hand panel, right-click opens the menu).
+// selects it for the right-hand panel, right-click opens the menu). Rows in
+// `tintOf` belong to a parent/child family and share its background tint.
 export function SystemProcessTableView({
   table,
+  tintOf,
   selectedKey,
   hasData,
   loading = false,
@@ -183,6 +186,9 @@ export function SystemProcessTableView({
 }: {
   table: TableInstance<ProcessRow>;
   columns: ColumnDef<ProcessRow>[];
+  // Row key -> family tint index (clusterFamilyRows). Only multi-row
+  // families appear here; unrelated rows keep the plain background.
+  tintOf: Map<string, number>;
   selectedKey: string | null;
   // Whether the last snapshot had any process at all — distinguishes the
   // "no processes" empty state from the "filters matched nothing" one.
@@ -248,6 +254,10 @@ export function SystemProcessTableView({
                   ))
                 : rows.map((row) => {
                     const r = row.original;
+                    // Shared background for related (parent/child) rows.
+                    const tint = tintOf.has(r.key)
+                      ? familyTint(tintOf.get(r.key)!)
+                      : undefined;
                     return (
                       <ContextMenu key={row.id}>
                         {/* Right-click opens the context menu (View info / Open
@@ -256,7 +266,7 @@ export function SystemProcessTableView({
                         <ContextMenuTrigger
                           render={
                             <TableRow
-                              className="group cursor-pointer"
+                              className={cn("group cursor-pointer", tint)}
                               data-state={
                                 selectedKey === r.key ? "selected" : undefined
                               }
@@ -276,7 +286,14 @@ export function SystemProcessTableView({
                           }
                         >
                           {row.getVisibleCells().map((cell) => {
-                            const pin = pinnedColAttrs(cell.column, false);
+                            // Sticky cells keep an opaque background; family
+                            // rows tint it so the pinned columns match the
+                            // row color instead of flashing plain background.
+                            const pin = pinnedColAttrs(
+                              cell.column,
+                              false,
+                              tint,
+                            );
                             const width = colWidthClass(cell.column);
                             return (
                               <TableCell

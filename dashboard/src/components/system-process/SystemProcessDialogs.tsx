@@ -43,9 +43,7 @@ export function KillConfirmDialog({
     >
       <AlertDialogPopup>
         <AlertDialogHeader>
-          <AlertDialogTitle>
-            {t("system.killConfirmTitle")}
-          </AlertDialogTitle>
+          <AlertDialogTitle>{t("system.killConfirmTitle")}</AlertDialogTitle>
           <AlertDialogDescription>
             {pendingKill &&
               (pendingKill.members.length > 1
@@ -82,10 +80,12 @@ export function ProcessInfoDialog({
   viewing,
   onDismiss,
   onCopy,
+  onReveal,
 }: {
   viewing: ProcessRow | null;
   onDismiss: () => void;
   onCopy: (value: string, label: string) => void;
+  onReveal?: (row: ProcessRow) => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -108,7 +108,11 @@ export function ProcessInfoDialog({
           </DialogDescription>
         </DialogHeader>
         {viewing && (
-          <SystemProcessInfo row={viewing} onCopy={onCopy} />
+          <SystemProcessInfo
+            row={viewing}
+            onCopy={onCopy}
+            onReveal={onReveal}
+          />
         )}
         <DialogFooter>
           <DialogClose render={<Button variant="ghost" />}>

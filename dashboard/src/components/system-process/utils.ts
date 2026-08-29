@@ -112,11 +112,15 @@ export function normalizeSystemProcess(process: SystemProcess): SystemProcess {
     : raw.port == null
       ? []
       : [raw.port];
-  const ports = [...new Set(
-    values
-      .map((value) => Number(value))
-      .filter((value) => Number.isInteger(value) && value >= 1 && value <= 65535),
-  )].sort((a, b) => a - b);
+  const ports = [
+    ...new Set(
+      values
+        .map((value) => Number(value))
+        .filter(
+          (value) => Number.isInteger(value) && value >= 1 && value <= 65535,
+        ),
+    ),
+  ].sort((a, b) => a - b);
   return { ...process, ports: ports.length > 0 ? ports : undefined };
 }
 
@@ -183,12 +187,169 @@ export function colWidthClass(column: Column<ProcessRow>): string | undefined {
     ?.className;
 }
 
+// ---- process families (parent/child rows share a tint and sit together) ----
+
+// Background tints cycled across families. Full literal class strings (never
+// composed at runtime) so Tailwind can statically detect them. color-mix over
+// --background keeps each value opaque (sticky cells must not show scrolling
+// content through) and theme-aware in dark mode.
+export const FAMILY_TINTS = [
+  "bg-[color-mix(in_srgb,var(--background)_88%,var(--color-sky-500)_12%)]",
+  "bg-[color-mix(in_srgb,var(--background)_88%,var(--color-emerald-500)_12%)]",
+  "bg-[color-mix(in_srgb,var(--background)_88%,var(--color-amber-500)_12%)]",
+  "bg-[color-mix(in_srgb,var(--background)_88%,var(--color-violet-500)_12%)]",
+  "bg-[color-mix(in_srgb,var(--background)_88%,var(--color-rose-500)_12%)]",
+] as const;
+
+export function familyTint(index: number): string {
+  const n = FAMILY_TINTS.length;
+  return FAMILY_TINTS[((index % n) + n) % n];
+}
+
+// Minimal string-keyed union-find.
+function makeDisjointSet() {
+  const parent = new Map<string, string>();
+  const find = (key: string): string => {
+    let root = key;
+    for (let p = parent.get(root); p !== undefined && p !== root;) {
+      root = p;
+      p = parent.get(root);
+    }
+    parent.set(key, root);
+    return root;
+  };
+  const union = (a: string, b: string) => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent.set(ra, rb);
+  };
+  return { find, union };
+}
+
+// Order the snapshot's rows keeping related processes (parent/child chains,
+// resolved through the members' pid/ppid pairs) adjacent, and map every row
+// belonging to a multi-row family to a stable tint index. Families are
+// anchored at wherever their first row lands in the base order, so the
+// authoritative comparator (ports-first etc.) still decides the layout;
+// within a family parents come before children.
+export function clusterFamilyRows(
+  rows: ProcessRow[],
+  sorting: SortingState,
+): { rows: ProcessRow[]; tintOf: Map<string, number> } {
+  // Which display row owns each pid.
+  const keyOfPid = new Map<number, string>();
+  for (const r of rows) for (const m of r.members) keyOfPid.set(m.pid, r.key);
+
+  // Link rows whose members are in a direct parent/child relation (transitive
+  // chains collapse into one family through the union-find).
+  const { find, union } = makeDisjointSet();
+  for (const r of rows) {
+    for (const m of r.members) {
+      const parentKey = keyOfPid.get(m.ppid);
+      if (parentKey && parentKey !== r.key) union(r.key, parentKey);
+    }
+  }
+
+  // Collect families (root -> rows, in snapshot order).
+  const families = new Map<string, ProcessRow[]>();
+  for (const r of rows) {
+    const root = find(r.key);
+    const arr = families.get(root);
+    if (arr) arr.push(r);
+    else families.set(root, [r]);
+  }
+
+  // Tint indices keyed by sorted root so colors stay put when unrelated
+  // families appear/disappear between refreshes.
+  const multiRoots = [...families.entries()]
+    .filter(([, rs]) => rs.length > 1)
+    .map(([root]) => root)
+    .sort();
+  const tintOf = new Map<string, number>();
+  multiRoots.forEach((root, i) => {
+    for (const r of families.get(root)!) tintOf.set(r.key, i);
+  });
+
+  // The authoritative base order (ports first, user sort, name).
+  const ordered = [...rows].sort((a, b) => compareProcessRows(a, b, sorting));
+  const baseIdx = new Map(ordered.map((r, i) => [r.key, i]));
+
+  // Parent-first order within each multi-row family: BFS from rows whose
+  // parent is outside the family; same-level rows keep the base order. Rows
+  // only reachable through a pid-reuse cycle are appended in base order.
+  const familyOrdered = new Map<string, ProcessRow[]>();
+  for (const [root, rs] of families) {
+    if (rs.length < 2) continue;
+    const keySet = new Set(rs.map((r) => r.key));
+    const rowOf = new Map(rs.map((r) => [r.key, r]));
+    const parentKeyOf = new Map<string, string>();
+    for (const r of rs) {
+      if (parentKeyOf.has(r.key)) continue;
+      for (const m of r.members) {
+        const pk = keyOfPid.get(m.ppid);
+        if (pk && pk !== r.key && keySet.has(pk)) {
+          parentKeyOf.set(r.key, pk);
+          break;
+        }
+      }
+    }
+    const childrenOf = new Map<string, string[]>();
+    for (const [key, pk] of parentKeyOf) {
+      const arr = childrenOf.get(pk);
+      if (arr) arr.push(key);
+      else childrenOf.set(pk, [key]);
+    }
+    const byBase = (a: string, b: string) =>
+      (baseIdx.get(a) ?? 0) - (baseIdx.get(b) ?? 0);
+    for (const arr of childrenOf.values()) arr.sort(byBase);
+    const out: ProcessRow[] = [];
+    const seen = new Set<string>();
+    const queue = rs
+      .filter((r) => !parentKeyOf.has(r.key))
+      .map((r) => r.key)
+      .sort(byBase);
+    while (queue.length) {
+      const key = queue.shift()!;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(rowOf.get(key)!);
+      for (const c of childrenOf.get(key) ?? []) {
+        if (!seen.has(c)) queue.push(c);
+      }
+    }
+    for (const r of rs) if (!seen.has(r.key)) out.push(r);
+    familyOrdered.set(root, out);
+  }
+
+  // Sweep the base order; the first row of a family pulls its whole family
+  // in at that spot. Everything else keeps its position.
+  const result: ProcessRow[] = [];
+  const placed = new Set<string>();
+  for (const r of ordered) {
+    if (placed.has(r.key)) continue;
+    const famRows = familyOrdered.get(find(r.key));
+    if (famRows) {
+      for (const fr of famRows) {
+        result.push(fr);
+        placed.add(fr.key);
+      }
+    } else {
+      result.push(r);
+      placed.add(r.key);
+    }
+  }
+  return { rows: result, tintOf };
+}
+
 // Generic sticky-column styling (the Processes table's pinnedColAttrs is typed
 // for ProcessView; this is the ProcessRow equivalent). Pins `name` left and
-// `actions` right per the table's columnPinning initialState.
+// `actions` right per the table's columnPinning initialState. `baseBg` swaps
+// the opaque cell background (family-tinted rows pass their tint so the
+// sticky cells match instead of flashing plain background over them).
 export function pinnedColAttrs(
   column: Column<ProcessRow>,
   head: boolean,
+  baseBg = "bg-background",
 ): { className?: string; style?: CSSProperties } {
   const side = column.getIsPinned();
   if (!side) return {};
@@ -207,6 +368,6 @@ export function pinnedColAttrs(
       right: side === "right" ? `${column.getAfter("right")}px` : undefined,
       zIndex: head ? 2 : 1,
     },
-    className: `bg-background ${edge} ${hover}`.trim() || undefined,
+    className: `${baseBg} ${edge} ${hover}`.trim() || undefined,
   };
 }
