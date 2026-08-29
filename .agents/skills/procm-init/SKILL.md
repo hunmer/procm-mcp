@@ -33,6 +33,21 @@ read by procm-mcp's `procm-command` tool and must live at the project root.
    present, is an array of strings.
 8. Report the resulting file path and commands. Do not start any process as
    part of initialization.
+9. After writing the file, explicitly ask the user whether the selected
+   commands should also be saved into a named process group. Do not assume
+   consent from the file-writing approval. If the user declines, finish after
+   reporting the file.
+10. If the user agrees, ask for the group name when one was not provided, then
+    add the selected command configurations with `import-process-batch` using
+    that `group`. This operation persists process records/favorites only; it
+    does **not** start any process. Tell the user that they can later start a
+    saved command explicitly with `procm-command` (`action: "start"`).
+
+Adding to a process group must remain a no-start operation. Do not call
+`procm-command` with `action: "start"` while importing, and do not describe
+grouping as starting or activating services. The import payload should include
+each command's `script`, `args` (use `[]` when absent), resolved `cwd`, and
+optional `name`/`desc`; apply the chosen group to the whole batch.
 
 ## Output format
 
