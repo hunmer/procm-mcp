@@ -7,17 +7,18 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pack = spawnSync(
   "npm",
   ["pack", "--dry-run", "--json", "--ignore-scripts"],
-  { cwd: root, encoding: "utf8" },
+  { cwd: root, encoding: "utf8", shell: process.platform === "win32" },
 );
 
 if (pack.status !== 0) {
-  process.stderr.write(pack.stderr || pack.stdout);
+  process.stderr.write(pack.stderr || pack.stdout || String(pack.error));
   process.exit(pack.status ?? 1);
 }
 
 let files;
 try {
-  files = JSON.parse(pack.stdout)[0].files.map(({ path }) => path);
+  const json = pack.stdout.match(/^\[[\s\S]*?^\]$/m)?.[0];
+  files = JSON.parse(json)[0].files.map(({ path }) => path);
 } catch (error) {
   console.error(`Unable to inspect npm package contents: ${error.message}`);
   process.exit(1);
