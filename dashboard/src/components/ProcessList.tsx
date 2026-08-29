@@ -1,9 +1,13 @@
 import { useMemo, useState } from "react";
+import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useTranslation } from "react-i18next";
 import {
   ChevronDownIcon,
   FolderIcon,
   FolderOpenIcon,
+  GripVerticalIcon,
   InboxIcon,
   ListXIcon,
   PencilIcon,
@@ -43,6 +47,9 @@ import {
   type PendingGroupRename,
 } from "./process-list/RenameGroupDialog";
 import { CreateDropdown } from "./CreateDropdown";
+// BorderBeam is intentionally kept as the requested standalone JSX asset.
+// @ts-expect-error The JSX asset does not ship a generated declaration.
+import BorderBeam from "./BorderBeam";
 
 // Whether a group label looks like an absolute folder path that the backend
 // could open in the OS file manager. Matches Windows drive paths (C:\, C:/),
@@ -66,6 +73,8 @@ function groupKeyOf(group: string | undefined): string {
 // Pinned process ids, persisted across reloads. Ids of deleted processes may
 // linger; they simply never match a row again.
 const PINNED_KEY = "procm.pinnedProcesses";
+const GROUP_ORDER_KEY = "procm.groupOrder";
+const PROCESS_ORDER_KEY = "procm.processOrder";
 
 function loadIdSet(key: string): Set<string> {
   if (typeof localStorage === "undefined") return new Set();
@@ -85,6 +94,20 @@ function saveIdSet(key: string, ids: Set<string>) {
   } catch {
     // localStorage may be unavailable; ignore.
   }
+}
+
+function loadJson<T>(key: string, fallback: T): T {
+  if (typeof localStorage === "undefined") return fallback;
+  try {
+    const value = JSON.parse(localStorage.getItem(key) ?? "null");
+    return value ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveJson(key: string, value: unknown) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* ignore */ }
 }
 
 function loadCollapsed(): Set<string> {
@@ -169,8 +192,10 @@ function GroupSection({
   onRenameGroup,
 }: GroupSectionProps) {
   const { t } = useTranslation();
+  const sortable = useSortable({ id: `group:${g.label}`, data: { type: "group", label: g.label } });
   const runningCount = g.processes.filter(canStopProcess).length;
   return (
+    <div ref={sortable.setNodeRef} style={{ transform: CSS.Transform.toString(sortable.transform), transition: sortable.transition }} className="group/section" data-dragging={sortable.isDragging || undefined}>
     <Frame className="w-full">
       <Collapsible defaultOpen={defaultOpen} onOpenChange={onOpenChange}>
         <FrameHeader className="flex-row items-center justify-between px-2 py-2">
@@ -189,6 +214,9 @@ function GroupSection({
             </Badge>
           </CollapsibleTrigger>
           <div className="flex items-center gap-0.5">
+            <Button size="icon-sm" variant="ghost" aria-label="拖拽排序分组" title="拖拽排序分组" className="cursor-grab text-muted-foreground opacity-0 transition-opacity group-hover/section:opacity-100" {...sortable.attributes} {...sortable.listeners}>
+              <GripVerticalIcon />
+            </Button>
             {runningCount > 0 && (
               <Badge
                 variant="success"
@@ -255,23 +283,38 @@ function GroupSection({
         </FrameHeader>
         <CollapsiblePanel>
           <FramePanel className="p-3">
+            <SortableContext items={g.processes.map((p) => p.id)} strategy={verticalListSortingStrategy}>
             <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2 @5xl:grid-cols-3">
               {g.processes.map((p) => (
-                <ProcessCard
-                  key={p.id}
-                  p={p}
-                  isActive={p.id === selectedId}
-                  unreadCount={unread[p.id] ?? 0}
-                  pinned={pinnedIds.has(p.id)}
-                  onTogglePin={onTogglePin}
-                  actions={actions}
-                />
+                <div key={p.id} className="relative rounded-2xl">
+                  <ProcessCard
+                    p={p}
+                    isActive={p.id === selectedId}
+                    unreadCount={unread[p.id] ?? 0}
+                    pinned={pinnedIds.has(p.id)}
+                    onTogglePin={onTogglePin}
+                    actions={actions}
+                    dragGroup={g.label}
+                  />
+                  {canStopProcess(p) && (
+                    <BorderBeam
+                      aria-hidden="true"
+                      className="rounded-2xl"
+                      duration={3}
+                      borderWidth={2}
+                      colorFrom="#22c55e"
+                      colorTo="#06b6d4"
+                    />
+                  )}
+                </div>
               ))}
             </div>
+            </SortableContext>
           </FramePanel>
         </CollapsiblePanel>
       </Collapsible>
     </Frame>
+    </div>
   );
 }
 
@@ -332,6 +375,46 @@ export function ProcessList({
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(() => loadIdSet(PINNED_KEY));
   // Which groups the user collapsed (by label), persisted to localStorage.
   const [collapsedLabels, setCollapsedLabels] = useState<Set<string>>(loadCollapsed);
+  const [groupOrder, setGroupOrder] = useState<string[]>(() => loadJson(GROUP_ORDER_KEY, []));
+  const [processOrder, setProcessOrder] = useState<Record<string, string[]>>(() => loadJson(PROCESS_ORDER_KEY, {}));
+
+  function moveItem(items: string[], from: string, to: string) {
+    const next = items.filter((id) => id !== from);
+    const index = next.indexOf(to);
+    next.splice(index < 0 ? next.length : index, 0, from);
+    return next;
+  }
+
+  function moveGroup(from: string, to: string) {
+    setGroupOrder((current) => {
+      const labels = [...new Set(processes.map((p) => groupKeyOf(p.group ?? undefined)))].sort((a, b) => {
+        if (a === UNGROUPED) return 1;
+        if (b === UNGROUPED) return -1;
+        return a.localeCompare(b);
+      });
+      const base = [...current.filter((label) => labels.includes(label)), ...labels.filter((label) => !current.includes(label))];
+      const next = moveItem(base, from, to);
+      saveJson(GROUP_ORDER_KEY, next);
+      return next;
+    });
+  }
+
+  function moveProcess(group: string, from: string, to: string) {
+    setProcessOrder((current) => { const next = { ...current, [group]: moveItem(current[group] ?? [], from, to) }; saveJson(PROCESS_ORDER_KEY, next); return next; });
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const activeData = active.data.current;
+    const overData = over.data.current;
+    const type = activeData?.type;
+    if (type === "group" && overData?.type === "group") {
+      moveGroup(String(activeData!.label), String(overData.label));
+    } else if (type === "process" && overData?.type === "process" && activeData?.group === overData?.group) {
+      moveProcess(String(activeData!.group), String(active.id), String(over.id));
+    }
+  }
 
   function togglePin(p: ProcessView) {
     setPinnedIds((cur) => {
@@ -513,21 +596,26 @@ export function ProcessList({
         processes: orderGroup(g.processes, sortMode, pinnedIds),
       }))
       .sort((a, b) => {
+        const ai = groupOrder.indexOf(a.label); const bi = groupOrder.indexOf(b.label);
+        if (ai >= 0 || bi >= 0) return (ai < 0 ? Number.MAX_SAFE_INTEGER : ai) - (bi < 0 ? Number.MAX_SAFE_INTEGER : bi);
         if (a.label === UNGROUPED) return 1;
         if (b.label === UNGROUPED) return -1;
         return a.label.localeCompare(b.label);
       });
-  }, [filteredProcesses, sortMode, pinnedIds]);
+  }, [filteredProcesses, sortMode, pinnedIds, groupOrder, processOrder]);
+
+  const orderedGroups = groups.map((g) => ({ ...g, processes: processOrder[g.label]?.length ? [...g.processes].sort((a, b) => (processOrder[g.label].indexOf(a.id) < 0 ? Number.MAX_SAFE_INTEGER : processOrder[g.label].indexOf(a.id)) - (processOrder[g.label].indexOf(b.id) < 0 ? Number.MAX_SAFE_INTEGER : processOrder[g.label].indexOf(b.id))) : g.processes }));
 
   const hasAnything = processes.length > 0;
 
   // The Ungrouped catch-all is pinned in its own area above the scrolling
   // region, so it stays put while the named groups scroll underneath. When
   // it's the only group, it simply takes the full height.
-  const ungrouped = groups.find((g) => g.label === UNGROUPED) ?? null;
-  const grouped = groups.filter((g) => g.label !== UNGROUPED);
+  const ungrouped = orderedGroups.find((g) => g.label === UNGROUPED) ?? null;
+  const grouped = orderedGroups.filter((g) => g.label !== UNGROUPED);
 
   return (
+    <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
     <div className="flex h-full min-h-0 flex-col">
       <ProcessFilterBar
         statusFilter={statusFilter}
@@ -562,6 +650,7 @@ export function ProcessList({
         <>
           {ungrouped && (
             <div className="@container max-h-[50%] shrink-0 overflow-auto border-b p-4">
+              <SortableContext items={orderedGroups.map((g) => `group:${g.label}`)} strategy={verticalListSortingStrategy}>
               <GroupSection
                 g={ungrouped}
                 defaultOpen={!collapsedLabels.has(ungrouped.label)}
@@ -577,10 +666,12 @@ export function ProcessList({
                 pinnedIds={pinnedIds}
                 onTogglePin={togglePin}
               />
+              </SortableContext>
             </div>
           )}
           <div className="@container min-h-0 flex-1 overflow-auto p-4">
             <div className="flex flex-col gap-4">
+              <SortableContext items={grouped.map((g) => `group:${g.label}`)} strategy={verticalListSortingStrategy}>
               {grouped.map((g) => (
                 <GroupSection
                   key={g.label}
@@ -599,11 +690,13 @@ export function ProcessList({
                   onTogglePin={togglePin}
                 />
               ))}
+              </SortableContext>
             </div>
           </div>
         </>
       ) : ungrouped ? (
         <div className="@container min-h-0 flex-1 overflow-auto p-4">
+          <SortableContext items={[`group:${ungrouped.label}`]} strategy={verticalListSortingStrategy}>
           <GroupSection
             g={ungrouped}
             defaultOpen={!collapsedLabels.has(ungrouped.label)}
@@ -619,6 +712,7 @@ export function ProcessList({
             pinnedIds={pinnedIds}
             onTogglePin={togglePin}
           />
+          </SortableContext>
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-auto p-4">
@@ -664,5 +758,6 @@ export function ProcessList({
         onSubmit={confirmRenameGroup}
       />
     </div>
+    </DndContext>
   );
 }

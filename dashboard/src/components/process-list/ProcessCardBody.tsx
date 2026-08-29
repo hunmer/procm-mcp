@@ -22,11 +22,13 @@ import type { ProcessView } from "@/lib/types";
 // the ContextMenuTrigger (the Card itself) wraps both header and panel.
 export function ProcessCardBody({
   p,
+  isActive,
   unreadCount,
   pinned,
   onTogglePin,
 }: {
   p: ProcessView;
+  isActive: boolean;
   unreadCount: number;
   pinned: boolean;
   onTogglePin: () => void;
@@ -84,7 +86,13 @@ export function ProcessCardBody({
 
   return (
     <>
-      <CardHeader className="border-b p-4">
+      <CardHeader
+        className={`overflow-hidden rounded-t-[calc(var(--radius-2xl)-1px)] border-b p-4 ${
+          isActive
+            ? "bg-primary/10 shadow-[inset_3px_0_0_var(--primary)]"
+            : ""
+        }`}
+      >
         <div className="flex min-w-0 flex-col gap-0.5">
           <div className="flex items-center gap-2">
             <span className="truncate font-mono text-sm font-semibold">

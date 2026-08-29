@@ -1,9 +1,131 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { cn } from "@/registry/default/lib/utils";
 import { tokenizeAnsi, type AnsiSegment } from "./ansi";
 import { JsonViewer, type JsonValue } from "./JsonViewer";
 import type { LogEntry } from "@/lib/types";
+import {
+  PreviewCard,
+  PreviewCardPopup,
+  PreviewCardTrigger,
+} from "@/registry/default/ui/preview-card";
+
+const URL_RE = /https?:\/\/[^\s<>"']+/gi;
+const previewCache = new Map<string, LinkPreviewData | null>();
+
+type LinkPreviewData = {
+  title?: string;
+  description?: string;
+  image?: string;
+  logo?: string;
+};
+
+function cleanUrl(raw: string): string {
+  return raw.replace(/[),.;!?]+$/, "");
+}
+
+function isLocalUrl(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    return (
+      hostname === "localhost" ||
+      hostname.endsWith(".localhost") ||
+      hostname.startsWith("127.") ||
+      hostname === "[::1]" ||
+      hostname === "::1"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function LinkPreview({ url }: { url: string }) {
+  const [data, setData] = useState<LinkPreviewData | null | undefined>(() =>
+    previewCache.has(url) ? previewCache.get(url) : undefined,
+  );
+
+  useEffect(() => {
+    if (previewCache.has(url)) return;
+    // Local development URLs are not reachable by Microlink and should not
+    // leak to a third-party metadata service.
+    if (isLocalUrl(url)) {
+      previewCache.set(url, null);
+      setData(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(`https://api.microlink.io?url=${encodeURIComponent(url)}&meta=true`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload) => {
+        const next = payload?.data
+          ? {
+              title: payload.data.title,
+              description: payload.data.description,
+              image: payload.data.image?.url,
+              logo: payload.data.logo?.url,
+            }
+          : null;
+        previewCache.set(url, next);
+        if (!cancelled) setData(next);
+      })
+      .catch(() => {
+        previewCache.set(url, null);
+        if (!cancelled) setData(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
+
+  let hostname = url;
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    // Keep the raw URL if it cannot be parsed.
+  }
+  const title = data?.title || hostname;
+  return (
+    <PreviewCardPopup className="w-[min(360px,calc(100vw-2rem))] p-0 overflow-hidden">
+      {data?.image && (
+        <img src={data.image} alt="" className="h-28 w-full object-cover" loading="lazy" />
+      )}
+      <div className="flex flex-col gap-1 p-3">
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          {data?.logo && <img src={data.logo} alt="" className="h-4 w-4 rounded-sm" loading="lazy" />}
+          <span className="truncate">{hostname}</span>
+        </div>
+        <p className="text-sm font-semibold leading-tight">{title}</p>
+        {data?.description && <p className="line-clamp-3 text-xs text-muted-foreground">{data.description}</p>}
+      </div>
+    </PreviewCardPopup>
+  );
+}
+
+function renderLinkedText(text: string, highlight: RegExp | null): ReactNode {
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+  URL_RE.lastIndex = 0;
+  for (const match of text.matchAll(URL_RE)) {
+    const raw = match[0];
+    const url = cleanUrl(raw);
+    const start = match.index ?? 0;
+    if (start > cursor) nodes.push(highlightMatches(text.slice(cursor, start), highlight));
+    nodes.push(
+      <PreviewCard key={`${url}-${start}`}>
+        <PreviewCardTrigger
+          render={<a href={url} target="_blank" rel="noopener noreferrer" className="text-sky-300 underline decoration-sky-400/60 underline-offset-2 hover:text-sky-200" />}
+        >
+          {highlightMatches(url, highlight)}
+        </PreviewCardTrigger>
+        <LinkPreview url={url} />
+      </PreviewCard>,
+    );
+    if (raw.length > url.length) nodes.push(raw.slice(url.length));
+    cursor = start + raw.length;
+  }
+  if (cursor < text.length) nodes.push(highlightMatches(text.slice(cursor), highlight));
+  return nodes.length ? <>{nodes}</> : highlightMatches(text, highlight);
+}
 
 // Log `data` payloads arrive as unknown (server-side JSON.parse output).
 // Guard that the value is purely JSON-shaped before feeding the tree.
@@ -85,7 +207,7 @@ function AnsiSpan({
       .filter(Boolean)
       .join(" ");
   }
-  return <span style={css}>{highlightMatches(segment.text, highlight)}</span>;
+  return <span style={css}>{renderLinkedText(segment.text, highlight)}</span>;
 }
 
 // Render a string that may contain ANSI color/style codes. The (relatively

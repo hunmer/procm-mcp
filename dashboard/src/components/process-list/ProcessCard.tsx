@@ -1,6 +1,8 @@
 import { useState, type MouseEvent } from "react";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useTranslation } from "react-i18next";
-import { PlayIcon, SquareIcon } from "lucide-react";
+import { GripVerticalIcon, PlayIcon, SquareIcon } from "lucide-react";
 import { Button } from "@/registry/default/ui/button";
 import { Card, CardPanel } from "@/registry/default/ui/card";
 import {
@@ -24,6 +26,7 @@ export function ProcessCard({
   pinned,
   onTogglePin,
   actions,
+  dragGroup,
 }: {
   p: ProcessView;
   isActive: boolean;
@@ -31,6 +34,7 @@ export function ProcessCard({
   pinned: boolean;
   onTogglePin: (p: ProcessView) => void;
   actions: RowActions;
+  dragGroup?: string;
 }) {
   const { t } = useTranslation();
   const [starting, setStarting] = useState(false);
@@ -39,6 +43,7 @@ export function ProcessCard({
   // reports `spawning` over WebSocket, covering the gap before the response.
   const isStarting = starting || p.status === "spawning";
   const cmd = `${p.script}${p.args?.length ? " " + p.args.join(" ") : ""}`;
+  const sortable = useSortable({ id: p.id, data: { type: "process", group: dragGroup } });
 
   async function handleStart(e: MouseEvent<HTMLButtonElement>) {
     e.stopPropagation();
@@ -51,6 +56,8 @@ export function ProcessCard({
     }
   }
   return (
+    <div ref={sortable.setNodeRef} style={{ transform: CSS.Transform.toString(sortable.transform), transition: sortable.transition }} className="group/process relative" data-dragging={sortable.isDragging || undefined}>
+      <Button size="icon-xs" variant="ghost" aria-label="拖拽排序进程" title="拖拽排序进程" className="absolute right-2 top-2 z-10 cursor-grab text-muted-foreground opacity-0 transition-opacity group-hover/process:opacity-100" {...sortable.attributes} {...sortable.listeners} onClick={(e) => e.stopPropagation()}><GripVerticalIcon /></Button>
     <ContextMenu>
       <ContextMenuTrigger
         render={
@@ -63,6 +70,7 @@ export function ProcessCard({
       >
         <ProcessCardBody
           p={p}
+          isActive={isActive}
           unreadCount={unreadCount}
           pinned={pinned}
           onTogglePin={() => onTogglePin(p)}
@@ -114,6 +122,7 @@ export function ProcessCard({
       </ContextMenuTrigger>
       <ProcessContextMenu p={p} actions={actions} />
     </ContextMenu>
+    </div>
   );
 }
 
