@@ -60,5 +60,4 @@ fetch("/api/processes/Sum29PRU/logs", { method: "DELETE" })
 
 - `$diagnose`：继续排查端口 5176 的后端实例与 WS 代理是否指向同一服务。
 - `$procm-mcp`：按 `debug.md` 使用全局 procm-mcp 重启和查看服务日志。
-- `$procm-rooms`：若需继续扩展 SDK room/日志事件协议。
-
+- `$procm-debug`：若需继续扩展 SDK room/日志事件协议。

@@ -57,7 +57,7 @@ Ask your AI agent to run the following steps in a terminal:
 
 ```powershell
 npm i -g @hunmer/procm-mcp
-npx skills add hunmer/procm-mcp --skill procm-http procm-rooms procm-init -y
+npx skills add hunmer/procm-mcp --skill procm-http procm-debug procm-init -y
 Start-Process -FilePath "procm-mcp" -ArgumentList "--server", "--port", "7331", "--data-path", "global"
 Start-Process "http://127.0.0.1:7331"
 ```
@@ -109,11 +109,11 @@ the procm-http skill and use its HTTP fallback.
 Install the project skills into the current project:
 
 ```bash
-npx skills add hunmer/procm-mcp --skill procm-http procm-rooms procm-init -y
+npx skills add hunmer/procm-mcp --skill procm-http procm-debug procm-init -y
 ```
 
 Use `--skill <name>` to install only one. Available skills are
-`procm-http`, `procm-rooms`, and `procm-init`.
+`procm-http`, `procm-debug`, and `procm-init`.
 The skills CLI detects the active agent and installs into its project-level
 skills directory, such as `.agents/skills/` for Codex.
 
@@ -123,7 +123,7 @@ skills directory, such as `.agents/skills/` for Codex.
 | --- | --- | --- |
 | `procm-http` | Fall back to HTTP/CLI process management when MCP is unavailable | “MCP is disconnected. Use HTTP to inspect logs on port 7331 and stop the given process.” |
 | `procm-init` | Discover project scripts and create a command catalog | “Read package.json and compose.yml, show candidates, then create `procm-commands.json`; ask whether to save them to a process group, but do not start anything.” |
-| `procm-rooms` | Coordinate Node/Electron/browser clients, readiness, and structured logs | “Put frontend and backend in one room; publish `backend:ready` and have the frontend use `waitFor` without polling.” |
+| `procm-debug` | Coordinate clients, custom test execution, readiness, and structured logs | “Put frontend and backend in one room; publish `backend:ready` and have the frontend use `waitFor` without polling.” |
 
 These cases describe intent; execution still follows each skill's prerequisites
 and safety rules.

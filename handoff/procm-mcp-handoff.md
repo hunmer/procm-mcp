@@ -13,15 +13,15 @@ Implemented surfaces:
 - Structured log parsing/merging and Dashboard level/JSON rendering.
 - Node and Electron demos under `demo/`; Electron uses pnpm. Both demos default to room `room-demo` and `ws://127.0.0.1:7331/room` through `.env.defaults`.
 - SDK helper commands: `npm run link:sdk` and `npm run publish:sdk`. These scripts were created but intentionally not executed.
-- Agent skill at `agent/skills/procm-rooms` with linked Markdown examples.
+- Agent skill at `.agents/skills/procm-debug` with linked Markdown examples.
 
 ## Read First
 
 - Implementation plan and decisions: `G:/procm-mcp/task_plan.md`
 - Architecture findings: `G:/procm-mcp/findings.md`
 - Work/verification record: `G:/procm-mcp/progress.md`
-- Room usage skill: `G:/procm-mcp/agent/skills/procm-rooms/SKILL.md`
-- Example index: `G:/procm-mcp/agent/skills/procm-rooms/examples/index.md`
+- Room usage skill: `G:/procm-mcp/.agents/skills/procm-debug/SKILL.md`
+- Example index: `G:/procm-mcp/.agents/skills/procm-debug/examples/index.md`
 - User-facing overview: `G:/procm-mcp/README.md`
 
 ## Key Entry Points
@@ -39,7 +39,7 @@ Implemented surfaces:
 - Full repository test result: 6 suites, 97 assertions, 0 failures.
 - SDK and root `npm pack --dry-run` checks passed.
 - Electron v37.10.3 and demo script syntax were verified.
-- `agent/skills/procm-rooms` passed the official skill validator and all local Markdown links resolve.
+- `.agents/skills/procm-debug` passed the official skill validator and all local Markdown links resolve.
 - After the latest demo default-environment change, targeted env loading was verified; a new full test run was not required.
 
 Common commands:
@@ -59,7 +59,7 @@ node "build/index.js" --server --port 7331
 
 ## Suggested Skills
 
-- `$procm-rooms` (`G:/procm-mcp/agent/skills/procm-rooms/SKILL.md`) for SDK, room, logging, batch, and Electron integration work.
+- `$procm-debug` (`G:/procm-mcp/.agents/skills/procm-debug/SKILL.md`) for SDK, room, logging, batch, and Electron integration work.
 - `$diagnose` for reported runtime or test failures.
 - `$coss` and `$coss-particles` for Dashboard UI changes.
 - `$planning-with-files` for work spanning multiple architecture areas.

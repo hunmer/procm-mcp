@@ -57,7 +57,7 @@ npm i -g @hunmer/procm-mcp
 
 ```powershell
 npm i -g @hunmer/procm-mcp
-npx skills add hunmer/procm-mcp --skill procm-http procm-rooms procm-init -y
+npx skills add hunmer/procm-mcp --skill procm-http procm-debug procm-init -y
 Start-Process -FilePath "procm-mcp" -ArgumentList "--server", "--port", "7331", "--data-path", "global"
 Start-Process "http://127.0.0.1:7331"
 ```
@@ -107,11 +107,11 @@ Start-Process "http://127.0.0.1:7331"
 将项目 skills 安装到当前项目：
 
 ```bash
-npx skills add hunmer/procm-mcp --skill procm-http procm-rooms procm-init -y
+npx skills add hunmer/procm-mcp --skill procm-http procm-debug procm-init -y
 ```
 
 只安装一个时使用 `--skill <name>`。可用 skill 包括：
-`procm-http`、`procm-rooms`、`procm-init`。
+`procm-http`、`procm-debug`、`procm-init`。
 `skills` CLI 会检测当前 agent，并安装到对应的项目级 skills 目录；Codex 对应
 `.agents/skills/`。
 
@@ -121,7 +121,7 @@ npx skills add hunmer/procm-mcp --skill procm-http procm-rooms procm-init -y
 | --- | --- | --- |
 | `procm-http` | MCP 不可用时改用 HTTP/CLI 管理进程 | “MCP 连接失败，请用 HTTP 查看 7331 端口的进程日志，并停止指定进程。” |
 | `procm-init` | 扫描项目脚本并生成命令目录 | “读取 package.json 和 compose.yml，先展示候选命令，再生成 `procm-commands.json`；询问是否保存到进程分组，但不要启动。” |
-| `procm-rooms` | Node/Electron/浏览器客户端通信、就绪同步和结构化日志 | “让前后端加入同一 room，后端发布 `backend:ready`，前端用 `waitFor` 等待，不要轮询。” |
+| `procm-debug` | 客户端通信、自定义测试执行、就绪同步和结构化日志 | “让前后端加入同一 room，后端发布 `backend:ready`，前端用 `waitFor` 等待，不要轮询。” |
 
 案例只描述意图，实际执行仍需遵循对应 skill 的前置条件和安全规则。
 
