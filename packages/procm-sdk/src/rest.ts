@@ -32,6 +32,93 @@ export interface ImportProcessItem {
   desc?: string;
 }
 
+export type ProcessStatus = "spawning" | "running" | "exited" | "error";
+
+export interface ProcessView {
+  id: string;
+  name: string;
+  script: string;
+  args: string[];
+  cwd: string;
+  status: ProcessStatus;
+  pid: number | null;
+  exitCode: number | null;
+  error: string | null;
+  desc?: string | null;
+  group?: string | null;
+  port?: number | null;
+  roomId?: string | null;
+  startedAt?: number;
+  lastStartedAt?: number | null;
+  stoppedAt?: number | null;
+  favorite?: boolean;
+}
+
+export interface ProcessListResponse {
+  serverId: string;
+  pid: number;
+  startedAt?: number;
+  port?: number | null;
+  processes: ProcessView[];
+}
+
+export interface UpdateProcessBody {
+  name?: string;
+  script?: string;
+  args?: string[];
+  cwd?: string;
+  desc?: string | null;
+  port?: number | null;
+  envs?: Record<string, string>;
+  group?: string | null;
+}
+
+export interface ServerLogFile {
+  name: string;
+  path: string;
+  size: number;
+  modifiedAt: number;
+}
+
+export interface ServerLogInfo {
+  dir: string;
+  maxBytes: number;
+  defaultMaxBytes: number;
+  envMaxBytes: number | null;
+  files: ServerLogFile[];
+}
+
+export function listProcesses(client: ProcmClient): Promise<ProcessListResponse> {
+  return request(client, "GET", "/api/processes");
+}
+
+export function getProcess(client: ProcmClient, id: string): Promise<ProcessView> {
+  return request(client, "GET", `/api/processes/${encodeURIComponent(id)}`);
+}
+
+export function updateProcess(
+  client: ProcmClient,
+  id: string,
+  updates: UpdateProcessBody,
+): Promise<ProcessView> {
+  return request(client, "PATCH", `/api/processes/${encodeURIComponent(id)}`, updates);
+}
+
+export function getServerLogInfo(client: ProcmClient): Promise<ServerLogInfo> {
+  return request(client, "GET", "/api/server-log");
+}
+
+export function updateServerLogMaxBytes(
+  client: ProcmClient,
+  maxBytes: number | null,
+): Promise<ServerLogInfo> {
+  return request(client, "PUT", "/api/server-log/settings", { maxBytes });
+}
+
+export function clearServerLogs(client: ProcmClient): Promise<{ cleared: string[] }> {
+  return request(client, "DELETE", "/api/server-log");
+}
+
 export function clearProcessLogs(client: ProcmClient, id: string): Promise<{ id: string; cleared: true }> {
   return request(client, "DELETE", `/api/processes/${encodeURIComponent(id)}/logs`);
 }

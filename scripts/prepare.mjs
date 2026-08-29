@@ -16,7 +16,12 @@ try {
 }
 
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
-const child = spawn(npm, ["run", "build"], { cwd: root, stdio: "inherit" });
+const child = spawn(npm, ["run", "build"], {
+  cwd: root,
+  stdio: "inherit",
+  // npm.cmd is a Windows command shim, not a native executable.
+  shell: process.platform === "win32",
+});
 child.on("exit", (code, signal) => {
   if (signal) process.kill(process.pid, signal);
   process.exit(code ?? 1);

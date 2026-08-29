@@ -65,7 +65,23 @@ Start-Process "http://127.0.0.1:7331"
 需要启用或重启服务器时，使用全局 `procm-mcp` 管理；自带热更新的服务不需要重启。
 如果 MCP 不可用，则加载 `procm-http` skill，使用 HTTP 作为兜底。
 
-然后将以下 MCP 配置添加到客户端：
+单个 Agent 客户端使用默认的 stdio 配置：
+
+```json
+{
+  "mcpServers": {
+    "procm-mcp": {
+      "command": "procm-mcp",
+      "args": ["--port", "7331", "--data-path", "global"]
+    }
+  }
+}
+```
+
+#### 如果在多个 Agent 客户端之间共享进程（备用选项）
+
+如果多个 Agent 客户端需要共享同一个进程管理器，则使用上面启动的 HTTP 后端，
+并在每个客户端中配置：
 
 ```json
 {

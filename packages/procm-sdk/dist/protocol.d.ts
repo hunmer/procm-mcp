@@ -36,6 +36,15 @@ export interface StructuredLog {
     data?: JsonValue;
     traceId?: string;
 }
+/** Payload shape used by the backend's WebSocket `processes` messages. */
+export interface ProcessesMessagePayload {
+    serverId?: string;
+    pid?: number;
+    startedAt?: number;
+    port?: number | null;
+    data: JsonValue[];
+    snapshot?: boolean;
+}
 export type ClientFrame = {
     version: typeof PROCM_PROTOCOL_VERSION;
     type: "hello";

@@ -22,6 +22,24 @@ async function request(client, method, path, body) {
         throw new Error(payload?.error || `HTTP ${response.status}`);
     return payload;
 }
+export function listProcesses(client) {
+    return request(client, "GET", "/api/processes");
+}
+export function getProcess(client, id) {
+    return request(client, "GET", `/api/processes/${encodeURIComponent(id)}`);
+}
+export function updateProcess(client, id, updates) {
+    return request(client, "PATCH", `/api/processes/${encodeURIComponent(id)}`, updates);
+}
+export function getServerLogInfo(client) {
+    return request(client, "GET", "/api/server-log");
+}
+export function updateServerLogMaxBytes(client, maxBytes) {
+    return request(client, "PUT", "/api/server-log/settings", { maxBytes });
+}
+export function clearServerLogs(client) {
+    return request(client, "DELETE", "/api/server-log");
+}
 export function clearProcessLogs(client, id) {
     return request(client, "DELETE", `/api/processes/${encodeURIComponent(id)}/logs`);
 }

@@ -66,7 +66,23 @@ When enabling or restarting a server, use the global `procm-mcp` manager. Servic
 with built-in hot reload do not need a restart. If MCP is unavailable, load the
 `procm-http` skill and use its HTTP fallback.
 
-Then add this MCP server configuration to the client:
+For a single Agent client, add the default stdio configuration:
+
+```json
+{
+  "mcpServers": {
+    "procm-mcp": {
+      "command": "procm-mcp",
+      "args": ["--port", "7331", "--data-path", "global"]
+    }
+  }
+}
+```
+
+#### Sharing processes across multiple Agent clients (backup option)
+
+If multiple Agent clients need to share the same process manager, use the HTTP
+backend started above and configure each client with:
 
 ```json
 {

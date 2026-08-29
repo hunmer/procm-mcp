@@ -163,19 +163,33 @@ try {
 
     // Optional HTTP dashboard (enabled via PROCM_HTTP_PORT), overridden by --port.
     if (Number.isFinite(cli.port) && cli.port > 0) {
-      const httpServer = await startHttpServer(cli.port);
-      const actualPort = (httpServer.address() as { port: number }).port;
-      consoleBanner(
-        `procm-mcp dashboard ready`,
-        `Dashboard: http://127.0.0.1:${actualPort}`,
-      );
-    } else {
-      const httpServer = await startHttpServerIfConfigured();
-      if (httpServer) {
+      try {
+        const httpServer = await startHttpServer(cli.port);
         const actualPort = (httpServer.address() as { port: number }).port;
         consoleBanner(
           `procm-mcp dashboard ready`,
           `Dashboard: http://127.0.0.1:${actualPort}`,
+        );
+      } catch (error) {
+        // A stdio MCP server remains useful when its optional dashboard port is
+        // already owned by another procm-mcp instance.
+        console.error(
+          `procm-mcp: dashboard unavailable on port ${cli.port}: ${toErrorMessage(error)}`,
+        );
+      }
+    } else {
+      try {
+        const httpServer = await startHttpServerIfConfigured();
+        if (httpServer) {
+          const actualPort = (httpServer.address() as { port: number }).port;
+          consoleBanner(
+            `procm-mcp dashboard ready`,
+            `Dashboard: http://127.0.0.1:${actualPort}`,
+          );
+        }
+      } catch (error) {
+        console.error(
+          `procm-mcp: dashboard unavailable: ${toErrorMessage(error)}`,
         );
       }
     }
