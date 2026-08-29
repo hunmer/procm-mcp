@@ -379,6 +379,8 @@ export function LogFilesView({
           highlight={null}
           fontTextClass={fontSize === "xs" ? "text-xs" : fontSize === "sm" ? "text-sm" : "text-base"}
           fontLineClass={fontSize === "xs" ? "leading-relaxed" : "leading-normal"}
+          fontSize={fontSize}
+          onFontSizeChange={setFontSize}
           backgroundMode={colorizeBackground ? "level" : "none"}
           loading={contentLoading}
           loadingText={<Spinner className="text-zinc-500 size-5" />}

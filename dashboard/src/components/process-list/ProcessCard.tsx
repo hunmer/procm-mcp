@@ -63,13 +63,13 @@ export function ProcessCard({
     }
   }
   return (
-    <div ref={sortable.setNodeRef} style={{ transform: CSS.Transform.toString(sortable.transform), transition: sortable.transition, visibility: sortable.isDragging ? "hidden" : "visible" }} className="group/process relative" data-dragging={sortable.isDragging || undefined}>
+    <div ref={sortable.setNodeRef} style={{ transform: CSS.Transform.toString(sortable.transform), transition: sortable.transition, visibility: sortable.isDragging ? "hidden" : "visible" }} className="group/process relative h-full" data-dragging={sortable.isDragging || undefined}>
       {dragEnabled && <Button ref={sortable.setActivatorNodeRef} size="icon-xs" variant="ghost" aria-label="拖拽排序进程" title="拖拽排序进程" className="absolute right-2 top-2 z-10 cursor-grab text-muted-foreground opacity-0 transition-opacity group-hover/process:opacity-100" {...sortable.attributes} {...sortable.listeners} onClick={(e) => e.stopPropagation()}><GripVerticalIcon /></Button>}
     <ContextMenu>
       <ContextMenuTrigger
         render={
           <Card
-            className="cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--card),var(--color-black)_2%)] data-[state=selected]:bg-[color-mix(in_srgb,var(--card),var(--color-black)_4%)] dark:hover:bg-[color-mix(in_srgb,var(--card),var(--color-white)_2%)] dark:data-[state=selected]:bg-[color-mix(in_srgb,var(--card),var(--color-white)_4%)]"
+            className="h-full cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--card),var(--color-black)_2%)] data-[state=selected]:bg-[color-mix(in_srgb,var(--card),var(--color-black)_4%)] dark:hover:bg-[color-mix(in_srgb,var(--card),var(--color-white)_2%)] dark:data-[state=selected]:bg-[color-mix(in_srgb,var(--card),var(--color-white)_4%)]"
             data-state={isActive ? "selected" : undefined}
             onClick={() => actions.onSelectLogs(p)}
           />

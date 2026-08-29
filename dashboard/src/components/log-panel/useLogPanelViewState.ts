@@ -1,18 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import type { LogEntry } from "@/lib/types";
 import type { FontSize, LevelFilter } from "./types";
-import { loadShowJson } from "./constants";
+import { loadViewSettings, persistViewSettings } from "./constants";
 
 export function useLogPanelViewState(entries: LogEntry[]) {
   const [search, setSearch] = useState("");
   const [selectedLevels, setSelectedLevels] = useState<Set<LevelFilter>>(new Set());
   const [selectedDevices, setSelectedDevices] = useState<Set<string>>(new Set());
-  const [showTime, setShowTime] = useState(true);
-  const [showLineNumbers, setShowLineNumbers] = useState(false);
-  const [showJson, setShowJson] = useState<boolean>(loadShowJson);
-  const [colorizeBackground, setColorizeBackground] = useState(true);
-  const [autoScroll, setAutoScroll] = useState(true);
-  const [fontSize, setFontSize] = useState<FontSize>("xs");
+  // View settings are initialized once from localStorage and written back on
+  // every change so they survive reloads.
+  const [initial] = useState(loadViewSettings);
+  const [showTime, setShowTime] = useState(initial.showTime);
+  const [showLineNumbers, setShowLineNumbers] = useState(initial.showLineNumbers);
+  const [showJson, setShowJson] = useState(initial.showJson);
+  const [colorizeBackground, setColorizeBackground] = useState(initial.colorizeBackground);
+  const [autoScroll, setAutoScroll] = useState(initial.autoScroll);
+  const [fontSize, setFontSize] = useState<FontSize>(initial.fontSize);
   const devices = useMemo(() => [...new Set(entries.map((entry) => entry.clientName).filter((name): name is string => !!name))].sort(), [entries]);
   const visibleEntries = useMemo(() => {
     const levels = selectedLevels.size === 0 ? entries : entries.filter((entry) => entry.level !== undefined && selectedLevels.has(entry.level));
@@ -32,5 +35,8 @@ export function useLogPanelViewState(entries: LogEntry[]) {
     const next = new Set([...current].filter((name) => devices.includes(name)));
     return next.size === current.size ? current : next;
   }), [devices]);
+  useEffect(() => {
+    persistViewSettings({ showTime, showLineNumbers, autoScroll, showJson, colorizeBackground, fontSize });
+  }, [showTime, showLineNumbers, autoScroll, showJson, colorizeBackground, fontSize]);
   return { search, setSearch, selectedLevels, setSelectedLevels, selectedDevices, setSelectedDevices, devices, visibleEntries, levelCounts, deviceCounts, showTime, setShowTime, showLineNumbers, setShowLineNumbers, showJson, setShowJson, colorizeBackground, setColorizeBackground, autoScroll, setAutoScroll, fontSize, setFontSize };
 }

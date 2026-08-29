@@ -8,13 +8,12 @@ import {
   PopoverTrigger,
 } from "@/registry/default/ui/popover";
 import { Separator } from "@/registry/default/ui/separator";
-import { persistShowJson } from "./constants";
 import type { FontSize } from "./types";
 
 // View settings: a popover (stays open while toggling) holding the per-log
 // view toggles + font-size picker, collapsed behind a gear so the
-// quick-filter row stays compact. Stateless except for persisting the
-// JSON-tree toggle to localStorage so the choice survives reloads.
+// quick-filter row stays compact. Fully controlled; persistence of all
+// toggles to localStorage lives in useLogPanelViewState.
 export function LogPanelViewSettings({
   showTime,
   onShowTimeChange,
@@ -84,10 +83,7 @@ export function LogPanelViewSettings({
         <label className="hover:bg-accent flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm">
           <Checkbox
             checked={showJson}
-            onCheckedChange={(v) => {
-              onShowJsonChange(v);
-              persistShowJson(v);
-            }}
+            onCheckedChange={(v) => onShowJsonChange(v)}
           />
           {t("logs.jsonOption")}
         </label>

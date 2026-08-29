@@ -15,6 +15,7 @@ import {
 } from "@/registry/default/ui/empty";
 import { ScrollArea } from "@/registry/default/ui/scroll-area";
 import type { LogEntry } from "@/lib/types";
+import type { FontSize } from "./types";
 import { TerminalLog } from "../TerminalLog";
 
 // The log body: a dark "terminal" surface so the ANSI color palette renders
@@ -34,6 +35,8 @@ export function LogPanelBody({
   highlight,
   fontTextClass,
   fontLineClass,
+  fontSize,
+  onFontSizeChange,
   backgroundMode,
   loading = false,
   notice,
@@ -53,6 +56,8 @@ export function LogPanelBody({
   highlight: RegExp | null;
   fontTextClass: string;
   fontLineClass: string;
+  fontSize?: FontSize;
+  onFontSizeChange?: (size: FontSize) => void;
   backgroundMode: "none" | "level" | "client";
   loading?: boolean;
   notice?: ReactNode;
@@ -111,6 +116,8 @@ export function LogPanelBody({
             highlight={highlight}
             backgroundMode={backgroundMode}
             className={`${fontTextClass} ${fontLineClass}`}
+            fontSize={fontSize}
+            onFontSizeChange={onFontSizeChange}
           />
         )}
       </div>

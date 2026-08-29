@@ -8,9 +8,9 @@ import {
   XIcon,
 } from "lucide-react";
 import { CopyIconButton } from "@/components/CopyIconButton";
+import { deviceColor } from "../TerminalLog";
 import { Button } from "@/registry/default/ui/button";
-import { Checkbox } from "@/registry/default/ui/checkbox";
-import { CheckboxGroup } from "@/registry/default/ui/checkbox-group";
+import { Badge } from "@/registry/default/ui/badge";
 import { Input } from "@/registry/default/ui/input";
 import { Slider } from "@/registry/default/ui/slider";
 import { LEVEL_FILTERS } from "./constants";
@@ -214,35 +214,38 @@ export function LogPanelHeader({
       )}
 
       {/* Structured-level quick filter: multiple levels may be combined. None
-          checked shows every line, including legacy plain output without a level. */}
-      <CheckboxGroup
-        value={LEVEL_FILTERS.filter((f) => selectedLevels.has(f.level)).map((f) => f.level)}
-        onValueChange={(value) => {
-          const next = new Set(value as LevelFilter[]);
-          LEVEL_FILTERS.forEach((f) => {
-            if (selectedLevels.has(f.level) !== next.has(f.level)) {
-              onToggleLevel(f.level);
-            }
-          });
-        }}
-        className="flex flex-row flex-nowrap items-center gap-1.5 overflow-x-auto"
+          active shows every line, including legacy plain output without a
+          level. Each badge is a toggle button styled like StatusBadge
+          (p-badge-17): a level-colored status dot plus semantic tinted fill
+          and matching border while active, outline otherwise. */}
+      <div
+        role="group"
         aria-label="Log level"
+        className="flex flex-row flex-nowrap items-center gap-1.5 overflow-x-auto"
       >
         {LEVEL_FILTERS.map((f) => {
           const checked = selectedLevels.has(f.level);
           const count = levelCounts[f.level];
           return (
-            <label
+            <Badge
               key={f.level}
-              className="inline-flex items-center gap-1"
-              title={t("logs.filterByLevel", { level: f.label })}
+              variant={checked ? f.variant : "outline"}
+              className={checked ? "border-current/40" : undefined}
+              render={
+                <button
+                  type="button"
+                  aria-pressed={checked}
+                  title={t("logs.filterByLevel", { level: f.label })}
+                  onClick={() => onToggleLevel(f.level)}
+                />
+              }
             >
-              <Checkbox value={f.level} checked={checked} className="size-3" />
+              <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${f.dotClass}`} />
               {f.label}
               {count > 0 && (
                 <span className="font-normal opacity-60 tabular-nums">{count}</span>
               )}
-            </label>
+            </Badge>
           );
         })}
         <LogPanelViewSettings
@@ -259,27 +262,35 @@ export function LogPanelHeader({
           colorizeBackground={colorizeBackground}
           onColorizeBackgroundChange={onColorizeBackgroundChange}
         />
-      </CheckboxGroup>
+      </div>
       {devices.length > 0 && (
-        <CheckboxGroup
-          value={devices.filter((name) => selectedDevices.has(name))}
-          onValueChange={(value) => {
-            const next = new Set(value as string[]);
-            devices.forEach((name) => {
-              if (selectedDevices.has(name) !== next.has(name)) onToggleDevice(name);
-            });
-          }}
-          className="flex flex-row flex-nowrap items-center gap-1.5 overflow-x-auto"
+        <div
+          role="group"
           aria-label="Devices"
+          className="flex flex-row flex-nowrap items-center gap-1.5 overflow-x-auto"
         >
-          {devices.map((name) => (
-            <label key={name} className="inline-flex items-center gap-1 text-xs">
-              <Checkbox value={name} checked={selectedDevices.has(name)} className="size-3" />
-              {name}
-              <span className="font-normal opacity-60 tabular-nums">{deviceCounts[name] ?? 0}</span>
-            </label>
-          ))}
-        </CheckboxGroup>
+          {devices.map((name) => {
+            const checked = selectedDevices.has(name);
+            return (
+              <Badge
+                key={name}
+                variant={checked ? "secondary" : "outline"}
+                className={checked ? "border-current/40" : undefined}
+                render={
+                  <button
+                    type="button"
+                    aria-pressed={checked}
+                    onClick={() => onToggleDevice(name)}
+                  />
+                }
+              >
+                {name}
+                <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: deviceColor(name) }} />
+                <span className="font-normal opacity-60 tabular-nums">{deviceCounts[name] ?? 0}</span>
+              </Badge>
+            );
+          })}
+        </div>
       )}
     </header>
   );

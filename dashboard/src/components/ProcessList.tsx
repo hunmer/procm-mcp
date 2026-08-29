@@ -287,7 +287,7 @@ function GroupSection({
             <SortableContext items={g.processes.map((p) => p.id)} strategy={rectSortingStrategy}>
             <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2 @5xl:grid-cols-3">
               {g.processes.map((p) => (
-                <div key={p.id} className="relative rounded-2xl">
+                <div key={p.id} className="relative h-full rounded-2xl">
                   <ProcessCard
                     p={p}
                     isActive={p.id === selectedId}

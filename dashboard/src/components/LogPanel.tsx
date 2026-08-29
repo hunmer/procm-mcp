@@ -610,6 +610,8 @@ export function LogPanel({ process, entries: externalEntries, roomMode = false, 
         highlight={highlightRegex}
         fontTextClass={fontTextClass}
         fontLineClass={fontLineClass}
+        fontSize={fontSize}
+        onFontSizeChange={setFontSize}
         backgroundMode={colorizeBackground ? (roomMode ? "client" : "level") : "none"}
       />
 

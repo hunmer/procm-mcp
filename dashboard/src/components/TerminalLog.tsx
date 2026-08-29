@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { cn } from "@/registry/default/lib/utils";
 import { tokenizeAnsi, type AnsiSegment } from "./ansi";
 import { JsonViewer, type JsonValue } from "./JsonViewer";
 import type { LogEntry } from "@/lib/types";
+import type { FontSize } from "./log-panel/types";
 import {
   PreviewCard,
   PreviewCardPopup,
@@ -312,7 +313,9 @@ function TerminalLine({
   );
 }
 
-function deviceColor(name: string): string {
+// Stable per-client color (used for the [clientName] tag, the client
+// background tint and the device-filter badge dot).
+export function deviceColor(name: string): string {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
   const palette = ["#f59e0b", "#22d3ee", "#a78bfa", "#4ade80", "#fb7185", "#60a5fa", "#facc15", "#c084fc"];
@@ -338,7 +341,16 @@ export interface TerminalLogProps {
   highlight: RegExp | null;
   className?: string;
   backgroundMode?: "none" | "level" | "client";
+  // Current font-size step. Ctrl/Cmd+wheel over the log zooms one step at a
+  // time and reports the new value through onFontSizeChange so the caller
+  // can persist it (the view-settings popover's fontSize state).
+  fontSize?: FontSize;
+  onFontSizeChange?: (size: FontSize) => void;
 }
+
+// Zoom ladder shared with the view-settings popover (xs→sm→md maps to
+// text-xs / text-sm / text-base).
+const FONT_STEPS: readonly FontSize[] = ["xs", "sm", "md"];
 
 // Terminal-styled log body: renders the merged stdout/stderr entries inside a
 // single <pre> (one line per entry), preserving whitespace and ANSI colors.
@@ -353,9 +365,31 @@ export function TerminalLog({
   highlight,
   className,
   backgroundMode = "none",
+  fontSize,
+  onFontSizeChange,
 }: TerminalLogProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || !onFontSizeChange) return;
+    // Registered as a native non-passive listener: React attaches wheel
+    // passively, so preventDefault (needed to stop the browser's Ctrl+wheel
+    // page zoom) would be ignored in a synthetic onWheel handler.
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      const idx = FONT_STEPS.indexOf(fontSize ?? "xs");
+      const next =
+        e.deltaY < 0
+          ? Math.min(idx + 1, FONT_STEPS.length - 1)
+          : Math.max(idx - 1, 0);
+      if (next !== idx) onFontSizeChange(FONT_STEPS[next]);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [fontSize, onFontSizeChange]);
   return (
-    <div className={cn("m-0 font-mono", className)}>
+    <div ref={containerRef} className={cn("m-0 font-mono", className)}>
       {entries.map((entry, i) => (
         <TerminalLine
           key={i}
