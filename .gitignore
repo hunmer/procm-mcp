@@ -5,6 +5,7 @@ dashboard/node_modules
 dashboard/dist
 .procm-mcp-data
 .procm-mcp/
+.zcode/
 .tmp-cli-out.txt
 .procm-mcp/processes.json
 .procm-mcp-test/
