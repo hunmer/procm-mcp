@@ -1,6 +1,5 @@
 import { useTranslation } from "react-i18next";
 import {
-  CopyIcon,
   DownloadIcon,
   EllipsisVerticalIcon,
   EraserIcon,
@@ -8,6 +7,7 @@ import {
   FolderTreeIcon,
   TerminalIcon,
 } from "lucide-react";
+import { CopyIconButton } from "@/components/CopyIconButton";
 import { Button } from "@/registry/default/ui/button";
 import {
   Menu,
@@ -20,7 +20,7 @@ import {
 // overflow actions dropdown (right). Stateless — handlers and counts come in
 // as props so LogPanel owns the state.
 export function LogPanelFooter({
-  onCopyText,
+  getCopyText,
   onClearLogs,
   canStop,
   showStdin,
@@ -34,7 +34,7 @@ export function LogPanelFooter({
   onRevealLogFile,
   onDownloadLog,
 }: {
-  onCopyText: () => void;
+  getCopyText: () => string | null;
   onClearLogs: () => void;
   canStop: boolean;
   showStdin: boolean;
@@ -52,15 +52,15 @@ export function LogPanelFooter({
   return (
     <div className="flex shrink-0 items-center justify-between gap-1 border-t px-2 py-1.5">
       <div className="flex items-center gap-1">
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          aria-label={t("logs.copyLogsAria")}
-          title={t("logs.copyLogsTitle")}
-          onClick={onCopyText}
-        >
-          <CopyIcon />
-        </Button>
+        {/* Copy button with anchored "已复制" toast (coss p-toast-7 pattern);
+            the count mirrors what handleCopyText built in LogPanel. */}
+        <CopyIconButton
+          getValue={getCopyText}
+          tooltip={t("logs.copyLogsTitle")}
+          ariaLabel={t("logs.copyLogsAria")}
+          toastTitle={t("logs.toastCopiedLines", { count: visibleCount })}
+          emptyToastTitle={t("logs.toastNothingToCopy")}
+        />
         {/* Clear-view button. Ctrl+C and other signals moved to the stdin
             bar's snippets menu. */}
         <Button

@@ -20,6 +20,7 @@ import {
   type DashboardTab,
 } from "./app/dashboardRoutes";
 import { useDashboardSocket } from "@/lib/ws";
+import { AnchoredToastProvider } from "@/registry/default/ui/toast";
 import {
   clearAllProcesses,
   clearLogFiles,
@@ -425,6 +426,9 @@ export function App() {
           : t("header.statusReconnecting");
 
   return (
+    // AnchoredToastProvider hosts the element-anchored tooltip-style toasts
+    // (e.g. CopyIconButton's "已复制" feedback). Global toasts stay separate.
+    <AnchoredToastProvider>
     <div className="flex h-full gap-3 p-3">
       <DashboardRail
         status={status}
@@ -537,5 +541,6 @@ export function App() {
       />
       <DevInspector />
     </div>
+    </AnchoredToastProvider>
   );
 }

@@ -117,16 +117,6 @@ export function LogPanel({ process, entries: externalEntries, roomMode = false, 
       "[data-slot=scroll-area-viewport]",
     ) ?? null;
 
-  // Copy the process id to the clipboard.
-  async function handleCopyId() {
-    try {
-      await navigator.clipboard.writeText(process.id);
-      onToast(t("logs.toastCopiedId", { id: process.id }));
-    } catch {
-      onToast(t("logs.toastCopyFailed"), true);
-    }
-  }
-
   // Clear this process's stdout/stderr history on the server, then reset the
   // panel to the empty live-tail view. Keep the current view when it fails.
   async function handleClearLogs() {
@@ -226,15 +216,14 @@ export function LogPanel({ process, entries: externalEntries, roomMode = false, 
     }
   }
 
-  // Copy the currently displayed log text to the clipboard. Mirrors the Line
+  // Build the currently displayed log text for the footer's copy button
+  // (clipboard write + anchored toast live in CopyIconButton). Mirrors the Line
   // rendering (timestamp + optional stderr tag, line numbers excluded since
-  // they're select-none) so the copied text matches what's on screen.
-  async function handleCopyText() {
-    if (visibleEntries.length === 0) {
-      onToast(t("logs.toastNothingToCopy"));
-      return;
-    }
-    const text = visibleEntries
+  // they're select-none) so the copied text matches what's on screen. Null
+  // when nothing is visible — the button then shows a "nothing to copy" toast.
+  function getCopyText(): string | null {
+    if (visibleEntries.length === 0) return null;
+    return visibleEntries
       .map((e) => {
         const time = `[${formatTime(e.timestamp)}]`;
         const tag = e.stream === "stderr" ? ` [${e.stream}]` : "";
@@ -243,12 +232,6 @@ export function LogPanel({ process, entries: externalEntries, roomMode = false, 
         return `${time}${tag} ${stripAnsi(e.message)}`;
       })
       .join("\n");
-    try {
-      await navigator.clipboard.writeText(text);
-      onToast(t("logs.toastCopiedLines", { count: visibleEntries.length }));
-    } catch {
-      onToast(t("logs.toastCopyFailed"), true);
-    }
   }
 
   // Copy the on-disk log file locations. The browser can't know these paths,
@@ -582,7 +565,6 @@ export function LogPanel({ process, entries: externalEntries, roomMode = false, 
         processName={process.name}
         processId={process.id}
         canStop={canStop}
-        onCopyId={handleCopyId}
         onRestart={handleRestart}
         onRequestStop={requestStop}
         onClose={onClose}
@@ -644,7 +626,7 @@ export function LogPanel({ process, entries: externalEntries, roomMode = false, 
       )}
 
       <LogPanelFooter
-        onCopyText={handleCopyText}
+        getCopyText={getCopyText}
         onClearLogs={handleClearLogs}
         canStop={canStop}
         showStdin={showStdin}

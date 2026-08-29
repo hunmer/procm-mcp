@@ -43,7 +43,11 @@ export function ProcessCard({
   // reports `spawning` over WebSocket, covering the gap before the response.
   const isStarting = starting || p.status === "spawning";
   const cmd = `${p.script}${p.args?.length ? " " + p.args.join(" ") : ""}`;
-  const sortable = useSortable({ id: p.id, data: { type: "process", group: dragGroup } });
+  const sortable = useSortable({
+    id: p.id,
+    data: { type: "process", group: dragGroup },
+    animateLayoutChanges: () => true,
+  });
 
   async function handleStart(e: MouseEvent<HTMLButtonElement>) {
     e.stopPropagation();
@@ -56,8 +60,8 @@ export function ProcessCard({
     }
   }
   return (
-    <div ref={sortable.setNodeRef} style={{ transform: CSS.Transform.toString(sortable.transform), transition: sortable.transition }} className="group/process relative" data-dragging={sortable.isDragging || undefined}>
-      <Button size="icon-xs" variant="ghost" aria-label="拖拽排序进程" title="拖拽排序进程" className="absolute right-2 top-2 z-10 cursor-grab text-muted-foreground opacity-0 transition-opacity group-hover/process:opacity-100" {...sortable.attributes} {...sortable.listeners} onClick={(e) => e.stopPropagation()}><GripVerticalIcon /></Button>
+    <div ref={sortable.setNodeRef} style={{ transform: CSS.Transform.toString(sortable.transform), transition: sortable.transition, visibility: sortable.isDragging ? "hidden" : "visible" }} className="group/process relative" data-dragging={sortable.isDragging || undefined}>
+      <Button ref={sortable.setActivatorNodeRef} size="icon-xs" variant="ghost" aria-label="拖拽排序进程" title="拖拽排序进程" className="absolute right-2 top-2 z-10 cursor-grab text-muted-foreground opacity-0 transition-opacity group-hover/process:opacity-100" {...sortable.attributes} {...sortable.listeners} onClick={(e) => e.stopPropagation()}><GripVerticalIcon /></Button>
     <ContextMenu>
       <ContextMenuTrigger
         render={

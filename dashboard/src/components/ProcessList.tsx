@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { DndContext, closestCorners, pointerWithin, type CollisionDetection, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
-import { SortableContext, rectSwappingStrategy, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { DndContext, DragOverlay, closestCorners, pointerWithin, type CollisionDetection, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
+import { SortableContext, rectSortingStrategy, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useTranslation } from "react-i18next";
 import {
@@ -282,7 +282,7 @@ function GroupSection({
         </FrameHeader>
         <CollapsiblePanel>
           <FramePanel className="p-3">
-            <SortableContext items={g.processes.map((p) => p.id)} strategy={rectSwappingStrategy}>
+            <SortableContext items={g.processes.map((p) => p.id)} strategy={rectSortingStrategy}>
             <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2 @5xl:grid-cols-3">
               {g.processes.map((p) => (
                 <div key={p.id} className="relative rounded-2xl">
@@ -376,6 +376,7 @@ export function ProcessList({
   const [collapsedLabels, setCollapsedLabels] = useState<Set<string>>(loadCollapsed);
   const [groupOrder, setGroupOrder] = useState<string[]>(() => loadJson(GROUP_ORDER_KEY, []));
   const [processOrder, setProcessOrder] = useState<Record<string, string[]>>(() => loadJson(PROCESS_ORDER_KEY, {}));
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
 
   function moveItem(items: string[], from: string, to: string) {
     const fromIndex = items.indexOf(from);
@@ -413,6 +414,8 @@ export function ProcessList({
   }
 
   function handleDragStart(event: DragStartEvent) {
+    const id = String(event.active.id);
+    setActiveDragId(id);
     if (event.active.data.current?.type !== "group") return;
     const labels = new Set(processes.map((p) => groupKeyOf(p.group ?? undefined)));
     setCollapsedLabels(labels);
@@ -420,6 +423,7 @@ export function ProcessList({
   }
 
   function handleDragEnd(event: DragEndEvent) {
+    setActiveDragId(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const activeData = active.data.current;
@@ -431,6 +435,10 @@ export function ProcessList({
       moveProcess(String(activeData!.group), String(active.id), String(over.id));
     }
   }
+
+
+  const activeDragProcess = activeDragId && processes.find((p) => p.id === activeDragId);
+  const activeDragGroup = activeDragId?.startsWith("group:") ? activeDragId.slice(6) : null;
 
   // Keep group drags from being captured by the process droppables nested in
   // each panel. Corner detection also activates as soon as the pointer enters
@@ -649,7 +657,7 @@ export function ProcessList({
   const grouped = orderedGroups.filter((g) => g.label !== UNGROUPED);
 
   return (
-    <DndContext collisionDetection={collisionDetectionStrategy} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    <DndContext collisionDetection={collisionDetectionStrategy} onDragStart={handleDragStart} onDragCancel={() => setActiveDragId(null)} onDragEnd={handleDragEnd}>
     <div className="flex h-full min-h-0 flex-col">
       <ProcessFilterBar
         statusFilter={statusFilter}
@@ -792,6 +800,9 @@ export function ProcessList({
         onSubmit={confirmRenameGroup}
       />
     </div>
+    <DragOverlay dropAnimation={null}>
+      {activeDragProcess ? <Card className="w-80 opacity-95 shadow-xl"><CardHeader className="p-4"><span className="font-semibold">{activeDragProcess.name}</span></CardHeader></Card> : activeDragGroup ? <Frame className="w-80 opacity-95 shadow-xl"><div className="p-3 text-sm font-semibold">{activeDragGroup}</div></Frame> : null}
+    </DragOverlay>
     </DndContext>
   );
 }

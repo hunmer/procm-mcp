@@ -1,6 +1,5 @@
 import { useTranslation } from "react-i18next";
 import {
-  CopyIcon,
   PanelRightCloseIcon,
   PlayIcon,
   RotateCwIcon,
@@ -8,6 +7,7 @@ import {
   SquareIcon,
   XIcon,
 } from "lucide-react";
+import { CopyIconButton } from "@/components/CopyIconButton";
 import { Button } from "@/registry/default/ui/button";
 import { Checkbox } from "@/registry/default/ui/checkbox";
 import { CheckboxGroup } from "@/registry/default/ui/checkbox-group";
@@ -25,7 +25,6 @@ export function LogPanelHeader({
   processName,
   processId,
   canStop,
-  onCopyId,
   onRestart,
   onRequestStop,
   onClose,
@@ -60,7 +59,6 @@ export function LogPanelHeader({
   processName: string;
   processId: string;
   canStop: boolean;
-  onCopyId: () => void;
   onRestart: () => void;
   onRequestStop: () => void;
   onClose: () => void;
@@ -104,15 +102,15 @@ export function LogPanelHeader({
             <p className="text-muted-foreground truncate font-mono text-xs">
               {processId}
             </p>
-            <button
-              type="button"
-              aria-label={t("logs.copyIdAria")}
-              title={t("logs.copyIdTitle")}
-              onClick={onCopyId}
-              className="text-muted-foreground hover:text-foreground shrink-0"
-            >
-              <CopyIcon className="size-3.5" />
-            </button>
+            {/* Copy-id button with anchored "已复制" toast (coss p-toast-7
+                pattern); extra size keeps it compact next to the id text. */}
+            <CopyIconButton
+              getValue={() => processId}
+              tooltip={t("logs.copyIdTitle")}
+              ariaLabel={t("logs.copyIdAria")}
+              size="icon-xs"
+              className="text-muted-foreground hover:text-foreground -m-1"
+            />
           </div>
         </div>
         {!hideProcessControls && <div className="flex shrink-0 items-center gap-1">

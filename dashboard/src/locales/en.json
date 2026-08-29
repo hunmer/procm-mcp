@@ -15,7 +15,8 @@
     "remove": "Remove",
     "view": "View",
     "lightTheme": "light",
-    "darkTheme": "dark"
+    "darkTheme": "dark",
+    "copied": "Copied"
   },
   "header": {
     "statusConnected": "connected",

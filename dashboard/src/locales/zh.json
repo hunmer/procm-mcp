@@ -15,7 +15,8 @@
     "remove": "移除",
     "view": "查看",
     "lightTheme": "浅色",
-    "darkTheme": "深色"
+    "darkTheme": "深色",
+    "copied": "已复制"
   },
   "header": {
     "statusConnected": "已连接",

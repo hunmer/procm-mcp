@@ -299,7 +299,6 @@ export function LogFilesView({
           processName={selected?.processName ?? t("logFiles.noneSelected")}
           processId={selected?.processId ?? ""}
           canStop={false}
-          onCopyId={() => undefined}
           onRestart={() => undefined}
           onRequestStop={() => undefined}
           onClose={() => undefined}
