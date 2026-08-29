@@ -192,6 +192,57 @@ procm-mcp --server --port 8080 --data-path .procm-mcp-data
 
 `--data-path <path>` 选择进程历史、房间与日志的存放目录。相对路径以当前工作目录解析。不带该参数时数据存放在进程工作目录下的 `.procm-mcp`。使用 `--data-path global` 则使用用户级 `~/.procm-mcp` 目录。设置 `PROCM_MCP_DIR` 也仍然有效。
 
+### 使用 PM2 启动
+
+全局安装 procm-mcp 和 PM2。创建 `ecosystem.config.cjs` 文件（使用配置文件
+可以避免 Windows 下命令行参数解析差异）：
+
+```js
+const path = require("node:path");
+const { execSync } = require("node:child_process");
+
+const globalRoot = execSync("npm root -g", { encoding: "utf8" }).trim();
+
+module.exports = {
+  apps: [{
+    name: "procm-mcp",
+    script: path.join(globalRoot, "@hunmer", "procm-mcp", "build", "index.js"),
+    args: "--server --port 7331 --data-path global"
+  }]
+};
+```
+
+然后使用 PM2 启动：
+
+```bash
+npm i -g @hunmer/procm-mcp pm2
+pm2 start ecosystem.config.cjs
+```
+
+启动后可通过 `http://127.0.0.1:7331` 访问 dashboard。常用管理命令：
+
+```bash
+pm2 status
+pm2 logs procm-mcp
+pm2 restart procm-mcp
+pm2 stop procm-mcp
+pm2 delete procm-mcp
+```
+
+如需系统重启后自动恢复进程：
+
+- **Windows（PowerShell）：** 安装 Windows 自启动辅助工具，然后保存当前
+  PM2 进程列表：
+
+  ```powershell
+  npm i -g pm2-windows-startup
+  pm2-startup install
+  pm2 save
+  ```
+
+- **Linux/macOS：** 运行 `pm2 startup`，执行它输出的命令，再运行
+  `pm2 save`。
+
 ### 经 HTTP 连接（`type: "http"`）
 
 当 procm-mcp 运行在 HTTP 端口上（`--server`，或 `--port`/`PROCM_HTTP_PORT`）时，它会在 **`/mcp`** 暴露一个真正的 MCP 端点（Streamable HTTP 传输）。这让只支持 MCP-over-HTTP 的客户端也能接入，而不必使用 stdio。

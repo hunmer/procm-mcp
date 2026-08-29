@@ -203,6 +203,58 @@ If the requested port is already in use, procm-mcp automatically selects the nex
 
 `--data-path <path>` selects the directory used for process history, rooms, and logs. Relative paths are resolved from the current working directory. Without the flag, data is stored in `.procm-mcp` under the process working directory. Use `--data-path global` for the per-user `~/.procm-mcp` directory. `PROCM_MCP_DIR` remains supported when set.
 
+### Run with PM2
+
+Install procm-mcp and PM2 globally. Create an `ecosystem.config.cjs` file (the
+configuration avoids command-line argument parsing differences on Windows):
+
+```js
+const path = require("node:path");
+const { execSync } = require("node:child_process");
+
+const globalRoot = execSync("npm root -g", { encoding: "utf8" }).trim();
+
+module.exports = {
+  apps: [{
+    name: "procm-mcp",
+    script: path.join(globalRoot, "@hunmer", "procm-mcp", "build", "index.js"),
+    args: "--server --port 7331 --data-path global"
+  }]
+};
+```
+
+Start it with PM2:
+
+```bash
+npm i -g @hunmer/procm-mcp pm2
+pm2 start ecosystem.config.cjs
+```
+
+The dashboard is then available at `http://127.0.0.1:7331`. Common management
+commands:
+
+```bash
+pm2 status
+pm2 logs procm-mcp
+pm2 restart procm-mcp
+pm2 stop procm-mcp
+pm2 delete procm-mcp
+```
+
+To persist the process across reboots:
+
+- **Windows (PowerShell):** install the Windows startup helper, then save the
+  current PM2 process list:
+
+  ```powershell
+  npm i -g pm2-windows-startup
+  pm2-startup install
+  pm2 save
+  ```
+
+- **Linux/macOS:** run `pm2 startup`, execute the command it prints, and then
+  run `pm2 save`.
+
 ### Connect over HTTP (`type: "http"`)
 
 When procm-mcp runs with an HTTP port (`--server`, or `--port`/`PROCM_HTTP_PORT`), it exposes a real MCP endpoint at **`/mcp`** using the Streamable HTTP transport. This lets you connect a client that only speaks MCP-over-HTTP instead of stdio.
