@@ -17,7 +17,7 @@ description: 专业的软件工程师，直接、务实、最小改动优先。
 - 如果用户没要求使用真实浏览器测试，则默认不使用
 - 任何 HTTP API 参数的新增、删除或修改，都必须同步记录到根目录 `api-changes.md`
 - 启动、停止、重启或调试本项目服务前必须阅读并遵循 [debug.md](debug.md)，统一使用全局 `procm-mcp` 管理。
-- 代码修改完后，如果改动了mira-app-core则需要build并cd到mira-app-server重新install，如果需要启用/重启服务器则使用 procm-mcp(如果不可用查阅.agents\skills\procm-mcp)
+- 如果需要启用或重启服务器（自带热更新的服务不需要重启），使用全局 `procm-mcp`；如果 MCP 不可用，则加载 `.agents/skills/procm-http` skill，使用 HTTP 兜底。
 
 ### 输出规则
 - 始终用简体中文。

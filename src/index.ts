@@ -130,13 +130,14 @@ try {
     // exited before the dashboard starts serving.
     await reconcileStaleProcesses();
 
-    await startHttpServer(port);
+    const httpServer = await startHttpServer(port);
+    const actualPort = (httpServer.address() as { port: number }).port;
     consoleBanner(
       `procm-mcp backend (HTTP) ready`,
-      `Dashboard: http://127.0.0.1:${port}  (PID ${process.pid})`,
+      `Dashboard: http://127.0.0.1:${actualPort}  (PID ${process.pid})`,
     );
     serverLog(
-      `Server started with ID: ${serverId}, PID: ${process.pid} (HTTP backend mode on port ${port}).`,
+      `Server started with ID: ${serverId}, PID: ${process.pid} (HTTP backend mode on port ${actualPort}).`,
     );
     installSignalHandlers();
   } else {
@@ -162,17 +163,19 @@ try {
 
     // Optional HTTP dashboard (enabled via PROCM_HTTP_PORT), overridden by --port.
     if (Number.isFinite(cli.port) && cli.port > 0) {
-      await startHttpServer(cli.port);
+      const httpServer = await startHttpServer(cli.port);
+      const actualPort = (httpServer.address() as { port: number }).port;
       consoleBanner(
         `procm-mcp dashboard ready`,
-        `Dashboard: http://127.0.0.1:${cli.port}`,
+        `Dashboard: http://127.0.0.1:${actualPort}`,
       );
     } else {
       const httpServer = await startHttpServerIfConfigured();
       if (httpServer) {
+        const actualPort = (httpServer.address() as { port: number }).port;
         consoleBanner(
           `procm-mcp dashboard ready`,
-          `Dashboard: http://127.0.0.1:${process.env.PROCM_HTTP_PORT}`,
+          `Dashboard: http://127.0.0.1:${actualPort}`,
         );
       }
     }
@@ -184,8 +187,7 @@ try {
   }
 } catch (error) {
   serverLog(`Error starting server: ${toErrorMessage(error)}`);
-  // Surface startup errors to the console (e.g. port in use) so they aren't
-  // only buried in the log file.
+  // Surface startup errors to the console so they aren't only buried in the log.
   console.error(`procm-mcp: ${toErrorMessage(error)}`);
   exitProcess(1);
 }

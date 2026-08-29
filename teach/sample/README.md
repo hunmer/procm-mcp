@@ -1,88 +1,89 @@
-# procm-mcp 手动调试练习
+# procm-mcp debugging exercise
 
-这是一个故意保留计算 Bug 的 Node.js HTTP 服务，用来体验以下闭环：
+[简体中文](README.zh-CN.md)
 
-1. 安装并连接 procm-mcp。
-2. 初始化项目命令。
-3. 通过 procm-mcp 启动服务。
-4. 在页面触发错误。
-5. 让 Agent 读取日志、添加调试信息并修复。
-6. 再次点击页面按钮完成验证。
+This is a deliberately broken Node.js HTTP service for practicing the following loop:
 
-示例只使用 Node.js 内置模块，业务代码没有引入 procm SDK。请不要提前修复 `server.js` 中的 Bug。
+1. Install and connect procm-mcp.
+2. Initialize the project commands.
+3. Start the service through procm-mcp.
+4. Trigger the error in the page.
+5. Have the Agent read the logs, add debugging output, and fix the issue.
+6. Click the button again to verify the fix.
 
-## 环境要求
+The sample uses only Node.js built-in modules and does not include the procm SDK. Do not fix the bug in `server.js` before starting the exercise.
 
-- Node.js 18 或更高版本
-- 支持 MCP 和项目 Skill 的 AI 编程 Agent
+## Requirements
 
-以下命令均在本目录 `teach/sample` 中执行。
+- Node.js 18 or newer
+- An AI coding Agent that supports MCP and project Skills
 
-## 1. 安装 procm-mcp
+Run the following commands from this directory (`teach/sample`).
 
-安装 procm-mcp 到当前练习项目：
+## 1. Install procm-mcp
+
+Install procm-mcp in the exercise project:
 
 ```bash
-npm install --save-dev @hunmer/procm-mcp
+npm install --global @hunmer/procm-mcp
 ```
 
-安装项目初始化和进程管理 Skill：
+Install the project initialization and process management Skills:
 
 ```bash
 npx skills add hunmer/procm-mcp --skill procm-mcp procm-mcp-init -y
 ```
 
-按照你使用的 Agent 的 MCP 配置方式，将本项目中的服务入口注册为 MCP server：
+Register the service entry point as an MCP server using your Agent's MCP configuration format:
 
 ```json
 {
   "mcpServers": {
     "procm-mcp": {
-      "command": "node",
-      "args": ["./node_modules/@hunmer/procm-mcp/build/index.js"],
+      "command": "procm-mcp",
       "env": {}
     }
   }
 }
 ```
 
-配置完成后，重新加载 Agent，确认它可以看到 procm-mcp 的进程和日志工具。
+Reload the Agent and confirm that it can see the procm-mcp process and log tools.
 
-## 2. 让 Agent 初始化项目
+## 2. Have the Agent initialize the project
 
-将下面这句话发给 Agent：
+Send this message to the Agent:
 
-> 请初始化当前项目的 procm-mcp 命令，读取 package.json 中的启动脚本，先展示建议，再创建 procm-commands.json。不要启动服务。
+> Please initialize the procm-mcp commands for the current project. Read the startup script from package.json, show the proposal first, then create procm-commands.json. Do not start the service.
 
-确认 Agent 生成的 `procm-commands.json` 包含一个执行 `npm start` 的命令。
+Confirm that the generated `procm-commands.json` includes a command that runs `npm start`.
 
-## 3. 通过 procm-mcp 启动服务
+## 3. Start the service through procm-mcp
 
-将下面这句话发给 Agent：
+Send this message to the Agent:
 
-> 请通过 procm-mcp 启动当前项目的 start 命令，不要直接在终端启动。启动后读取最近日志，告诉我进程 ID 和访问地址。
+> Please start the current project's start command through procm-mcp, not directly in the terminal. After it starts, read the latest logs and tell me the process ID and URL.
 
-默认访问地址应为 <http://127.0.0.1:3000>。不要关闭 Agent 托管的服务。
+The default URL is <http://127.0.0.1:3000>. Do not stop the Agent-managed service.
 
-## 4. 手动触发错误
+## 4. Trigger the error
 
-1. 浏览器打开 <http://127.0.0.1:3000>。
-2. 点击“计算总价”。
-3. 确认页面显示 HTTP 500 返回的错误名称、错误消息和调用栈。
+1. Open <http://127.0.0.1:3000> in a browser.
+2. Click **Calculate total**.
+3. Confirm that the page shows the HTTP 500 error name, message, and stack trace.
 
-## 5. 让 Agent 读取证据并修复
+## 5. Have the Agent read the evidence and fix it
 
-不要复制页面错误或终端日志，直接将下面这句话发给 Agent：
+Do not copy the page error or terminal logs. Send this message to the Agent:
 
-> 我刚才点击“计算总价”后页面报错了。请读取该服务最近的 stdout 和 stderr，定位这次错误；先在关键输入和计算位置添加必要的调试输出，通过 procm-mcp 重启服务，然后让我再次点击以收集日志。根据新日志修复根因，再通过 procm-mcp 重启服务并检查启动日志。不要添加 procm SDK。
+> I clicked "Calculate total" and the page reported an error. Read the service's latest stdout and stderr to locate it. First add necessary debugging output at the key inputs and calculation, restart the service through procm-mcp, and ask me to click again to collect logs. Fix the root cause from the new logs, then restart through procm-mcp and check the startup logs. Do not add the procm SDK.
 
-Agent 要先从 procm-mcp 获取错误证据，再修改代码。按 Agent 提示再次点击按钮，让它读取新增的调试日志并完成修复。
+The Agent should obtain the error evidence from procm-mcp before changing the code. Click the button again when prompted so it can read the new debugging logs and complete the fix.
 
-## 6. 手动验证修复
+## 6. Verify the fix manually
 
-1. 刷新 <http://127.0.0.1:3000>。
-2. 再次点击“计算总价”。
-3. 确认页面返回 `ok: true`，总价为 `497`。
-4. 告诉 Agent：“我已点击并验证成功，请读取最新日志确认没有新的 error，并停止该服务。”
+1. Refresh <http://127.0.0.1:3000>.
+2. Click **Calculate total** again.
+3. Confirm that the response is `ok: true` and the total is `497`.
+4. Tell the Agent: “I clicked and verified it successfully. Read the latest logs to confirm there are no new errors, then stop the service.”
 
-完成后，你应当体验到由 procm-mcp 串联的完整过程：托管启动、读取错误日志、重启、再次收集调试信息、修复和停止服务。
+After completing the exercise, you should have practiced the full procm-mcp workflow: managed startup, log inspection, restart, debug-log collection, fixing, and stopping the service.

@@ -62,7 +62,7 @@ dashboard 和 demo 客户端应自动重连。若未恢复，再通过全局 `pr
 - 停止服务：使用全局 `process` 的 `action=delete`。
 - 查看日志：使用全局 `process-logs`，按进程 ID 读取 stdout 或 stderr。
 - 查看状态：使用全局 `process` 的 `action=list` 或 `action=get`。
-- MCP tools 不可用时：按 `.agents/skills/procm-mcp/SKILL.md` 连接全局后台进行 HTTP/CLI fallback；不要启动当前项目实例替代全局管理器。
+- MCP tools 不可用时：按 `.agents/skills/procm-http/SKILL.md` 连接全局后台进行 HTTP/CLI fallback；不要启动当前项目实例替代全局管理器。
 
 ## 快速验收
 

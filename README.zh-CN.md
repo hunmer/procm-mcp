@@ -38,12 +38,59 @@ node ./build/index.js --port 7331 --data-path global
 {
   "mcpServers": {
     "procm-mcp": {
-      "command": "node",
-      "args": ["./build/index.js", "--port", "7331", "--data-path", "global"]
+      "command": "procm-mcp",
+      "args": ["--port", "7331", "--data-path", "global"]
     }
   }
 }
 ```
+
+## 安装
+
+```powershell
+npm i -g @hunmer/procm-mcp
+```
+
+### AI 一键安装
+
+让 AI Agent 在终端依次执行：
+
+```powershell
+npm i -g @hunmer/procm-mcp
+npx skills add hunmer/procm-mcp --skill procm-http procm-rooms procm-init -y
+Start-Process -FilePath "procm-mcp" -ArgumentList "--server", "--port", "7331", "--data-path", "global"
+Start-Process "http://127.0.0.1:7331"
+```
+
+需要启用或重启服务器时，使用全局 `procm-mcp` 管理；自带热更新的服务不需要重启。
+如果 MCP 不可用，则加载 `procm-http` skill，使用 HTTP 作为兜底。
+
+然后将以下 MCP 配置添加到客户端：
+
+```json
+{
+  "mcpServers": {
+    "procm-mcp": {
+      "type": "http",
+      "url": "http://127.0.0.1:7331/mcp"
+    }
+  }
+}
+```
+
+### Agent Skills
+
+将两个 skill 安装到当前项目：
+
+```bash
+npx skills add hunmer/procm-mcp --skill procm-http procm-rooms procm-init -y
+```
+
+只安装一个时使用 `--skill <name>`（可选 `procm-http`、`procm-rooms` 或
+`procm-init`）。`procm-init` skill 会探索项目启动脚本，生成供
+审核的 `procm-commands.json`。
+`skills` CLI 会检测当前 agent，并安装到对应的项目级 skills 目录；Codex 对应
+`.agents/skills/`。
 
 ## Dashboard（HTTP）
 
@@ -108,6 +155,7 @@ procm-mcp --server --port 8080 --data-path .procm-mcp-data
 ```
 
 `--port <number>` 在默认（stdio）模式下同样可用：无需设置 `PROCM_HTTP_PORT` 即可启动 dashboard，且优先级高于它。
+如果指定端口已被占用，procm-mcp 会自动选择下一个可用端口，并在启动日志中报告实际端口。
 
 `--data-path <path>` 选择进程历史、房间与日志的存放目录。相对路径以当前工作目录解析。不带该参数时数据存放在进程工作目录下的 `.procm-mcp`。使用 `--data-path global` 则使用用户级 `~/.procm-mcp` 目录。设置 `PROCM_MCP_DIR` 也仍然有效。
 
@@ -156,25 +204,6 @@ procm-mcp --server --port 7331
 ```
 
 `procm-command` 工具（action `list`）返回文件内容与可用命令名。用 `procm-command`（action `start`）按名启动。每个命令的 `cwd` 相对项目目录（即包含 `procm-commands.json` 的目录）解析。
-
-## 安装
-
-```bash
-npm i -D @hunmer/procm-mcp
-```
-
-### Agent Skills
-
-将两个 skill 安装到当前项目：
-
-```bash
-npx skills add hunmer/procm-mcp --skill procm-mcp procm-rooms procm-mcp-init -y
-```
-
-只安装一个时使用 `--skill <name>`（可选 `procm-mcp`、`procm-rooms` 或
-`procm-mcp-init`）。`procm-mcp-init` skill 会探索项目启动脚本，生成供
-审核的 `procm-commands.json`。`skills` CLI 会检测当前 agent，并安装到对应
-的项目级 skills 目录；Codex 对应 `.agents/skills/`。
 
 房间客户端安装单独发布的 TypeScript SDK：
 
@@ -238,20 +267,6 @@ npm run test:custom-noise
 ```
 
 被管进程自动获得 `PROCM_ROOM_ID`、`PROCM_PROCESS_ID`、`PROCM_WS_URL` 与可选的鉴权信息。显式的 SDK 选项会覆盖环境变量。Node.js 与 Electron 的工作流示例见 `demo/`。
-
-`.mcp.json`
-
-```json
-{
-  "mcpServers": {
-    "procm-mcp": {
-      "command": "procm-mcp",
-      "args": ["--port", "7331", "--data-path", "global"],
-      "env": {}
-    }
-  }
-}
-```
 
 ## 进程创建没有内置门控
 

@@ -1,9 +1,9 @@
 ---
-name: procm-mcp
+name: procm-http
 description: HTTP API fallback for procm-mcp when the MCP server/tools are unavailable (not connected, tools missing, or transport error). Use whenever the agent needs to start/stop/restart a local background process, read or grep its stdout/stderr logs, send stdin input or a signal (Ctrl+C = SIGINT), or run commands from a project's procm-commands.json — AND the procm-mcp MCP tools are NOT working, so the same operations must be done over plain HTTP (or the `procm-mcp` CLI). Covers endpoint paths, request/response shapes, port & token discovery, and error codes.
 ---
 
-# procm-mcp (HTTP fallback)
+# procm-http (HTTP fallback)
 
 procm-mcp normally exposes its process manager as MCP tools (`start-process`,
 `process`, `process-logs`, `process-input`, `procm-command`). **This skill is

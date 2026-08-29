@@ -1348,12 +1348,8 @@ function createRequestHandler(token: string | undefined) {
   };
 }
 
-// Create and start the dashboard HTTP server on a given port.
-// Bound to 127.0.0.1 only. If PROCM_HTTP_TOKEN is set, requests must carry
-// `Authorization: Bearer <token>`.
-// Resolves once listening; rejects (with a friendly message on EADDRINUSE) on
-// failure so the caller can surface it instead of letting it reach
-// `uncaughtException`.
+// Create and start the dashboard HTTP server on a given port. If that port is
+// occupied, try subsequent ports until one is available.
 export function startHttpServer(port: number): Promise<http.Server> {
   const dashboardState = currentDashboardState();
   if (dashboardState.available) {
@@ -1364,37 +1360,39 @@ export function startHttpServer(port: number): Promise<http.Server> {
     );
   }
   const token = process.env.PROCM_HTTP_TOKEN;
-  setConnectionConfig(port, token);
-  const server = http.createServer(createRequestHandler(token));
-
   return new Promise<http.Server>((resolve, reject) => {
-    server.once("error", (err: NodeJS.ErrnoException) => {
-      if (err.code === "EADDRINUSE") {
-        reject(
-          new Error(
-            `Port ${port} is already in use. Choose another with --port <number> or PROCM_HTTP_PORT, or stop the process holding port ${port}.`,
-          ),
-        );
-      } else {
-        reject(err);
-      }
-    });
-
-    server.listen(port, HOST, () => {
-      httpPort = port;
-      serverLog(
-        `Dashboard HTTP server listening on http://${HOST}:${port}` +
-          (token ? " (token protected)" : ""),
-      );
-      // Attach the WebSocket endpoint for real-time process and log updates.
-      attachWebsocketServer(server, token, {
-        serverId,
-        pid: process.pid,
-        startedAt: serverStartedAt,
-        port,
+    const tryListen = (candidatePort: number) => {
+      const server = http.createServer(createRequestHandler(token));
+      setConnectionConfig(candidatePort, token);
+      server.once("error", (err: NodeJS.ErrnoException) => {
+        if (err.code === "EADDRINUSE") {
+          if (candidatePort < 65535) {
+            server.close(() => tryListen(candidatePort + 1));
+          } else {
+            reject(new Error(`No available port found starting at ${port}.`));
+          }
+        } else {
+          reject(err);
+        }
       });
-      resolve(server);
-    });
+
+      server.listen(candidatePort, HOST, () => {
+        httpPort = candidatePort;
+        serverLog(
+          `Dashboard HTTP server listening on http://${HOST}:${candidatePort}` +
+            (token ? " (token protected)" : ""),
+        );
+        // Attach the WebSocket endpoint for real-time process and log updates.
+        attachWebsocketServer(server, token, {
+          serverId,
+          pid: process.pid,
+          startedAt: serverStartedAt,
+          port: candidatePort,
+        });
+        resolve(server);
+      });
+    };
+    tryListen(port);
   });
 }
 

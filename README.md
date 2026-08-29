@@ -38,12 +38,60 @@ Enable the same command in your MCP client's project configuration (for example,
 {
   "mcpServers": {
     "procm-mcp": {
-      "command": "node",
-      "args": ["./build/index.js", "--port", "7331", "--data-path", "global"]
+      "command": "procm-mcp",
+      "args": ["--port", "7331", "--data-path", "global"]
     }
   }
 }
 ```
+
+## Installation
+
+```powershell
+npm i -g @hunmer/procm-mcp
+```
+
+### AI one-click setup
+
+Ask your AI agent to run the following steps in a terminal:
+
+```powershell
+npm i -g @hunmer/procm-mcp
+npx skills add hunmer/procm-mcp --skill procm-http procm-rooms procm-init -y
+Start-Process -FilePath "procm-mcp" -ArgumentList "--server", "--port", "7331", "--data-path", "global"
+Start-Process "http://127.0.0.1:7331"
+```
+
+When enabling or restarting a server, use the global `procm-mcp` manager. Services
+with built-in hot reload do not need a restart. If MCP is unavailable, load the
+`procm-http` skill and use its HTTP fallback.
+
+Then add this MCP server configuration to the client:
+
+```json
+{
+  "mcpServers": {
+    "procm-mcp": {
+      "type": "http",
+      "url": "http://127.0.0.1:7331/mcp"
+    }
+  }
+}
+```
+
+### Agent Skills
+
+Install both skills into the current project:
+
+```bash
+npx skills add hunmer/procm-mcp --skill procm-http procm-rooms procm-init -y
+```
+
+Use `--skill <name>` to install only one (`procm-http`, `procm-rooms`, or
+`procm-init`). The `procm-init` skill explores project startup scripts
+and creates a reviewed `procm-commands.json` catalog. The skills CLI detects
+the active agent and installs into its project-level skills directory, such as
+`.agents/skills/` for Codex.
 
 ## Dashboard (HTTP)
 
@@ -115,6 +163,7 @@ procm-mcp --server --port 8080 --data-path .procm-mcp-data
 ```
 
 `--port <number>` also works in the default (stdio) mode to start the dashboard without setting `PROCM_HTTP_PORT`. It takes precedence over `PROCM_HTTP_PORT`.
+If the requested port is already in use, procm-mcp automatically selects the next available port and reports it in the startup log.
 
 `--data-path <path>` selects the directory used for process history, rooms, and logs. Relative paths are resolved from the current working directory. Without the flag, data is stored in `.procm-mcp` under the process working directory. Use `--data-path global` for the per-user `~/.procm-mcp` directory. `PROCM_MCP_DIR` remains supported when set.
 
@@ -162,26 +211,6 @@ Define reusable named commands in a `procm-commands.json` file at the root of yo
 ```
 
 The `procm-command` tool (action `list`) returns the file's contents and the available command names. Use `procm-command` (action `start`) to start one by name. Each command's `cwd` is resolved relative to the project directory (the directory containing `procm-commands.json`).
-
-## Installation
-
-```bash
-npm i -D @hunmer/procm-mcp
-```
-
-### Agent Skills
-
-Install both skills into the current project:
-
-```bash
-npx skills add hunmer/procm-mcp --skill procm-mcp procm-rooms procm-mcp-init -y
-```
-
-Use `--skill <name>` to install only one (`procm-mcp`, `procm-rooms`, or
-`procm-mcp-init`). The `procm-mcp-init` skill explores project startup scripts
-and creates a reviewed `procm-commands.json` catalog. The skills CLI detects
-the active agent and installs into its project-level skills directory, such as
-`.agents/skills/` for Codex.
 
 Room clients install the separately published TypeScript SDK:
 
@@ -245,20 +274,6 @@ npm run test:custom-noise
 ```
 
 Managed processes receive `PROCM_ROOM_ID`, `PROCM_PROCESS_ID`, `PROCM_WS_URL`, and optional authentication automatically. Explicit SDK options override environment values. See `demo/` for the Node.js and Electron workflow.
-
-`.mcp.json`
-
-```json
-{
-  "mcpServers": {
-    "procm-mcp": {
-      "command": "procm-mcp",
-      "args": ["--port", "7331", "--data-path", "global"],
-      "env": {}
-    }
-  }
-}
-```
 
 ## Process creation has no built-in gate
 

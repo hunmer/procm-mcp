@@ -1,4 +1,4 @@
-# procm-mcp CLI reference
+# procm-http CLI reference
 
 The `procm-mcp` CLI wraps the backend's HTTP API. It connects to an already
 running backend (`procm-mcp --server`, or an MCP backend with
