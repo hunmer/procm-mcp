@@ -13,26 +13,37 @@
 
 借助这些能力，LLM 可以启动开发服务器、docker-compose、测试 watcher 等进程，并读取它们的输出以自动修复问题。
 
-## 动手示例
+## 从源码运行
 
-可以尝试 [`teach/sample`](teach/sample/README.md) 中故意保留 Bug 的 Node.js 调试练习。示例会引导你安装并初始化 procm-mcp，通过进程管理器启动服务，读取错误日志，修复问题并验证结果。
-
-## 全局安装（开发用）
-
-如果你在开发 procm-mcp 本身，想让 `procm-mcp` 命令在**任何终端**都指向你的工作副本，运行：
+克隆仓库、安装依赖并在本地构建：
 
 ```bash
-npm run link
+git clone https://github.com/hunmer/procm-mcp.git
+cd procm-mcp
+npm install
+npm run build
 ```
 
-这会构建项目并通过 `npm link` 注册全局命令。全局命令是指向本 checkout 的链接（junction），因此每次 `npm run build`（或 `npm run link`）都会自动生效，无需重装。若 npm 全局 bin 目录不在 PATH 上，脚本会尝试添加（Windows 上写入用户 PATH；其他平台打印说明）。之后打开**新**终端，即可：
+### stdio MCP 模式
+
+通过 stdio 启动 MCP 服务器，将 dashboard 置于 `7331` 端口，并使用用户级共享数据目录：
 
 ```bash
-procm-mcp --help
-procm-mcp --server            # 以 HTTP 后端运行
+node ./build/index.js --port 7331 --data-path global
 ```
 
-撤销：`npm unlink -g @hunmer/procm-mcp`。
+在 MCP 客户端的项目配置中启用同一命令（例如 `.mcp.json`）：
+
+```json
+{
+  "mcpServers": {
+    "procm-mcp": {
+      "command": "node",
+      "args": ["./build/index.js", "--port", "7331", "--data-path", "global"]
+    }
+  }
+}
+```
 
 ## Dashboard（HTTP）
 
@@ -54,8 +65,7 @@ npm run build
 {
   "mcpServers": {
     "procm-mcp": {
-      "command": "node",
-      "args": ["./node_modules/@hunmer/procm-mcp/build/index.js"],
+      "command": "procm-mcp",
       "env": { "PROCM_HTTP_PORT": "7331" }
     }
   }
@@ -88,13 +98,13 @@ HTTP API（同源）：
 
 ```bash
 # dashboard 使用默认端口 7331
-node ./node_modules/@hunmer/procm-mcp/build/index.js --server
+procm-mcp --server
 
 # 或指定端口
-node ./node_modules/@hunmer/procm-mcp/build/index.js --server --port 8080
+procm-mcp --server --port 8080
 
 # 隔离本实例的进程历史与日志
-node ./node_modules/@hunmer/procm-mcp/build/index.js --server --port 8080 --data-path .procm-mcp-data
+procm-mcp --server --port 8080 --data-path .procm-mcp-data
 ```
 
 `--port <number>` 在默认（stdio）模式下同样可用：无需设置 `PROCM_HTTP_PORT` 即可启动 dashboard，且优先级高于它。
@@ -108,7 +118,7 @@ node ./node_modules/@hunmer/procm-mcp/build/index.js --server --port 8080 --data
 先运行后端（例如在独立终端 / 作为服务）：
 
 ```bash
-node ./node_modules/@hunmer/procm-mcp/build/index.js --server --port 7331
+procm-mcp --server --port 7331
 ```
 
 然后把 MCP 客户端指向它：
@@ -235,8 +245,8 @@ npm run test:custom-noise
 {
   "mcpServers": {
     "procm-mcp": {
-      "command": "node",
-      "args": ["./node_modules/@hunmer/procm-mcp/build/index.js"],
+      "command": "procm-mcp",
+      "args": ["--port", "7331", "--data-path", "global"],
       "env": {}
     }
   }

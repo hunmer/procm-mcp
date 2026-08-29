@@ -13,26 +13,37 @@ A Model Context Protocol (MCP) server for process management.
 
 Using these features, LLMs start processes like development servers, docker-compose, or test watchers and check their outputs to fix bugs automatically.
 
-## Hands-on example
+## Run from source
 
-Try the deliberately broken Node.js debugging exercise in [`teach/sample`](teach/sample/README.md). It walks through installing and initializing procm-mcp, starting the service through the process manager, reading the failure logs, and verifying the fix.
-
-## Install globally (for development)
-
-If you're developing procm-mcp itself and want the `procm-mcp` command available in **any** terminal pointing at your working copy, run:
+Clone the repository, install dependencies, and build it locally:
 
 ```bash
-npm run link
+git clone https://github.com/hunmer/procm-mcp.git
+cd procm-mcp
+npm install
+npm run build
 ```
 
-This builds the project and registers it globally via `npm link`. The global command is a link (junction) to this checkout, so every `npm run build` (or `npm run link`) is automatically reflected — no reinstall needed. If the npm global bin directory isn't on your PATH, the script attempts to add it (User PATH on Windows; prints instructions on other platforms). Open a **new** terminal afterwards, then:
+### stdio MCP mode
+
+Start the MCP server over stdio, with the dashboard on port `7331` and shared user-level data:
 
 ```bash
-procm-mcp --help
-procm-mcp --server            # run as an HTTP backend
+node ./build/index.js --port 7331 --data-path global
 ```
 
-To undo: `npm unlink -g @hunmer/procm-mcp`.
+Enable the same command in your MCP client's project configuration (for example, `.mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "procm-mcp": {
+      "command": "node",
+      "args": ["./build/index.js", "--port", "7331", "--data-path", "global"]
+    }
+  }
+}
+```
 
 ## Dashboard (HTTP)
 
@@ -54,8 +65,7 @@ Enable it by setting `PROCM_HTTP_PORT` in the MCP server environment:
 {
   "mcpServers": {
     "procm-mcp": {
-      "command": "node",
-      "args": ["./node_modules/@hunmer/procm-mcp/build/index.js"],
+      "command": "procm-mcp",
       "env": { "PROCM_HTTP_PORT": "7331" }
     }
   }
@@ -95,13 +105,13 @@ By default procm-mcp runs as an MCP server over stdio (with the dashboard option
 
 ```bash
 # Dashboard on the default port 7331
-node ./node_modules/@hunmer/procm-mcp/build/index.js --server
+procm-mcp --server
 
 # Or pick a port
-node ./node_modules/@hunmer/procm-mcp/build/index.js --server --port 8080
+procm-mcp --server --port 8080
 
 # Keep this instance's process history and logs isolated
-node ./node_modules/@hunmer/procm-mcp/build/index.js --server --port 8080 --data-path .procm-mcp-data
+procm-mcp --server --port 8080 --data-path .procm-mcp-data
 ```
 
 `--port <number>` also works in the default (stdio) mode to start the dashboard without setting `PROCM_HTTP_PORT`. It takes precedence over `PROCM_HTTP_PORT`.
@@ -115,7 +125,7 @@ When procm-mcp runs with an HTTP port (`--server`, or `--port`/`PROCM_HTTP_PORT`
 First run the backend (e.g. in a separate terminal / as a service):
 
 ```bash
-node ./node_modules/@hunmer/procm-mcp/build/index.js --server --port 7331
+procm-mcp --server --port 7331
 ```
 
 Then point your MCP client at it:
@@ -242,8 +252,8 @@ Managed processes receive `PROCM_ROOM_ID`, `PROCM_PROCESS_ID`, `PROCM_WS_URL`, a
 {
   "mcpServers": {
     "procm-mcp": {
-      "command": "node",
-      "args": ["./node_modules/@hunmer/procm-mcp/build/index.js"],
+      "command": "procm-mcp",
+      "args": ["--port", "7331", "--data-path", "global"],
       "env": {}
     }
   }
