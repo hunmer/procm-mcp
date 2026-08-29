@@ -10,3 +10,5 @@ dashboard/dist
 .procm-mcp/processes.json
 .procm-mcp-test/
 projects/
+.agents/skills/coss/
+.agents/skills/coss-particles/
