@@ -79,6 +79,15 @@ Then add this MCP server configuration to the client:
 }
 ```
 
+Finally, add the following rule to the project's `AGENTS.md` or `CLAUDE.md` so
+the AI agent follows the same process-management policy:
+
+```text
+When enabling or restarting a server (services with built-in hot reload do not
+need a restart), use the global procm-mcp manager. If MCP is unavailable, load
+the procm-http skill and use its HTTP fallback.
+```
+
 ### Agent Skills
 
 Install both skills into the current project:

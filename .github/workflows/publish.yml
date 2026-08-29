@@ -18,8 +18,8 @@ jobs:
           registry-url: "https://registry.npmjs.org"
 
       - run: npm install --global pnpm@10.17.1
-      - run: npm ci
       - run: npm ci --prefix dashboard
+      - run: npm ci
 
       - name: Publish to npm
         run: npm publish --access public

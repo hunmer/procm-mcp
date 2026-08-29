@@ -78,6 +78,14 @@ Start-Process "http://127.0.0.1:7331"
 }
 ```
 
+最后，将以下规则添加到项目的 `AGENTS.md` 或 `CLAUDE.md`，让 AI Agent 遵循统一的
+进程管理规范：
+
+```text
+需要启用或重启服务器时（自带热更新的服务不需要重启），使用全局 procm-mcp 管理。
+如果 MCP 不可用，则加载 procm-http skill，使用 HTTP 兜底。
+```
+
 ### Agent Skills
 
 将两个 skill 安装到当前项目：

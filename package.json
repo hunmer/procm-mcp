@@ -21,7 +21,7 @@
   "scripts": {
     "build": "npm run build:sdk && npm run sync:demos && npm run build:dashboard && tsc",
     "verify:package": "node ./scripts/verify-package.mjs",
-    "prepare": "npm run build",
+    "prepare": "node ./scripts/prepare.mjs",
     "prepack": "npm run build && npm run verify:package",
     "build:sdk": "npm --prefix packages/procm-sdk run build && npm --prefix packages/procm-sdk run build:browser",
     "sync:demos": "pnpm -C demo/electron-client install",
