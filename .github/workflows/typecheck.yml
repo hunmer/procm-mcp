@@ -1,34 +1,23 @@
-name: Publish to MCP Registry
+name: Type Check
 on:
   push:
     branches: ["main"]
 
 jobs:
-  publish:
+  typecheck:
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-node@v5
         with:
           node-version: "lts/*"
-          registry-url: "https://registry.npmjs.org"
 
-      - run: npm install --global pnpm@10.17.1
       - run: npm ci --prefix dashboard
-      - run: npm ci
-
-      - name: Publish to npm
-        run: npm publish --access public
-
-      - name: Download mcp-publisher
-        run: |
-          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
-
-      - name: Publish to MCP Registry
-        run: |
-          ./mcp-publisher login github-oidc
-          ./mcp-publisher publish
+      - run: npm ci --ignore-scripts
+      - name: Type-check SDK
+        run: npm --prefix packages/procm-sdk exec tsc -- --noEmit
+      - name: Type-check dashboard
+        run: npm --prefix dashboard exec tsc -- --noEmit
+      - name: Type-check server
+        run: npx tsc --noEmit
