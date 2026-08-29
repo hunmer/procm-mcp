@@ -401,6 +401,7 @@ export async function startProcess(
     const childProcess = spawn(spawnTarget.command, args || [], {
       cwd,
       shell: spawnTarget.shell,
+      windowsHide: true,
       stdio: [ignoreStdin ? "ignore" : "pipe", "pipe", "pipe"],
       env: {
         ...process.env,
