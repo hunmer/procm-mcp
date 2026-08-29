@@ -329,6 +329,28 @@ function isProtectedPid(pid: number): boolean {
   return pid <= 4 || pid === process.pid;
 }
 
+// Kill exactly one process, leaving any descendants running. `process.kill`
+// maps to TerminateProcess on Windows and SIGTERM on Unix; ESRCH (already
+// gone) resolves, matching the tree helper's tolerance. Protected pids are
+// refused upfront.
+export function killProcessOnly(pid: number): Promise<void> {
+  if (!Number.isFinite(pid)) {
+    return Promise.reject(new Error("Invalid pid"));
+  }
+  if (isProtectedPid(pid)) {
+    return Promise.reject(new Error("Refusing to kill a protected system pid"));
+  }
+  return new Promise((resolve, reject) => {
+    try {
+      process.kill(pid, "SIGTERM");
+      resolve();
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ESRCH") reject(error);
+      else resolve();
+    }
+  });
+}
+
 // Kill a process and its entire descendant tree. tree-kill maps to
 // `taskkill /T /F` on Windows (so cmd /c grandchildren die too) and to a
 // SIGTERM/SIGKILL sweep on Unix. Resolves once the tree is gone; rejects with

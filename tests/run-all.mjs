@@ -20,6 +20,7 @@ const scripts = [
   "cli-roundtrip.mjs",
   "data-path.mjs",
   "room-sdk.mjs",
+  "sdk-rest.mjs",
   "sdk-hook.mjs",
   "trace-logger.mjs",
   "trace-memory.mjs",

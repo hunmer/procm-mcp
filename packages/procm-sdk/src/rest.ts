@@ -123,6 +123,14 @@ export function clearProcessLogs(client: ProcmClient, id: string): Promise<{ id:
   return request(client, "DELETE", `/api/processes/${encodeURIComponent(id)}/logs`);
 }
 
+export function killSystemProcess(client: ProcmClient, pid: number, tree = true): Promise<void> {
+  return request<{ ok: true; pid: number }>(
+    client,
+    "POST",
+    `/api/system-processes/${pid}/kill${tree ? "" : "?tree=0"}`,
+  ).then(() => undefined);
+}
+
 /** Clear logs for the process represented by the client. */
 export function clearLogs(
   client: ProcmClient,

@@ -12,7 +12,10 @@ import type {
   RoomView,
   RoomLogEntry,
 } from "./types";
-import { decodeStructuredLogLine, stripStructuredLogFrame } from "@hunmer/procm-mcp-sdk";
+import {
+  decodeStructuredLogLine,
+  stripStructuredLogFrame,
+} from "@hunmer/procm-mcp-sdk";
 
 // Thin wrapper around the same-origin REST API. Throws on non-2xx with the
 // server's `error` message when present.
@@ -57,7 +60,10 @@ export function getRoom(id: string): Promise<RoomView> {
   return api<RoomView>("GET", `/api/rooms/${encodeURIComponent(id)}`);
 }
 
-export async function queryRoomLogs(id: string, count = 500): Promise<RoomLogEntry[]> {
+export async function queryRoomLogs(
+  id: string,
+  count = 500,
+): Promise<RoomLogEntry[]> {
   const response = await api<{ entries: RoomLogEntry[] }>(
     "GET",
     `/api/rooms/${encodeURIComponent(id)}/logs?count=${count}`,
@@ -73,8 +79,13 @@ export function getProcess(id: string): Promise<ProcessView> {
   return api<ProcessView>("GET", `/api/processes/${encodeURIComponent(id)}`);
 }
 
-export function setProcessFavorite(id: string, favorite: boolean): Promise<ProcessView> {
-  return api<ProcessView>("PATCH", `/api/processes/${encodeURIComponent(id)}`, { favorite });
+export function setProcessFavorite(
+  id: string,
+  favorite: boolean,
+): Promise<ProcessView> {
+  return api<ProcessView>("PATCH", `/api/processes/${encodeURIComponent(id)}`, {
+    favorite,
+  });
 }
 
 // Editable fields of a process record. Only the provided keys are merged
@@ -256,9 +267,7 @@ export function clearServerLogs(): Promise<{ cleared: string[] }> {
 // the backend's own OS. Built server-side because envs live only in memory
 // and are never sent to the client. Only live processes resolve; historical
 // records 404.
-export function getProcessCommand(
-  id: string,
-): Promise<{ command: string }> {
+export function getProcessCommand(id: string): Promise<{ command: string }> {
   return api<{ command: string }>(
     "GET",
     `/api/processes/${encodeURIComponent(id)}/command`,
@@ -303,9 +312,7 @@ export function parseLogText(text: string, stream: ProcessStream): LogEntry[] {
 
 // Merge one or more arrays of log entries into a single oldest-first list.
 // Stable sort preserves the within-stream order for equal timestamps.
-export function mergeEntries(
-  ...arrays: LogEntry[][]
-): LogEntry[] {
+export function mergeEntries(...arrays: LogEntry[][]): LogEntry[] {
   return arrays.flat().sort((a, b) => a.timestamp - b.timestamp);
 }
 
@@ -313,8 +320,14 @@ export function startProcess(body: StartProcessBody): Promise<{ id: string }> {
   return api<{ id: string; name: string }>("POST", "/api/processes", body);
 }
 
-export function saveImportedProcess(body: StartProcessBody): Promise<{ id: string }> {
-  return api<{ id: string; name: string }>("POST", "/api/processes/import", body);
+export function saveImportedProcess(
+  body: StartProcessBody,
+): Promise<{ id: string }> {
+  return api<{ id: string; name: string }>(
+    "POST",
+    "/api/processes/import",
+    body,
+  );
 }
 
 // One launchable command to import as part of a directory-import batch.
@@ -352,9 +365,7 @@ export interface ScanCandidate {
 
 // Scan a folder for project commands. Returns the candidate list (possibly
 // empty). Throws with the server's `error` message on a bad path.
-export async function scanDirectory(
-  path: string,
-): Promise<ScanCandidate[]> {
+export async function scanDirectory(path: string): Promise<ScanCandidate[]> {
   const r = await api<{ candidates: ScanCandidate[] }>(
     "POST",
     "/api/favorites/scan",
@@ -394,19 +405,13 @@ export function revealPath(path: string): Promise<void> {
 }
 
 export function stopProcess(id: string): Promise<void> {
-  return api<void>(
-    "POST",
-    `/api/processes/${encodeURIComponent(id)}/stop`,
-  );
+  return api<void>("POST", `/api/processes/${encodeURIComponent(id)}/stop`);
 }
 
 // Delete a process entirely: stops it if still running, then erases its
 // persisted record so it no longer shows up in the (historical) list.
 export function deleteProcessCall(id: string): Promise<void> {
-  return api<void>(
-    "DELETE",
-    `/api/processes/${encodeURIComponent(id)}`,
-  );
+  return api<void>("DELETE", `/api/processes/${encodeURIComponent(id)}`);
 }
 
 // Bulk delete via the collection endpoint. Done server-side in a single
@@ -424,10 +429,7 @@ export function clearAllProcesses(
 }
 
 export function restartProcess(id: string): Promise<void> {
-  return api<void>(
-    "POST",
-    `/api/processes/${encodeURIComponent(id)}/restart`,
-  );
+  return api<void>("POST", `/api/processes/${encodeURIComponent(id)}/restart`);
 }
 
 // Enumerate all running OS processes (the System tab's data source). Distinct
@@ -438,13 +440,14 @@ export function listSystemProcesses(): Promise<SystemProcessListResponse> {
   return api<SystemProcessListResponse>("GET", "/api/system-processes");
 }
 
-// Kill a system process and its whole descendant tree (tree-kill on the
-// backend → taskkill /T /F on Windows). Protected pids (idle/system/self) are
-// refused server-side and surface here as a thrown Error.
-export function killSystemProcess(pid: number): Promise<void> {
+// Kill a system process. `tree` (default, matching the backend) also takes
+// down the whole descendant tree (taskkill /T /F on Windows); `tree: false`
+// kills only the pid itself. Protected pids (idle/system/self) are refused
+// server-side and surface here as a thrown Error.
+export function killSystemProcess(pid: number, tree = true): Promise<void> {
   return api<{ ok: true; pid: number }>(
     "POST",
-    `/api/system-processes/${pid}/kill`,
+    `/api/system-processes/${pid}/kill${tree ? "" : "?tree=0"}`,
   ).then(() => undefined);
 }
 

@@ -44,7 +44,7 @@ function parseTimestamp(value: string | null): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 import { scanProjectCommands } from "./project-scanner.js";
-import { listSystemProcesses, killProcessTree, findProcessByPort } from "./system-processes.js";
+import { listSystemProcesses, killProcessTree, killProcessOnly, findProcessByPort } from "./system-processes.js";
 import { ProcmMcpDir } from "./procm-mcp-dir.js";
 import { listProcessLogFiles, deleteProcessLogFiles } from "./process-log-files.js";
 import {
@@ -849,16 +849,19 @@ function createRequestHandler(token: string | undefined) {
         return;
       }
 
-      // POST /api/system-processes/:pid/kill -> terminate a process and its
-      // whole descendant tree (tree-kill -> taskkill /T /F on Windows).
-      // Protected pids (idle/system/self) are refused by the helper.
+      // POST /api/system-processes/:pid/kill[?tree=0|1] -> terminate a
+      // process. Default (and `tree=1`) kills the whole descendant tree
+      // (tree-kill -> taskkill /T /F on Windows); `tree=0` kills only the
+      // pid itself. Protected pids (idle/system/self) are refused by the
+      // helpers.
       const sysKillMatch = pathname.match(
         /^\/api\/system-processes\/(\d+)\/kill$/,
       );
       if (method === "POST" && sysKillMatch) {
         const pid = Number(sysKillMatch[1]);
+        const tree = url.searchParams.get("tree") !== "0";
         try {
-          await killProcessTree(pid);
+          await (tree ? killProcessTree(pid) : killProcessOnly(pid));
           json(res, 200, { ok: true, pid });
         } catch (e) {
           json(res, 400, { error: toErrorMessage(e) });

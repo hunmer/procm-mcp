@@ -296,17 +296,18 @@ export function SystemProcessList({
     });
   }, [sortedData.length]);
 
-  // Perform the kill: call the backend (tree-kill) per member — merged rows
-  // kill every grouped process, single rows are the one-member case — toast
+  // Perform the kill: call the backend per member (merged rows kill every
+  // grouped process, single rows are the one-member case) — `tree` (the
+  // confirm dialog's checkbox) decides whether descendants die too. Toast
   // the result, then refresh immediately so the rows disappear without
   // waiting for the next poll.
   const confirmKill = useCallback(
-    async (row: ProcessRow) => {
+    async (row: ProcessRow, tree: boolean) => {
       setPendingKill(null);
       setKillingPid(row.pid);
       try {
         for (const m of row.members) {
-          await killSystemProcess(m.pid);
+          await killSystemProcess(m.pid, tree);
         }
         onToast(
           row.members.length > 1
@@ -487,7 +488,7 @@ export function SystemProcessList({
       <KillConfirmDialog
         pendingKill={pendingKill}
         onDismiss={() => setPendingKill(null)}
-        onConfirm={(row) => void confirmKill(row)}
+        onConfirm={(row, tree) => void confirmKill(row, tree)}
       />
       <ProcessInfoDialog
         viewing={viewing}

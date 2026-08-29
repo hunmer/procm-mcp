@@ -43,6 +43,9 @@ export function clearServerLogs(client) {
 export function clearProcessLogs(client, id) {
     return request(client, "DELETE", `/api/processes/${encodeURIComponent(id)}/logs`);
 }
+export function killSystemProcess(client, pid, tree = true) {
+    return request(client, "POST", `/api/system-processes/${pid}/kill${tree ? "" : "?tree=0"}`).then(() => undefined);
+}
 /** Clear logs for the process represented by the client. */
 export function clearLogs(client, id = client.processId) {
     if (!id)

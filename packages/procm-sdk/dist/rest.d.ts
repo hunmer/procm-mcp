@@ -68,6 +68,7 @@ export declare function clearProcessLogs(client: ProcmClient, id: string): Promi
     id: string;
     cleared: true;
 }>;
+export declare function killSystemProcess(client: ProcmClient, pid: number, tree?: boolean): Promise<void>;
 /** Clear logs for the process represented by the client. */
 export declare function clearLogs(client: ProcmClient, id?: string | undefined): Promise<{
     id: string;

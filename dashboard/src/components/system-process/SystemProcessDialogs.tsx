@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { SkullIcon } from "lucide-react";
 import {
@@ -19,12 +20,14 @@ import {
   DialogTitle,
 } from "@/registry/default/ui/dialog";
 import { Button } from "@/registry/default/ui/button";
+import { Checkbox } from "@/registry/default/ui/checkbox";
 import { Input } from "@/registry/default/ui/input";
 import type { ProcessRow } from "./types";
 import { SystemProcessInfo } from "./SystemProcessInfo";
 
-// Kill confirmation. Killing a tree is irreversible and takes down children
-// too, so confirm with the pid + name up front. Driven by the pendingKill
+// Kill confirmation. Killing is irreversible, so confirm with the pid + name
+// up front. By default only the selected process(es) die; the checkbox opts
+// in to taking the whole descendant tree down too. Driven by the pendingKill
 // state from the parent; closing clears it.
 export function KillConfirmDialog({
   pendingKill,
@@ -33,9 +36,14 @@ export function KillConfirmDialog({
 }: {
   pendingKill: ProcessRow | null;
   onDismiss: () => void;
-  onConfirm: (row: ProcessRow) => void;
+  onConfirm: (row: ProcessRow, tree: boolean) => void;
 }) {
   const { t } = useTranslation();
+  // Reset to the safe default every time the dialog is armed.
+  const [tree, setTree] = useState(false);
+  useEffect(() => {
+    if (pendingKill) setTree(false);
+  }, [pendingKill]);
   return (
     <AlertDialog
       open={pendingKill != null}
@@ -57,13 +65,21 @@ export function KillConfirmDialog({
                   }))}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter>
+        <label className="-mt-3 flex cursor-pointer items-center gap-2 px-6 text-sm">
+          <Checkbox
+            checked={tree}
+            onCheckedChange={(v) => setTree(v === true)}
+            aria-label={t("system.killTreeLabel")}
+          />
+          {t("system.killTreeLabel")}
+        </label>
+        <AlertDialogFooter variant="bare">
           <AlertDialogClose render={<Button variant="ghost" />}>
             {t("common.cancel")}
           </AlertDialogClose>
           <AlertDialogClose
             render={<Button variant="destructive" />}
-            onClick={() => pendingKill && onConfirm(pendingKill)}
+            onClick={() => pendingKill && onConfirm(pendingKill, tree)}
           >
             {t("system.kill")}
           </AlertDialogClose>
