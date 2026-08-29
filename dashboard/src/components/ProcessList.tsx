@@ -169,6 +169,7 @@ interface GroupSectionProps {
   // Open the rename-group dialog for this group: every process of the group
   // is moved to the name typed inside.
   onRenameGroup: (g: Group) => void;
+  processDragEnabled: boolean;
 }
 
 // One category section, following the "Frame with collapsible content" pattern
@@ -189,6 +190,7 @@ function GroupSection({
   onToast,
   groupOptions,
   onRenameGroup,
+  processDragEnabled,
 }: GroupSectionProps) {
   const { t } = useTranslation();
   const sortable = useSortable({ id: `group:${g.label}`, data: { type: "group", label: g.label } });
@@ -294,6 +296,7 @@ function GroupSection({
                     onTogglePin={onTogglePin}
                     actions={actions}
                     dragGroup={g.label}
+                    dragEnabled={processDragEnabled}
                   />
                   {canStopProcess(p) && (
                     <BorderBeam
@@ -377,6 +380,8 @@ export function ProcessList({
   const [groupOrder, setGroupOrder] = useState<string[]>(() => loadJson(GROUP_ORDER_KEY, []));
   const [processOrder, setProcessOrder] = useState<Record<string, string[]>>(() => loadJson(PROCESS_ORDER_KEY, {}));
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const processDragEnabled =
+    statusFilter === "all" && sortMode === "none" && nameFilter.trim() === "";
 
   function moveItem(items: string[], from: string, to: string) {
     const fromIndex = items.indexOf(from);
@@ -446,7 +451,6 @@ export function ProcessList({
   const collisionDetectionStrategy: CollisionDetection = (args) => {
     const type = args.active.data.current?.type;
     const containers = args.droppableContainers.filter((container) => {
-      if (container.id === args.active.id) return false;
       if (container.data.current?.type !== type) return false;
       if (type === "process") {
         return container.data.current?.group === args.active.data.current?.group;
@@ -646,7 +650,12 @@ export function ProcessList({
       });
   }, [filteredProcesses, sortMode, pinnedIds, groupOrder, processOrder]);
 
-  const orderedGroups = groups.map((g) => ({ ...g, processes: processOrder[g.label]?.length ? [...g.processes].sort((a, b) => (processOrder[g.label].indexOf(a.id) < 0 ? Number.MAX_SAFE_INTEGER : processOrder[g.label].indexOf(a.id)) - (processOrder[g.label].indexOf(b.id) < 0 ? Number.MAX_SAFE_INTEGER : processOrder[g.label].indexOf(b.id))) : g.processes }));
+  const orderedGroups = groups.map((g) => ({
+    ...g,
+    processes: processDragEnabled && processOrder[g.label]?.length
+      ? [...g.processes].sort((a, b) => (processOrder[g.label].indexOf(a.id) < 0 ? Number.MAX_SAFE_INTEGER : processOrder[g.label].indexOf(a.id)) - (processOrder[g.label].indexOf(b.id) < 0 ? Number.MAX_SAFE_INTEGER : processOrder[g.label].indexOf(b.id)))
+      : g.processes,
+  }));
 
   const hasAnything = processes.length > 0;
 
@@ -707,6 +716,7 @@ export function ProcessList({
                 onRenameGroup={requestRenameGroup}
                 pinnedIds={pinnedIds}
                 onTogglePin={togglePin}
+                processDragEnabled={processDragEnabled}
               />
               </SortableContext>
             </div>
@@ -730,6 +740,7 @@ export function ProcessList({
                   onRenameGroup={requestRenameGroup}
                   pinnedIds={pinnedIds}
                   onTogglePin={togglePin}
+                  processDragEnabled={processDragEnabled}
                 />
               ))}
               </SortableContext>
@@ -753,6 +764,7 @@ export function ProcessList({
             onRenameGroup={requestRenameGroup}
             pinnedIds={pinnedIds}
             onTogglePin={togglePin}
+            processDragEnabled={processDragEnabled}
           />
           </SortableContext>
         </div>

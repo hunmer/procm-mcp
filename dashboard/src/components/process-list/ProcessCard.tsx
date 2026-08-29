@@ -27,6 +27,7 @@ export function ProcessCard({
   onTogglePin,
   actions,
   dragGroup,
+  dragEnabled = true,
 }: {
   p: ProcessView;
   isActive: boolean;
@@ -35,6 +36,7 @@ export function ProcessCard({
   onTogglePin: (p: ProcessView) => void;
   actions: RowActions;
   dragGroup?: string;
+  dragEnabled?: boolean;
 }) {
   const { t } = useTranslation();
   const [starting, setStarting] = useState(false);
@@ -46,6 +48,7 @@ export function ProcessCard({
   const sortable = useSortable({
     id: p.id,
     data: { type: "process", group: dragGroup },
+    disabled: !dragEnabled,
     animateLayoutChanges: () => true,
   });
 
@@ -61,7 +64,7 @@ export function ProcessCard({
   }
   return (
     <div ref={sortable.setNodeRef} style={{ transform: CSS.Transform.toString(sortable.transform), transition: sortable.transition, visibility: sortable.isDragging ? "hidden" : "visible" }} className="group/process relative" data-dragging={sortable.isDragging || undefined}>
-      <Button ref={sortable.setActivatorNodeRef} size="icon-xs" variant="ghost" aria-label="拖拽排序进程" title="拖拽排序进程" className="absolute right-2 top-2 z-10 cursor-grab text-muted-foreground opacity-0 transition-opacity group-hover/process:opacity-100" {...sortable.attributes} {...sortable.listeners} onClick={(e) => e.stopPropagation()}><GripVerticalIcon /></Button>
+      {dragEnabled && <Button ref={sortable.setActivatorNodeRef} size="icon-xs" variant="ghost" aria-label="拖拽排序进程" title="拖拽排序进程" className="absolute right-2 top-2 z-10 cursor-grab text-muted-foreground opacity-0 transition-opacity group-hover/process:opacity-100" {...sortable.attributes} {...sortable.listeners} onClick={(e) => e.stopPropagation()}><GripVerticalIcon /></Button>}
     <ContextMenu>
       <ContextMenuTrigger
         render={
