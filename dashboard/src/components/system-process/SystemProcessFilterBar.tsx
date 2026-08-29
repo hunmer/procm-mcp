@@ -21,8 +21,6 @@ function intervalLabel(ms: number): string {
 // Filter + refresh bar. Three independent substring filters, a manual refresh
 // button, and the live-refresh toggle with its interval.
 export function SystemProcessFilterBar({
-  shown,
-  total,
   nameFilter,
   onNameFilterChange,
   pathFilter,
@@ -39,8 +37,6 @@ export function SystemProcessFilterBar({
   onRefresh,
   onOpenPortLookup,
 }: {
-  shown: number;
-  total: number;
   nameFilter: string;
   onNameFilterChange: (v: string) => void;
   pathFilter: string;
@@ -60,10 +56,6 @@ export function SystemProcessFilterBar({
   const { t } = useTranslation();
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-4 py-2.5">
-      <span className="text-muted-foreground whitespace-nowrap text-xs">
-        {t("system.countOfTotal", { shown, total })}
-      </span>
-
       {/* Three substring filters, each a labeled p-group-23-style search
           group (search-icon label | input | clear) so the bar matches the
           log-panel filter groups. */}
@@ -115,9 +107,7 @@ export function SystemProcessFilterBar({
           {liveRefresh && (
             <Select
               value={String(intervalMs)}
-              onValueChange={(v) =>
-                onIntervalMsChange(Number(v) || 2000)
-              }
+              onValueChange={(v) => onIntervalMsChange(Number(v) || 2000)}
             >
               <SelectTrigger size="sm" className="h-8 w-[68px]">
                 <SelectValue>{intervalLabel(intervalMs)}</SelectValue>
@@ -148,7 +138,9 @@ export function SystemProcessFilterBar({
           title={t("system.refreshNow")}
           onClick={onRefresh}
         >
-          <RefreshCwIcon className={refreshing ? "size-3.5 animate-spin" : "size-3.5"} />
+          <RefreshCwIcon
+            className={refreshing ? "size-3.5 animate-spin" : "size-3.5"}
+          />
         </Button>
       </div>
     </div>

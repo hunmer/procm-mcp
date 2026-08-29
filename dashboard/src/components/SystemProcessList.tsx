@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  type PaginationState,
   type SortingState,
   getCoreRowModel,
   getFilteredRowModel,
+  getPaginationRowModel,
   useReactTable,
 } from "@tanstack/react-table";
 import { InboxIcon } from "lucide-react";
@@ -24,6 +26,9 @@ import type { SystemProcess } from "@/lib/types";
 import {
   INTERVAL_KEY,
   LIVE_KEY,
+  PAGE_SIZE_KEY,
+  PAGE_SIZE_MAX,
+  PAGE_SIZE_OPTIONS,
   PORTS_ONLY_KEY,
   type ProcessRow,
   type RowActions,
@@ -89,6 +94,18 @@ export function SystemProcessList({
   // by name" (see compareProcessRows), applied below in sortedData. The
   // sorting state here is only what the user explicitly selects via headers.
   const [sorting, setSorting] = useState<SortingState>([]);
+
+  // Pagination (p-table-4 pattern): rows are chunked client-side over the
+  // filtered snapshot; the footer lets the user jump ranges, step pages and
+  // change the page size (capped at PAGE_SIZE_MAX, persisted like the other
+  // preferences; an unknown stored value falls back to the max).
+  const [pagination, setPagination] = useState<PaginationState>(() => {
+    const stored = readNum(PAGE_SIZE_KEY, PAGE_SIZE_MAX);
+    const pageSize = (PAGE_SIZE_OPTIONS as readonly number[]).includes(stored)
+      ? stored
+      : PAGE_SIZE_MAX;
+    return { pageIndex: 0, pageSize };
+  });
 
   // The row awaiting kill confirmation (null = dialog closed). The button
   // itself doesn't kill directly — it arms this, and the dialog's confirm
@@ -161,6 +178,9 @@ export function SystemProcessList({
   useEffect(() => {
     writeBool(PORTS_ONLY_KEY, portsOnly);
   }, [portsOnly]);
+  useEffect(() => {
+    writeNum(PAGE_SIZE_KEY, pagination.pageSize);
+  }, [pagination.pageSize]);
 
   // Collapse the snapshot into display rows: processes sharing the same name
   // AND the same parent (e.g. a browser's helper swarm) merge into one row
@@ -180,8 +200,8 @@ export function SystemProcessList({
   // update), and clear it if the process has gone away. Reads `cur` inside the
   // updater so it doesn't need `selected` as a dependency.
   useEffect(() => {
-    setSelected(
-      (cur) => (cur ? rows.find((r) => r.key === cur.key) ?? null : null),
+    setSelected((cur) =>
+      cur ? (rows.find((r) => r.key === cur.key) ?? null) : null,
     );
   }, [rows]);
 
@@ -233,17 +253,37 @@ export function SystemProcessList({
     columns,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    // Live refresh re-creates `data` on every poll; without this the table
+    // would snap back to page 0 each tick.
+    autoResetPageIndex: false,
     // NOTE: no getSortedRowModel — sorting is applied in sortedData above so the
     // "ports first" primary key is always honored (see compareProcessRows).
-    // No pagination model either — all rows render in one scrollable region.
     onSortingChange: setSorting,
+    onPaginationChange: setPagination,
     // Pin name left + actions right so both survive horizontal scroll, matching
     // the Processes table convention (pinnedColAttrs reads these back).
     initialState: {
       columnPinning: { left: ["name"], right: ["actions"] },
     },
-    state: { sorting },
+    state: { sorting, pagination },
   });
+
+  // Changing filters restarts from the first page (otherwise the old page
+  // index may land past the new, smaller result set). The updater form avoids
+  // depending on `pagination` here.
+  useEffect(() => {
+    setPagination((p) => ({ ...p, pageIndex: 0 }));
+  }, [nameFilter, pathFilter, cmdFilter, portsOnly]);
+
+  // Rows can also shrink out from under the current page (kills, background
+  // refreshes) without any filter change — clamp the index back in range.
+  useEffect(() => {
+    setPagination((p) => {
+      const pageCount = Math.max(1, Math.ceil(sortedData.length / p.pageSize));
+      return p.pageIndex >= pageCount ? { ...p, pageIndex: pageCount - 1 } : p;
+    });
+  }, [sortedData.length]);
 
   // Perform the kill: call the backend (tree-kill) per member — merged rows
   // kill every grouped process, single rows are the one-member case — toast
@@ -371,8 +411,6 @@ export function SystemProcessList({
     setPortLookupResult(null);
   }, []);
 
-  const rowCount = table.getRowCount();
-
   // Per-row callbacks handed to the table view and the shared context menu.
   const rowActions: RowActions = {
     onSelect: setSelected,
@@ -383,49 +421,47 @@ export function SystemProcessList({
 
   return (
     <div className="flex h-full min-h-0">
-    <div className="flex h-full min-w-0 flex-1 flex-col">
-      <SystemProcessFilterBar
-        shown={rowCount}
-        total={rows.length}
-        nameFilter={nameFilter}
-        onNameFilterChange={setNameFilter}
-        pathFilter={pathFilter}
-        onPathFilterChange={setPathFilter}
-        cmdFilter={cmdFilter}
-        onCmdFilterChange={setCmdFilter}
-        portsOnly={portsOnly}
-        onPortsOnlyChange={setPortsOnly}
-        liveRefresh={liveRefresh}
-        onLiveRefreshChange={setLiveRefresh}
-        intervalMs={intervalMs}
-        onIntervalMsChange={setIntervalMs}
-        refreshing={refreshing}
-        onRefresh={() => void refresh()}
-        onOpenPortLookup={() => setPortLookupOpen(true)}
-      />
-
-      {/* Body: the table (skeleton rows on first load) or the error state. */}
-      {error ? (
-        <Empty className="min-h-0 flex-1">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <InboxIcon />
-            </EmptyMedia>
-            <EmptyTitle>{t("system.errorTitle")}</EmptyTitle>
-            <EmptyDescription>{error}</EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : (
-        <SystemProcessTableView
-          table={table}
-          columns={columns}
-          selectedKey={selected?.key ?? null}
-          hasData={processes.length > 0}
-          loading={loading}
-          actions={rowActions}
+      <div className="flex h-full min-w-0 flex-1 flex-col">
+        <SystemProcessFilterBar
+          nameFilter={nameFilter}
+          onNameFilterChange={setNameFilter}
+          pathFilter={pathFilter}
+          onPathFilterChange={setPathFilter}
+          cmdFilter={cmdFilter}
+          onCmdFilterChange={setCmdFilter}
+          portsOnly={portsOnly}
+          onPortsOnlyChange={setPortsOnly}
+          liveRefresh={liveRefresh}
+          onLiveRefreshChange={setLiveRefresh}
+          intervalMs={intervalMs}
+          onIntervalMsChange={setIntervalMs}
+          refreshing={refreshing}
+          onRefresh={() => void refresh()}
+          onOpenPortLookup={() => setPortLookupOpen(true)}
         />
-      )}
-    </div>
+
+        {/* Body: the table (skeleton rows on first load) or the error state. */}
+        {error ? (
+          <Empty className="min-h-0 flex-1">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <InboxIcon />
+              </EmptyMedia>
+              <EmptyTitle>{t("system.errorTitle")}</EmptyTitle>
+              <EmptyDescription>{error}</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : (
+          <SystemProcessTableView
+            table={table}
+            columns={columns}
+            selectedKey={selected?.key ?? null}
+            hasData={processes.length > 0}
+            loading={loading}
+            actions={rowActions}
+          />
+        )}
+      </div>
 
       {selected && (
         <SystemProcessInfoPanel

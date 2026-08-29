@@ -35,6 +35,11 @@ export interface RowActions {
 export const LIVE_KEY = "procm.sysLive";
 export const INTERVAL_KEY = "procm.sysInterval";
 export const PORTS_ONLY_KEY = "procm.sysPortsOnly";
+export const PAGE_SIZE_KEY = "procm.sysPageSize";
 
 // Live-refresh polling intervals offered in the toolbar select (ms).
 export const INTERVAL_OPTIONS = [1000, 2000, 3000, 5000] as const;
+
+// Page sizes offered in the table footer select, capped at the max below.
+export const PAGE_SIZE_OPTIONS = [20, 50, 100, 200] as const;
+export const PAGE_SIZE_MAX = 200;
