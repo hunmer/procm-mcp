@@ -4,6 +4,24 @@ English | [简体中文](README.zh-CN.md)
 
 A Model Context Protocol (MCP) server for process management.
 
+## Installation
+
+```powershell
+npm i -g @hunmer/procm-mcp
+```
+
+### AI one-click setup
+
+Ask your AI agent to run the following steps in a terminal. **Install the
+project skills at the same time as procm-mcp.**
+
+```powershell
+npm i -g @hunmer/procm-mcp
+npx skills add hunmer/procm-mcp --skill procm-http procm-debug procm-init -y
+Start-Process -FilePath "procm-mcp" -ArgumentList "--server", "--port", "7331", "--data-path", "global"
+Start-Process "http://127.0.0.1:7331"
+```
+
 ## Supported features
 
 - Secure and automatable process creation
@@ -43,23 +61,6 @@ Enable the same command in your MCP client's project configuration (for example,
     }
   }
 }
-```
-
-## Installation
-
-```powershell
-npm i -g @hunmer/procm-mcp
-```
-
-### AI one-click setup
-
-Ask your AI agent to run the following steps in a terminal:
-
-```powershell
-npm i -g @hunmer/procm-mcp
-npx skills add hunmer/procm-mcp --skill procm-http procm-debug procm-init -y
-Start-Process -FilePath "procm-mcp" -ArgumentList "--server", "--port", "7331", "--data-path", "global"
-Start-Process "http://127.0.0.1:7331"
 ```
 
 When enabling or restarting a server, use the global `procm-mcp` manager. Services

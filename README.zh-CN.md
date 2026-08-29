@@ -4,6 +4,23 @@
 
 一个用于**进程管理**的 Model Context Protocol (MCP) 服务器。
 
+## 安装
+
+```powershell
+npm i -g @hunmer/procm-mcp
+```
+
+### AI 一键安装
+
+让 AI Agent 在终端依次执行。**安装 procm-mcp 的同时，需要同步安装项目 skills。**
+
+```powershell
+npm i -g @hunmer/procm-mcp
+npx skills add hunmer/procm-mcp --skill procm-http procm-debug procm-init -y
+Start-Process -FilePath "procm-mcp" -ArgumentList "--server", "--port", "7331", "--data-path", "global"
+Start-Process "http://127.0.0.1:7331"
+```
+
 ## 功能特性
 
 - 安全、可自动化的进程创建
@@ -43,23 +60,6 @@ node ./build/index.js --port 7331 --data-path global
     }
   }
 }
-```
-
-## 安装
-
-```powershell
-npm i -g @hunmer/procm-mcp
-```
-
-### AI 一键安装
-
-让 AI Agent 在终端依次执行：
-
-```powershell
-npm i -g @hunmer/procm-mcp
-npx skills add hunmer/procm-mcp --skill procm-http procm-debug procm-init -y
-Start-Process -FilePath "procm-mcp" -ArgumentList "--server", "--port", "7331", "--data-path", "global"
-Start-Process "http://127.0.0.1:7331"
 ```
 
 需要启用或重启服务器时，使用全局 `procm-mcp` 管理；自带热更新的服务不需要重启。
