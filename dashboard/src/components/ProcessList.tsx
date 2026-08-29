@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
-import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { DndContext, closestCorners, pointerWithin, type CollisionDetection, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
+import { SortableContext, rectSwappingStrategy, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useTranslation } from "react-i18next";
 import {
@@ -147,9 +147,8 @@ function orderGroup(
 
 interface GroupSectionProps {
   g: Group;
-  // Collapsible state: uncontrolled with a persisted default (collapsed group
-  // labels live in localStorage), with changes reported back for persistence.
-  defaultOpen: boolean;
+  // Collapsible state is controlled by the parent so drag-start can collapse all groups.
+  open: boolean;
   onOpenChange: (open: boolean) => void;
   selectedId: string | null;
   unread: Record<string, number>;
@@ -178,7 +177,7 @@ interface GroupSectionProps {
 // collapsible FramePanel — live process cards first, then favorite cards.
 function GroupSection({
   g,
-  defaultOpen,
+  open,
   onOpenChange,
   selectedId,
   unread,
@@ -197,7 +196,7 @@ function GroupSection({
   return (
     <div ref={sortable.setNodeRef} style={{ transform: CSS.Transform.toString(sortable.transform), transition: sortable.transition }} className="group/section" data-dragging={sortable.isDragging || undefined}>
     <Frame className="w-full">
-      <Collapsible defaultOpen={defaultOpen} onOpenChange={onOpenChange}>
+      <Collapsible open={open} onOpenChange={onOpenChange}>
         <FrameHeader className="flex-row items-center justify-between px-2 py-2">
           <CollapsibleTrigger
             // Rotate only the leading chevron when the panel is open.
@@ -283,7 +282,7 @@ function GroupSection({
         </FrameHeader>
         <CollapsiblePanel>
           <FramePanel className="p-3">
-            <SortableContext items={g.processes.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+            <SortableContext items={g.processes.map((p) => p.id)} strategy={rectSwappingStrategy}>
             <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2 @5xl:grid-cols-3">
               {g.processes.map((p) => (
                 <div key={p.id} className="relative rounded-2xl">
@@ -379,9 +378,13 @@ export function ProcessList({
   const [processOrder, setProcessOrder] = useState<Record<string, string[]>>(() => loadJson(PROCESS_ORDER_KEY, {}));
 
   function moveItem(items: string[], from: string, to: string) {
+    const fromIndex = items.indexOf(from);
+    const toIndex = items.indexOf(to);
+    if (fromIndex < 0 || toIndex < 0) return items;
     const next = items.filter((id) => id !== from);
-    const index = next.indexOf(to);
-    next.splice(index < 0 ? next.length : index, 0, from);
+    const adjustedTarget = next.indexOf(to);
+    const insertIndex = fromIndex < toIndex ? adjustedTarget + 1 : adjustedTarget;
+    next.splice(insertIndex, 0, from);
     return next;
   }
 
@@ -400,7 +403,20 @@ export function ProcessList({
   }
 
   function moveProcess(group: string, from: string, to: string) {
-    setProcessOrder((current) => { const next = { ...current, [group]: moveItem(current[group] ?? [], from, to) }; saveJson(PROCESS_ORDER_KEY, next); return next; });
+    setProcessOrder((current) => {
+      const ids = processes.filter((p) => groupKeyOf(p.group ?? undefined) === group).map((p) => p.id);
+      const base = [...(current[group] ?? []).filter((id) => ids.includes(id)), ...ids.filter((id) => !(current[group] ?? []).includes(id))];
+      const next = { ...current, [group]: moveItem(base, from, to) };
+      saveJson(PROCESS_ORDER_KEY, next);
+      return next;
+    });
+  }
+
+  function handleDragStart(event: DragStartEvent) {
+    if (event.active.data.current?.type !== "group") return;
+    const labels = new Set(processes.map((p) => groupKeyOf(p.group ?? undefined)));
+    setCollapsedLabels(labels);
+    saveJson(COLLAPSED_KEY, [...labels]);
   }
 
   function handleDragEnd(event: DragEndEvent) {
@@ -415,6 +431,24 @@ export function ProcessList({
       moveProcess(String(activeData!.group), String(active.id), String(over.id));
     }
   }
+
+  // Keep group drags from being captured by the process droppables nested in
+  // each panel. Corner detection also activates as soon as the pointer enters
+  // the adjacent section instead of waiting for its center.
+  const collisionDetectionStrategy: CollisionDetection = (args) => {
+    const type = args.active.data.current?.type;
+    const containers = args.droppableContainers.filter((container) => {
+      if (container.id === args.active.id) return false;
+      if (container.data.current?.type !== type) return false;
+      if (type === "process") {
+        return container.data.current?.group === args.active.data.current?.group;
+      }
+      return true;
+    });
+    const scopedArgs = { ...args, droppableContainers: containers };
+    const pointerMatches = pointerWithin(scopedArgs);
+    return pointerMatches.length > 0 ? pointerMatches : closestCorners(scopedArgs);
+  };
 
   function togglePin(p: ProcessView) {
     setPinnedIds((cur) => {
@@ -615,7 +649,7 @@ export function ProcessList({
   const grouped = orderedGroups.filter((g) => g.label !== UNGROUPED);
 
   return (
-    <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+    <DndContext collisionDetection={collisionDetectionStrategy} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
     <div className="flex h-full min-h-0 flex-col">
       <ProcessFilterBar
         statusFilter={statusFilter}
@@ -653,7 +687,7 @@ export function ProcessList({
               <SortableContext items={orderedGroups.map((g) => `group:${g.label}`)} strategy={verticalListSortingStrategy}>
               <GroupSection
                 g={ungrouped}
-                defaultOpen={!collapsedLabels.has(ungrouped.label)}
+                open={!collapsedLabels.has(ungrouped.label)}
                 onOpenChange={(open) => toggleGroup(ungrouped.label, open)}
                 selectedId={selectedId}
                 unread={unread}
@@ -676,7 +710,7 @@ export function ProcessList({
                 <GroupSection
                   key={g.label}
                   g={g}
-                  defaultOpen={!collapsedLabels.has(g.label)}
+                  open={!collapsedLabels.has(g.label)}
                   onOpenChange={(open) => toggleGroup(g.label, open)}
                   selectedId={selectedId}
                   unread={unread}
@@ -699,7 +733,7 @@ export function ProcessList({
           <SortableContext items={[`group:${ungrouped.label}`]} strategy={verticalListSortingStrategy}>
           <GroupSection
             g={ungrouped}
-            defaultOpen={!collapsedLabels.has(ungrouped.label)}
+            open={!collapsedLabels.has(ungrouped.label)}
             onOpenChange={(open) => toggleGroup(ungrouped.label, open)}
             selectedId={selectedId}
             unread={unread}
