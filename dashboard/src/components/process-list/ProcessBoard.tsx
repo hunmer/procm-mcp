@@ -1,8 +1,16 @@
 import { useEffect, useRef, useState } from "react";
+import {
+  SortableContext,
+  rectSortingStrategy,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useTranslation } from "react-i18next";
 import {
   ExternalLinkIcon,
   FolderIcon,
+  GripVerticalIcon,
   PencilIcon,
   PinIcon,
   PinOffIcon,
@@ -32,6 +40,8 @@ function BoardRow({
   pinned,
   onTogglePin,
   actions,
+  dragGroup,
+  dragEnabled = true,
 }: {
   p: ProcessView;
   isActive: boolean;
@@ -39,6 +49,9 @@ function BoardRow({
   pinned: boolean;
   onTogglePin: (p: ProcessView) => void;
   actions: RowActions;
+  // Group label the row reports to the DnD context (same-group collision only).
+  dragGroup?: string;
+  dragEnabled?: boolean;
 }) {
   const { t } = useTranslation();
   const canStop = canStopProcess(p);
@@ -46,17 +59,33 @@ function BoardRow({
   const portHref = port ? `http://localhost:${port}` : null;
   const cmd = `${p.script}${p.args?.length ? " " + p.args.join(" ") : ""}`;
   const subtitle = p.desc || cmd;
+  const sortable = useSortable({
+    id: p.id,
+    data: { type: "process", group: dragGroup },
+    disabled: !dragEnabled,
+    animateLayoutChanges: () => true,
+  });
   return (
-    <ContextMenu>
-      <ContextMenuTrigger
-        render={
-          <div
-            className="group/row flex cursor-pointer items-center gap-2 bg-card px-3 py-1 transition-colors hover:bg-accent/60 data-[state=selected]:bg-primary/10 data-[state=selected]:shadow-[inset_2px_0_0_var(--primary)]"
-            data-state={isActive ? "selected" : undefined}
-            onClick={() => actions.onSelectLogs(p)}
-          />
-        }
-      >
+    <div
+      ref={sortable.setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(sortable.transform),
+        transition: sortable.transition,
+        visibility: sortable.isDragging ? "hidden" : "visible",
+      }}
+      className="group/row"
+      data-dragging={sortable.isDragging || undefined}
+    >
+      <ContextMenu>
+        <ContextMenuTrigger
+          render={
+            <div
+              className="flex cursor-pointer items-center gap-2 bg-card px-3 py-1 transition-colors hover:bg-accent/60 data-[state=selected]:bg-primary/10 data-[state=selected]:shadow-[inset_2px_0_0_var(--primary)]"
+              data-state={isActive ? "selected" : undefined}
+              onClick={() => actions.onSelectLogs(p)}
+            />
+          }
+        >
         <span
           className={
             "inline-block size-2 shrink-0 rounded-full " + STATUS_DOT[p.status]
@@ -109,6 +138,21 @@ function BoardRow({
           }
           onClick={(e) => e.stopPropagation()}
         >
+          {dragEnabled && (
+            <Button
+              ref={sortable.setActivatorNodeRef}
+              size="icon-xs"
+              variant="ghost"
+              aria-label="拖拽排序进程"
+              title="拖拽排序进程"
+              className="text-muted-foreground cursor-grab"
+              {...sortable.attributes}
+              {...sortable.listeners}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <GripVerticalIcon />
+            </Button>
+          )}
           <Button
             size="icon-xs"
             variant="ghost"
@@ -153,7 +197,8 @@ function BoardRow({
         </div>
       </ContextMenuTrigger>
       <ProcessContextMenu p={p} actions={actions} />
-    </ContextMenu>
+      </ContextMenu>
+    </div>
   );
 }
 
@@ -171,6 +216,7 @@ function BoardColumn({
   onToast,
   groupOptions,
   onRenameGroup,
+  dragEnabled = true,
 }: {
   g: { label: string; processes: ProcessView[] };
   selectedId: string | null;
@@ -184,14 +230,28 @@ function BoardColumn({
   groupOptions: string[];
   // Open the rename-group dialog for this column's group.
   onRenameGroup: (g: { label: string; processes: ProcessView[] }) => void;
+  dragEnabled?: boolean;
 }) {
   const { t } = useTranslation();
   const runningCount = g.processes.filter(canStopProcess).length;
+  const sortable = useSortable({
+    id: `group:${g.label}`,
+    data: { type: "group", label: g.label },
+    disabled: !dragEnabled,
+  });
   return (
     // One div per column; the card rows are direct children of it (no wrapper
     // layer). overflow-hidden clips the square row backgrounds to the rounded
     // border so the bottom corners aren't painted over.
-    <div className="group/col flex min-w-0 flex-col overflow-hidden rounded-xl border bg-card/40 pb-1.5">
+    <div
+      ref={sortable.setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(sortable.transform),
+        transition: sortable.transition,
+      }}
+      className="group/col flex min-w-0 flex-col overflow-hidden rounded-xl border bg-card/40 pb-1.5"
+      data-dragging={sortable.isDragging || undefined}
+    >
       <div className="mb-1.5 flex items-center gap-2 border-b px-3 py-2">
         <FolderIcon className="text-muted-foreground size-3.5 shrink-0" />
         <span
@@ -201,6 +261,19 @@ function BoardColumn({
           {g.label === UNGROUPED ? t("processes.ungrouped") : g.label}
         </span>
         <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/col:opacity-100 focus-within:opacity-100">
+          {dragEnabled && (
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label="拖拽排序列"
+              title="拖拽排序列"
+              className="text-muted-foreground cursor-grab"
+              {...sortable.attributes}
+              {...sortable.listeners}
+            >
+              <GripVerticalIcon />
+            </Button>
+          )}
           <CreateDropdown
             trigger={
               <Button
@@ -241,17 +314,24 @@ function BoardColumn({
           {g.processes.length}
         </Badge>
       </div>
-      {g.processes.map((p) => (
-        <BoardRow
-          key={p.id}
-          p={p}
-          isActive={p.id === selectedId}
-          unreadCount={unread[p.id] ?? 0}
-          pinned={pinnedIds.has(p.id)}
-          onTogglePin={onTogglePin}
-          actions={actions}
-        />
-      ))}
+      <SortableContext
+        items={g.processes.map((p) => p.id)}
+        strategy={verticalListSortingStrategy}
+      >
+        {g.processes.map((p) => (
+          <BoardRow
+            key={p.id}
+            p={p}
+            isActive={p.id === selectedId}
+            unreadCount={unread[p.id] ?? 0}
+            pinned={pinnedIds.has(p.id)}
+            onTogglePin={onTogglePin}
+            actions={actions}
+            dragGroup={g.label}
+            dragEnabled={dragEnabled}
+          />
+        ))}
+      </SortableContext>
     </div>
   );
 }
@@ -279,6 +359,7 @@ export function ProcessBoard({
   onToast,
   groupOptions,
   onRenameGroup,
+  dragEnabled = true,
 }: {
   groups: { label: string; processes: ProcessView[] }[];
   selectedId: string | null;
@@ -289,6 +370,7 @@ export function ProcessBoard({
   onToast: (message: string, isError?: boolean) => void;
   groupOptions: string[];
   onRenameGroup: (g: { label: string; processes: ProcessView[] }) => void;
+  dragEnabled?: boolean;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [columnCount, setColumnCount] = useState(1);
@@ -316,20 +398,26 @@ export function ProcessBoard({
         className="grid items-start gap-x-3 gap-y-3"
         style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
       >
-        {groups.map((g) => (
-          <BoardColumn
-            key={g.label}
-            g={g}
-            selectedId={selectedId}
-            unread={unread}
-            pinnedIds={pinnedIds}
-            actions={actions}
-            onTogglePin={onTogglePin}
-            onToast={onToast}
-            groupOptions={groupOptions}
-            onRenameGroup={onRenameGroup}
-          />
-        ))}
+        <SortableContext
+          items={groups.map((g) => `group:${g.label}`)}
+          strategy={rectSortingStrategy}
+        >
+          {groups.map((g) => (
+            <BoardColumn
+              key={g.label}
+              g={g}
+              selectedId={selectedId}
+              unread={unread}
+              pinnedIds={pinnedIds}
+              actions={actions}
+              onTogglePin={onTogglePin}
+              onToast={onToast}
+              groupOptions={groupOptions}
+              onRenameGroup={onRenameGroup}
+              dragEnabled={dragEnabled}
+            />
+          ))}
+        </SortableContext>
       </div>
     </div>
   );

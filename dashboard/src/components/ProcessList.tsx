@@ -390,13 +390,10 @@ export function ProcessList({
   const [groupOrder, setGroupOrder] = useState<string[]>(() => loadJson(GROUP_ORDER_KEY, []));
   const [processOrder, setProcessOrder] = useState<Record<string, string[]>>(() => loadJson(PROCESS_ORDER_KEY, {}));
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
-  // Manual drag ordering only exists in the grouped view (the board orders via
-  // the sort select) and only without active filters.
+  // Manual drag ordering exists in both views (grouped cards and board) and
+  // only without active filters.
   const processDragEnabled =
-    viewMode === "grouped" &&
-    statusFilter === "all" &&
-    sortMode === "none" &&
-    nameFilter.trim() === "";
+    statusFilter === "all" && sortMode === "none" && nameFilter.trim() === "";
 
   function changeViewMode(v: ViewMode) {
     setViewMode(v);
@@ -737,6 +734,7 @@ export function ProcessList({
             groupOptions={groupOptions}
             onToast={onToast}
             onRenameGroup={requestRenameGroup}
+            dragEnabled={processDragEnabled}
           />
         </div>
       ) : grouped.length > 0 ? (
