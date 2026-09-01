@@ -21,13 +21,25 @@ export type { ProcessListProps };
 export type StatusFilter = "all" | ProcessStatus | "expired";
 
 // How the processes inside each group are ordered. "none" keeps the
-// backend's push order; "startedAt" sorts newest-first. Pinned rows float
-// to the top in either mode.
-export type SortMode = "none" | "startedAt";
+// backend's push order; "startedAt" sorts newest-first; "name" sorts
+// case-insensitively by process name. Pinned rows float to the top in
+// every mode.
+export type SortMode = "none" | "startedAt" | "name";
+
+// Which layout renders the process list: "grouped" stacks collapsible card
+// groups vertically (default); "board" renders one fixed-width column per
+// group with dense rows — no collapsing, ordering driven by the sort select.
+export type ViewMode = "grouped" | "board";
+
+export const VIEW_OPTIONS: { value: ViewMode; labelKey: string }[] = [
+  { value: "grouped", labelKey: "processes.viewGrouped" },
+  { value: "board", labelKey: "processes.viewBoard" },
+];
 
 export const SORT_OPTIONS: { value: SortMode; labelKey: string }[] = [
   { value: "none", labelKey: "processes.sortNone" },
   { value: "startedAt", labelKey: "processes.sortStartedAt" },
+  { value: "name", labelKey: "processes.sortName" },
 ];
 
 // Color dot shown before each status option. Mirrors StatusBadge semantics.

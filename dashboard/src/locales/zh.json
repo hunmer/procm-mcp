@@ -124,7 +124,11 @@
     "renameGroupDescription": "将“{{label}}”下的 {{count}} 个进程移动到目标分组。",
     "renameGroupLabel": "目标分组",
     "renameGroupPlaceholder": "分组名称",
-    "renameGroupHelp": "该分组下的所有进程都会移动到输入的分组；留空则移回“未分组”。"
+    "renameGroupHelp": "该分组下的所有进程都会移动到输入的分组；留空则移回“未分组”。",
+    "viewAria": "切换视图",
+    "viewGrouped": "分组卡片",
+    "viewBoard": "看板列表",
+    "sortName": "名称"
   },
   "logFiles": {
     "listTitle": "日志文件",
@@ -328,9 +332,12 @@
     "newProcess": {
       "title": "启动一个进程",
       "description": "本控制台是面向本机的人工操作界面。在此启动进程，等同于你在终端中亲自运行该命令。",
+      "createTitle": "新建进程",
+      "createDescription": "仅保存进程信息为记录，不会立即启动；之后可在列表中随时启动。",
       "validationError": "必须填写脚本和工作目录",
       "portValidationError": "端口必须是 1 到 65535 之间的整数",
-      "submit": "启动进程"
+      "submit": "启动进程",
+      "createSubmit": "创建"
     },
     "details": {
       "title": "编辑进程",
@@ -363,7 +370,8 @@
       "envsLabel": "环境变量（每行一个 KEY=VALUE）",
       "envsPlaceholder": "NODE_ENV=development\nPORT=3000",
       "envsHelp": "可选。每行一个变量，格式为 KEY=VALUE。",
-      "groupEmpty": "没有匹配的分组，可直接回车使用输入的名称"
+      "groupEmpty": "没有匹配的分组，输入的名称将作为新分组",
+      "runAfterCreate": "创建后立即运行"
     }
   },
   "favorites": {
@@ -417,6 +425,7 @@
     "groupMoved": "已将 {{count}} 个进程移动到“{{label}}”",
     "groupMoveFailed": "{{failed}} 个进程移动失败",
     "started": "已启动：{{id}}",
+    "created": "已创建：{{id}}",
     "cleared_one": "已清除 {{count}} 个进程",
     "cleared_other": "已清除 {{count}} 个进程",
     "clearedPartial": "已清除 {{deleted}} 个，{{notFound}} 个未找到",

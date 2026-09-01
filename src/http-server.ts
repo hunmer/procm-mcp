@@ -745,6 +745,18 @@ function createRequestHandler(token: string | undefined) {
           json(res, 400, { error: "script, cwd and args are required" });
           return;
         }
+        // Optional served port, same coercion/range check as the start route
+        // so a created-without-start record keeps the one-click open link.
+        const rawPort = Number(body.port);
+        const port =
+          body.port !== undefined && body.port !== null &&
+          Number.isInteger(rawPort) && rawPort >= 1 && rawPort <= 65535
+            ? rawPort
+            : null;
+        if (body.port !== undefined && body.port !== null && port === null) {
+          json(res, 400, { error: "port must be an integer between 1 and 65535" });
+          return;
+        }
         const saved = await saveProcessRecord({
           name: body.name ? String(body.name) : undefined,
           script,
@@ -753,6 +765,7 @@ function createRequestHandler(token: string | undefined) {
           desc: body.desc ? String(body.desc) : undefined,
           group: body.group ? String(body.group).trim() : null,
           favorite: true,
+          port,
         });
         json(res, 201, { id: saved.id, name: saved.name, favorite: true });
         return;

@@ -42,8 +42,9 @@ export function DashboardHeader({
   const { t } = useTranslation();
 
   return (
-    <div className="flex shrink-0 items-center justify-between border-b px-4 py-2.5">
+    <div className="flex shrink-0 items-center justify-between gap-2 overflow-x-auto border-b px-4 py-2.5">
       <Tabs
+        className="shrink-0"
         value={activeTab}
         onValueChange={(value) => {
           const tab = value in TAB_ROUTES ? (value as DashboardTab) : "processes";
@@ -80,7 +81,7 @@ export function DashboardHeader({
           <TabsIndicator />
         </TabsList>
       </Tabs>
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex shrink-0 items-center gap-2">
         {data && (
           <Badge
             variant="outline"

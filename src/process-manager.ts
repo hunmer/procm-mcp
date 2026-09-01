@@ -253,6 +253,7 @@ export async function saveProcessRecord(input: {
   desc?: string;
   group?: string | null;
   favorite?: boolean;
+  port?: number | null;
 }): Promise<ProcessRecord> {
   const record: ProcessRecord = {
     id: generateProcessId(),
@@ -267,6 +268,7 @@ export async function saveProcessRecord(input: {
     desc: input.desc ?? null,
     group: input.group ?? null,
     favorite: input.favorite ?? true,
+    port: input.port ?? null,
     startedAt: Date.now(),
     lastStartedAt: null,
     stoppedAt: null,

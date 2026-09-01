@@ -449,9 +449,9 @@ export function App() {
         onToast={showToast}
       />
 
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1">
         <main className="flex min-w-0 flex-1 flex-col gap-4">
-          <div className="bg-card flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
+          <div className="bg-card flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border">
             <DashboardHeader
               activeTab={activeTab}
               data={data}

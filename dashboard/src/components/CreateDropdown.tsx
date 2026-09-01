@@ -17,6 +17,7 @@ import { NewProcessDialog } from "./NewProcessDialog";
 // process list, with the clicked group pre-filled into both dialogs.
 export function CreateDropdown({
   onStarted,
+  onCreated,
   onError,
   onToast,
   defaultGroup,
@@ -25,6 +26,8 @@ export function CreateDropdown({
   trigger,
 }: {
   onStarted: (id: string) => void;
+  // Fired when a process was created without starting (checkbox unticked).
+  onCreated?: (id: string) => void;
   onError: (message: string) => void;
   onToast: (message: string, isError?: boolean) => void;
   // Group pre-filled into the new-process dialog when it opens.
@@ -67,6 +70,7 @@ export function CreateDropdown({
         defaultGroup={defaultGroup}
         groupOptions={groupOptions}
         onStarted={onStarted}
+        onCreated={onCreated}
         onError={onError}
       />
       <ImportGroupDialog

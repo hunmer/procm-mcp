@@ -124,7 +124,11 @@
     "renameGroupDescription": "Moves all {{count}} process(es) under “{{label}}” to the target group.",
     "renameGroupLabel": "Target group",
     "renameGroupPlaceholder": "Group name",
-    "renameGroupHelp": "Every process in this group moves to the typed group name; leave blank to move them to Ungrouped."
+    "renameGroupHelp": "Every process in this group moves to the typed group name; leave blank to move them to Ungrouped.",
+    "viewAria": "Switch view",
+    "viewGrouped": "Grouped cards",
+    "viewBoard": "Board",
+    "sortName": "Name"
   },
   "logFiles": {
     "listTitle": "Log files",
@@ -328,9 +332,12 @@
     "newProcess": {
       "title": "Start a process",
       "description": "The dashboard is a human-driven localhost UI. Starting a process here is equivalent to running the command yourself in a terminal.",
+      "createTitle": "New process",
+      "createDescription": "Saves the process as a record without starting it; launch it any time from the list.",
       "validationError": "script and working directory are required",
       "portValidationError": "port must be an integer between 1 and 65535",
-      "submit": "Start process"
+      "submit": "Start process",
+      "createSubmit": "Create"
     },
     "details": {
       "title": "Edit process",
@@ -363,7 +370,8 @@
       "envsLabel": "Environment variables (KEY=VALUE per line)",
       "envsPlaceholder": "NODE_ENV=development\nPORT=3000",
       "envsHelp": "Optional. One variable per line, written as KEY=VALUE.",
-      "groupEmpty": "No matching groups — the typed name will be used"
+      "groupEmpty": "No matching groups — the typed name will be used as a new group",
+      "runAfterCreate": "Run immediately after creation"
     }
   },
   "favorites": {
@@ -417,6 +425,7 @@
     "groupMoved": "Moved {{count}} process(es) to “{{label}}”",
     "groupMoveFailed": "{{failed}} process(es) could not be moved",
     "started": "Started: {{id}}",
+    "created": "Created: {{id}}",
     "cleared_one": "Cleared {{count}} process",
     "cleared_other": "Cleared {{count}} processes",
     "clearedPartial": "Cleared {{deleted}}, {{notFound}} not found",

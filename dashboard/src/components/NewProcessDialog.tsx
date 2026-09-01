@@ -20,20 +20,22 @@ import {
   FieldLabel,
 } from "@/registry/default/ui/field";
 import {
-  Combobox,
-  ComboboxEmpty,
-  ComboboxInput,
-  ComboboxItem,
-  ComboboxList,
-  ComboboxPopup,
-  ComboboxTrigger,
-} from "@/registry/default/ui/combobox";
-import { ChevronsUpDownIcon, PlusIcon, SearchIcon } from "lucide-react";
-import { parseEnvs, startProcess, updateProcess } from "@/lib/api";
+  Autocomplete,
+  AutocompleteEmpty,
+  AutocompleteInput,
+  AutocompleteItem,
+  AutocompleteList,
+  AutocompletePopup,
+} from "@/registry/default/ui/autocomplete";
+import { Checkbox } from "@/registry/default/ui/checkbox";
+import { PlusIcon, SearchIcon } from "lucide-react";
+import { parseEnvs, saveImportedProcess, startProcess, updateProcess } from "@/lib/api";
 import type { ProcessView } from "@/lib/types";
 
 interface NewProcessDialogProps {
   onStarted: (id: string) => void;
+  // Fired when the record was created without starting (checkbox unticked).
+  onCreated?: (id: string) => void;
   onError: (message: string) => void;
   // Controlled mode: when open/onOpenChange are provided the dialog is driven
   // from outside (e.g. the header "+" menu) and the built-in trigger button
@@ -65,6 +67,7 @@ export interface ProcessDetailsDialogProps {
 // flex column still treats them as direct layout sections.
 export function NewProcessDialog({
   onStarted,
+  onCreated,
   onError,
   open: openProp,
   onOpenChange,
@@ -76,6 +79,9 @@ export function NewProcessDialog({
   const open = openProp ?? internalOpen;
   const setOpen = onOpenChange ?? setInternalOpen;
   const [submitting, setSubmitting] = useState(false);
+  // Default off: submit only persists a stopped record; ticking the checkbox
+  // switches the dialog to "start" wording and launches on submit.
+  const [startAfterCreate, setStartAfterCreate] = useState(false);
   const [name, setName] = useState("");
   const [script, setScript] = useState("");
   const [args, setArgs] = useState("");
@@ -87,8 +93,12 @@ export function NewProcessDialog({
 
   // Re-seed the group field from defaultGroup on every open so a group
   // header's "+" always pre-fills that group, and a plain reopen clears it.
+  // The run checkbox also resets to the create-only default each time.
   useEffect(() => {
-    if (open) setGroup(defaultGroup ?? "");
+    if (open) {
+      setGroup(defaultGroup ?? "");
+      setStartAfterCreate(false);
+    }
   }, [open, defaultGroup]);
 
   function reset() {
@@ -118,7 +128,7 @@ export function NewProcessDialog({
     }
     setSubmitting(true);
     try {
-      const r = await startProcess({
+      const body = {
         name: name.trim() || undefined,
         script: script.trim(),
         args: args.trim() ? args.trim().split(/\s+/) : [],
@@ -127,10 +137,16 @@ export function NewProcessDialog({
         desc: desc.trim() || undefined,
         port: portNum,
         group: group.trim() || undefined,
-      });
+      };
+      // Ticked: launch now (same as before). Unticked: persist a stopped
+      // record via the import route so it appears in the list ready to start.
+      const r = startAfterCreate
+        ? await startProcess(body)
+        : await saveImportedProcess(body);
       reset();
       setOpen(false);
-      onStarted(r.id);
+      if (startAfterCreate) onStarted(r.id);
+      else onCreated?.(r.id);
     } catch (err) {
       onError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -151,9 +167,15 @@ export function NewProcessDialog({
       )}
       <DialogPopup>
         <DialogHeader>
-          <DialogTitle>{t("dialogs.newProcess.title")}</DialogTitle>
+          <DialogTitle>
+            {startAfterCreate
+              ? t("dialogs.newProcess.title")
+              : t("dialogs.newProcess.createTitle")}
+          </DialogTitle>
           <DialogDescription>
-            {t("dialogs.newProcess.description")}
+            {startAfterCreate
+              ? t("dialogs.newProcess.description")
+              : t("dialogs.newProcess.createDescription")}
           </DialogDescription>
         </DialogHeader>
         <ProcessForm
@@ -168,7 +190,14 @@ export function NewProcessDialog({
           group={group}
           setGroup={setGroup}
           groupOptions={groupOptions ?? []}
+          startAfterCreate={startAfterCreate}
+          setStartAfterCreate={setStartAfterCreate}
           submitting={submitting}
+          submitLabel={
+            startAfterCreate
+              ? t("dialogs.newProcess.submit")
+              : t("dialogs.newProcess.createSubmit")
+          }
           onSubmit={handleSubmit}
         />
       </DialogPopup>
@@ -319,6 +348,11 @@ interface ProcessFormProps {
   group?: string;
   setGroup?: (v: string) => void;
   groupOptions?: string[];
+  // "Run after creation" checkbox state. Only rendered when
+  // `setStartAfterCreate` is provided (the new-process dialog); the details
+  // dialog keeps its plain save behavior.
+  startAfterCreate?: boolean;
+  setStartAfterCreate?: (v: boolean) => void;
   readOnly?: boolean;
   submitting: boolean;
   // Override for the submit button label. Defaults to the new-process
@@ -340,6 +374,8 @@ function ProcessForm({
   group,
   setGroup,
   groupOptions,
+  startAfterCreate,
+  setStartAfterCreate,
   readOnly,
   submitting,
   submitLabel,
@@ -348,7 +384,11 @@ function ProcessForm({
   const { t } = useTranslation();
   // Combobox items are {value,label} objects so selecting one fills the
   // input with the label automatically (Base UI single-select behavior).
-  const groupItems = (groupOptions ?? []).map((g) => ({ value: g, label: g }));
+  type GroupItem = { value: string; label: string };
+  const groupItems: GroupItem[] = (groupOptions ?? []).map((g) => ({
+    value: g,
+    label: g,
+  }));
   return (
     <form className="contents" onSubmit={onSubmit}>
       <DialogPanel>
@@ -422,49 +462,35 @@ function ProcessForm({
               <FieldLabel htmlFor="f-group">
                 {t("dialogs.form.groupLabel")}
               </FieldLabel>
-              {/* p-combobox-10 (coss): an outline trigger shows the current
-                  group; the search input lives inside the popup. Free text is
-                  kept as-is, so a typed name that matches no existing group
-                  still applies. */}
-              <Combobox
+              {/* p-autocomplete-5 (coss): the input itself is the control —
+                  free text IS the value; picking an item fills it. Replaces
+                  the earlier trigger-style Combobox: with the search input
+                  inside the popup, Base UI treats the text as a transient
+                  filter and clears it when the popup closes, so a typed or
+                  picked group never stuck. */}
+              <Autocomplete
                 items={groupItems}
-                inputValue={group}
-                onInputValueChange={(v) => setGroup(v)}
+                value={group}
+                onValueChange={(v) => setGroup(v)}
               >
-                <ComboboxTrigger
-                  render={
-                    <Button
-                      id="f-group"
-                      variant="outline"
-                      className="w-full justify-between font-normal"
-                    />
-                  }
-                >
-                  <span
-                    className={`truncate ${group ? "" : "text-muted-foreground"}`}
-                  >
-                    {group || t("dialogs.form.groupPlaceholder")}
-                  </span>
-                  <ChevronsUpDownIcon className="text-muted-foreground size-4 opacity-50" />
-                </ComboboxTrigger>
-                <ComboboxPopup aria-label={t("dialogs.form.groupLabel")}>
-                  <div className="border-b p-2">
-                    <ComboboxInput
-                      placeholder={t("dialogs.form.groupPlaceholder")}
-                      showTrigger={false}
-                      startAddon={<SearchIcon />}
-                    />
-                  </div>
-                  <ComboboxEmpty>{t("dialogs.form.groupEmpty")}</ComboboxEmpty>
-                  <ComboboxList>
-                    {(item: { value: string; label: string }) => (
-                      <ComboboxItem key={item.value} value={item}>
+                <AutocompleteInput
+                  id="f-group"
+                  placeholder={t("dialogs.form.groupPlaceholder")}
+                  startAddon={<SearchIcon />}
+                />
+                <AutocompletePopup aria-label={t("dialogs.form.groupLabel")}>
+                  <AutocompleteEmpty>
+                    {t("dialogs.form.groupEmpty")}
+                  </AutocompleteEmpty>
+                  <AutocompleteList>
+                    {(item: GroupItem) => (
+                      <AutocompleteItem key={item.value} value={item}>
                         {item.label}
-                      </ComboboxItem>
+                      </AutocompleteItem>
                     )}
-                  </ComboboxList>
-                </ComboboxPopup>
-              </Combobox>
+                  </AutocompleteList>
+                </AutocompletePopup>
+              </Autocomplete>
               <FieldDescription>
                 {t("dialogs.form.groupHelp")}
               </FieldDescription>
@@ -502,6 +528,25 @@ function ProcessForm({
             </FieldDescription>
           )}
         </Field>
+        {setStartAfterCreate && !readOnly && (
+          <Field className="mt-4">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="f-run-after-create"
+                checked={startAfterCreate ?? false}
+                onCheckedChange={(checked) =>
+                  setStartAfterCreate(checked === true)
+                }
+              />
+              <label
+                htmlFor="f-run-after-create"
+                className="text-sm select-none"
+              >
+                {t("dialogs.form.runAfterCreate")}
+              </label>
+            </div>
+          </Field>
+        )}
       </DialogPanel>
       <DialogFooter>
         <DialogClose render={<Button variant="ghost" />}>

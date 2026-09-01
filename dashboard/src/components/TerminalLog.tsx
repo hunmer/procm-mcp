@@ -14,6 +14,18 @@ import {
 const URL_RE = /https?:\/\/[^\s<>"']+/gi;
 const previewCache = new Map<string, LinkPreviewData | null>();
 
+// Tools often style parts of a URL differently (e.g. host one color, port
+// another), which splits the URL across ANSI segments — and per-segment link
+// matching then drops the port (http://127.0.0.1 links, ":5173/…" renders as
+// plain text). Match URLs while tolerating SGR escapes inside them, then
+// strip those escapes so the whole URL lands in a single segment.
+const URL_RE_WITH_ANSI = /https?:\/\/(?:\x1b\[[0-9;:]*m|[^\s<>"'\x1b])+/gi;
+const SGR_RE = /\x1b\[[0-9;:]*m/g;
+
+function joinAnsiSplitUrls(text: string): string {
+  return text.replace(URL_RE_WITH_ANSI, (m) => m.replace(SGR_RE, ""));
+}
+
 type LinkPreviewData = {
   title?: string;
   description?: string;
@@ -221,7 +233,7 @@ export function AnsiText({
   text: string;
   highlight: RegExp | null;
 }) {
-  const segments = useMemo<AnsiSegment[]>(() => tokenizeAnsi(text), [text]);
+  const segments = useMemo<AnsiSegment[]>(() => tokenizeAnsi(joinAnsiSplitUrls(text)), [text]);
   return (
     <>
       {segments.map((seg, i) => (

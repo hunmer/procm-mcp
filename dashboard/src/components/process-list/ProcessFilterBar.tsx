@@ -1,6 +1,13 @@
 import { useTranslation } from "react-i18next";
 import type { ReactNode } from "react";
-import { ArrowDownUpIcon, SearchIcon } from "lucide-react";
+import {
+  ArrowDownUpIcon,
+  KanbanIcon,
+  LayoutGridIcon,
+  SearchIcon,
+} from "lucide-react";
+import { Button } from "@/registry/default/ui/button";
+import { Group } from "@/registry/default/ui/group";
 import { Input } from "@/registry/default/ui/input";
 import {
   Select,
@@ -15,14 +22,18 @@ import {
   SORT_OPTIONS,
   STATUS_DOT,
   STATUS_OPTIONS,
+  VIEW_OPTIONS,
   type SortMode,
   type StatusFilter,
+  type ViewMode,
 } from "./types";
 
-// The filter bar above the merged list: status select (processes only) + sort
-// select + name search + result count. Stateless — all values/setters come in
-// as props so the orchestrator owns the state.
+// The filter bar above the merged list: view switch + status select (processes
+// only) + sort select + name search + result count. Stateless — all
+// values/setters come in as props so the orchestrator owns the state.
 export function ProcessFilterBar({
+  viewMode,
+  onViewModeChange,
   statusFilter,
   onStatusFilterChange,
   sortMode,
@@ -33,6 +44,8 @@ export function ProcessFilterBar({
   totalCount,
   right,
 }: {
+  viewMode: ViewMode;
+  onViewModeChange: (v: ViewMode) => void;
   statusFilter: StatusFilter;
   onStatusFilterChange: (v: StatusFilter) => void;
   sortMode: SortMode;
@@ -51,6 +64,25 @@ export function ProcessFilterBar({
     SORT_OPTIONS.find((o) => o.value === sortMode) ?? SORT_OPTIONS[0];
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-4 py-2.5">
+      <Group aria-label={t("processes.viewAria")}>
+        {VIEW_OPTIONS.map((o) => (
+          <Button
+            key={o.value}
+            size="icon-sm"
+            variant={viewMode === o.value ? "secondary" : "ghost"}
+            aria-pressed={viewMode === o.value}
+            aria-label={t(o.labelKey)}
+            title={t(o.labelKey)}
+            onClick={() => onViewModeChange(o.value)}
+          >
+            {o.value === "grouped" ? (
+              <LayoutGridIcon />
+            ) : (
+              <KanbanIcon />
+            )}
+          </Button>
+        ))}
+      </Group>
       <Select
         value={statusFilter}
         onValueChange={(v) => onStatusFilterChange((v as StatusFilter) ?? "all")}

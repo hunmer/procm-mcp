@@ -36,10 +36,12 @@ import {
   type RowActions,
   type SortMode,
   type StatusFilter,
+  type ViewMode,
 } from "./process-list/types";
 import { useProcessActions } from "./process-list/useProcessActions";
-import { canStopProcess } from "./process-list/utils";
+import { canStopProcess, groupKeyOf, UNGROUPED } from "./process-list/utils";
 import { ProcessFilterBar } from "./process-list/ProcessFilterBar";
+import { ProcessBoard } from "./process-list/ProcessBoard";
 import { ProcessCard } from "./process-list/ProcessCard";
 import { ProcessDialogs } from "./process-list/ProcessDialogs";
 import {
@@ -63,12 +65,9 @@ function looksLikePath(label: string): boolean {
 // localStorage may be unavailable (private mode); the in-memory state still
 // works for the session.
 const COLLAPSED_KEY = "procm.collapsedGroups";
-const UNGROUPED = "Ungrouped";
 
-function groupKeyOf(group: string | undefined): string {
-  const value = (group ?? "").trim();
-  return value || UNGROUPED;
-}
+// Which layout (grouped cards / board) is shown, persisted across reloads.
+const VIEW_KEY = "procm.processView";
 
 // Pinned process ids, persisted across reloads. Ids of deleted processes may
 // linger; they simply never match a row again.
@@ -120,8 +119,9 @@ interface Group {
 }
 
 // Order the rows inside a group: pinned rows always float to the top; the
-// sort mode then applies — "startedAt" newest-first, "none" keeps the
-// backend's push order (stabilized via the original index).
+// sort mode then applies — "startedAt" newest-first, "name"
+// case-insensitive, "none" keeps the backend's push order (stabilized via
+// the original index).
 function orderGroup(
   rows: ProcessView[],
   sortMode: SortMode,
@@ -139,6 +139,11 @@ function orderGroup(
           (b.p.lastStartedAt ?? b.p.startedAt ?? 0) -
           (a.p.lastStartedAt ?? a.p.startedAt ?? 0)
         );
+      }
+      if (sortMode === "name") {
+        return a.p.name.localeCompare(b.p.name, undefined, {
+          sensitivity: "base",
+        });
       }
       return a.i - b.i;
     })
@@ -241,6 +246,7 @@ function GroupSection({
               defaultImportGroup={g.label === UNGROUPED ? "" : g.label}
               groupOptions={groupOptions}
               onStarted={(id) => onToast(t("toasts.started", { id }))}
+              onCreated={(id) => onToast(t("toasts.created", { id }))}
               onError={(m) => onToast(m, true)}
               onToast={onToast}
             />
@@ -373,6 +379,10 @@ export function ProcessList({
   const [nameFilter, setNameFilter] = useState("");
   // How the rows inside each group are ordered (pinned always first).
   const [sortMode, setSortMode] = useState<SortMode>("none");
+  // Which layout renders the list: grouped cards (default) or the dense board.
+  const [viewMode, setViewMode] = useState<ViewMode>(() =>
+    loadJson<string>(VIEW_KEY, "grouped") === "board" ? "board" : "grouped",
+  );
   // Pinned process ids, persisted to localStorage.
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(() => loadIdSet(PINNED_KEY));
   // Which groups the user collapsed (by label), persisted to localStorage.
@@ -380,8 +390,18 @@ export function ProcessList({
   const [groupOrder, setGroupOrder] = useState<string[]>(() => loadJson(GROUP_ORDER_KEY, []));
   const [processOrder, setProcessOrder] = useState<Record<string, string[]>>(() => loadJson(PROCESS_ORDER_KEY, {}));
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  // Manual drag ordering only exists in the grouped view (the board orders via
+  // the sort select) and only without active filters.
   const processDragEnabled =
-    statusFilter === "all" && sortMode === "none" && nameFilter.trim() === "";
+    viewMode === "grouped" &&
+    statusFilter === "all" &&
+    sortMode === "none" &&
+    nameFilter.trim() === "";
+
+  function changeViewMode(v: ViewMode) {
+    setViewMode(v);
+    saveJson(VIEW_KEY, v);
+  }
 
   function moveItem(items: string[], from: string, to: string) {
     const fromIndex = items.indexOf(from);
@@ -667,8 +687,10 @@ export function ProcessList({
 
   return (
     <DndContext collisionDetection={collisionDetectionStrategy} onDragStart={handleDragStart} onDragCancel={() => setActiveDragId(null)} onDragEnd={handleDragEnd}>
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 min-w-0 flex-col">
       <ProcessFilterBar
+        viewMode={viewMode}
+        onViewModeChange={changeViewMode}
         statusFilter={statusFilter}
         onStatusFilterChange={setStatusFilter}
         sortMode={sortMode}
@@ -680,8 +702,10 @@ export function ProcessList({
         right={
           <CreateDropdown
             onStarted={(id) => onToast(t("toasts.started", { id }))}
+            onCreated={(id) => onToast(t("toasts.created", { id }))}
             onError={(m) => onToast(m, true)}
             onToast={onToast}
+            groupOptions={groupOptions}
           />
         }
       />
@@ -696,6 +720,24 @@ export function ProcessList({
               <ProcessCardSkeleton key={i} />
             ))}
           </div>
+        </div>
+      ) : viewMode === "board" && orderedGroups.length > 0 ? (
+        // Board view: one dense column per group (Ungrouped included), no
+        // collapsing; rows follow the sort select via `orderedGroups`.
+        // min-w-0 lets this region actually shrink when the log panel or
+        // window narrows, so the board's ResizeObserver sees the real width.
+        <div className="min-h-0 min-w-0 flex-1 overflow-hidden p-4">
+          <ProcessBoard
+            groups={orderedGroups}
+            selectedId={selectedId}
+            unread={unread}
+            pinnedIds={pinnedIds}
+            actions={actions}
+            onTogglePin={togglePin}
+            groupOptions={groupOptions}
+            onToast={onToast}
+            onRenameGroup={requestRenameGroup}
+          />
         </div>
       ) : grouped.length > 0 ? (
         <>

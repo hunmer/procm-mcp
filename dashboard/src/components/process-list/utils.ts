@@ -7,3 +7,12 @@ import type { ProcessView } from "@/lib/types";
 export function canStopProcess(p: ProcessView): boolean {
   return p.stoppedAt == null && p.status !== "exited" && p.status !== "error";
 }
+
+// Label of the catch-all bucket for processes without a group. Shared by the
+// grouped view and the board view so both bucket the same rows.
+export const UNGROUPED = "Ungrouped";
+
+export function groupKeyOf(group: string | undefined): string {
+  const value = (group ?? "").trim();
+  return value || UNGROUPED;
+}
