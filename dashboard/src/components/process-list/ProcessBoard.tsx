@@ -8,12 +8,10 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useTranslation } from "react-i18next";
 import {
+  EllipsisIcon,
   ExternalLinkIcon,
-  FolderIcon,
   GripVerticalIcon,
   PencilIcon,
-  PinIcon,
-  PinOffIcon,
   PlayIcon,
   SquareIcon,
 } from "lucide-react";
@@ -23,22 +21,27 @@ import {
   ContextMenu,
   ContextMenuTrigger,
 } from "@/registry/default/ui/context-menu";
+import {
+  Popover,
+  PopoverPopup,
+  PopoverTrigger,
+} from "@/registry/default/ui/popover";
 import type { ProcessView } from "@/lib/types";
 import { CreateDropdown } from "../CreateDropdown";
+import { ProcessActions } from "./ProcessActions";
 import { ProcessContextMenu } from "./ProcessContextMenu";
-import { STATUS_DOT, type RowActions } from "./types";
+import { GroupIcon } from "./GroupIcon";
+import { STATUS_DOT, type ProcessGroup, type RowActions } from "./types";
 import { canStopProcess, UNGROUPED } from "./utils";
 
 // One dense row of the board view: status dot + two-line name/desc + port and
-// unread badges, with pin / stop-or-run surfacing on hover (pinned rows keep
-// the pin visible). Clicking opens the log panel; the shared context menu
-// carries every other action.
+// unread badges, with drag / stop-or-run / a dots overflow popover surfacing
+// on hover. Clicking opens the log panel; the shared context menu carries
+// every other action.
 function BoardRow({
   p,
   isActive,
   unreadCount,
-  pinned,
-  onTogglePin,
   actions,
   dragGroup,
   dragEnabled = true,
@@ -46,8 +49,6 @@ function BoardRow({
   p: ProcessView;
   isActive: boolean;
   unreadCount: number;
-  pinned: boolean;
-  onTogglePin: (p: ProcessView) => void;
   actions: RowActions;
   // Group label the row reports to the DnD context (same-group collision only).
   dragGroup?: string;
@@ -127,15 +128,9 @@ function BoardRow({
             {unreadCount > 999 ? "999+" : unreadCount}
           </Badge>
         ) : null}
-        {/* Hover actions keep their slot so the row doesn't jump; pinned rows
-            always show the pin. */}
+        {/* Hover actions keep their slot so the row doesn't jump. */}
         <div
-          className={
-            "flex shrink-0 items-center gap-0.5 transition-opacity focus-within:opacity-100 " +
-            (pinned
-              ? "opacity-100"
-              : "opacity-0 group-hover/row:opacity-100")
-          }
+          className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/row:opacity-100"
           onClick={(e) => e.stopPropagation()}
         >
           {dragEnabled && (
@@ -153,24 +148,6 @@ function BoardRow({
               <GripVerticalIcon />
             </Button>
           )}
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            aria-label={
-              pinned
-                ? t("processes.unpinAria", { name: p.name })
-                : t("processes.pinAria", { name: p.name })
-            }
-            title={pinned ? t("processes.unpinTitle") : t("processes.pinTitle")}
-            onClick={() => onTogglePin(p)}
-            className={
-              pinned
-                ? "text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }
-          >
-            {pinned ? <PinIcon /> : <PinOffIcon />}
-          </Button>
           {canStop ? (
             <Button
               size="icon-xs"
@@ -194,6 +171,32 @@ function BoardRow({
               <PlayIcon />
             </Button>
           )}
+          {/* Overflow popover: the same action icons as the card footer. */}
+          <Popover>
+            <PopoverTrigger
+              render={
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  aria-label="更多操作"
+                  title="更多操作"
+                  className="text-muted-foreground hover:text-foreground"
+                />
+              }
+            >
+              <EllipsisIcon />
+            </PopoverTrigger>
+            <PopoverPopup className="min-w-0!">
+              <ProcessActions
+                process={p}
+                favorited={p.favorite === true}
+                onToggleFavorite={actions.onToggleFavorite}
+                onRestart={actions.onRestart}
+                onStop={actions.onRequestStop}
+                onDelete={actions.onRequestDelete}
+              />
+            </PopoverPopup>
+          </Popover>
         </div>
       </ContextMenuTrigger>
       <ProcessContextMenu p={p} actions={actions} />
@@ -210,26 +213,22 @@ function BoardColumn({
   g,
   selectedId,
   unread,
-  pinnedIds,
   actions,
-  onTogglePin,
   onToast,
   groupOptions,
   onRenameGroup,
   dragEnabled = true,
 }: {
-  g: { label: string; processes: ProcessView[] };
+  g: ProcessGroup;
   selectedId: string | null;
   unread: Record<string, number>;
-  pinnedIds: Set<string>;
   actions: RowActions;
-  onTogglePin: (p: ProcessView) => void;
   // Toast sink for the column "+" create menu.
   onToast: (message: string, isError?: boolean) => void;
   // Existing group labels offered by the create menu's group combobox.
   groupOptions: string[];
   // Open the rename-group dialog for this column's group.
-  onRenameGroup: (g: { label: string; processes: ProcessView[] }) => void;
+  onRenameGroup: (g: ProcessGroup) => void;
   dragEnabled?: boolean;
 }) {
   const { t } = useTranslation();
@@ -253,7 +252,7 @@ function BoardColumn({
       data-dragging={sortable.isDragging || undefined}
     >
       <div className="mb-1.5 flex items-center gap-2 border-b px-3 py-2">
-        <FolderIcon className="text-muted-foreground size-3.5 shrink-0" />
+        <GroupIcon imageIcon={g.imageIcon} className="size-3.5" />
         <span
           className="min-w-0 flex-1 truncate text-xs font-semibold"
           title={g.label === UNGROUPED ? t("processes.ungrouped") : g.label}
@@ -324,8 +323,6 @@ function BoardColumn({
             p={p}
             isActive={p.id === selectedId}
             unreadCount={unread[p.id] ?? 0}
-            pinned={pinnedIds.has(p.id)}
-            onTogglePin={onTogglePin}
             actions={actions}
             dragGroup={g.label}
             dragEnabled={dragEnabled}
@@ -338,9 +335,8 @@ function BoardColumn({
 
 // Column layout is JS-driven, not CSS auto-fill: a ResizeObserver on the
 // board wrapper measures the real available width and the column count is
-// computed in JS, then set as an explicit grid-template-columns. Explicit
-// minmax(0,1fr) tracks also give the grid a zero min-content width, so the
-// board can never stretch its ancestors and block them from shrinking.
+// computed in JS. Each visual column is an independent flex container so a
+// short group never inherits the row height of a taller neighbouring group.
 const MIN_COLUMN_WIDTH = 240;
 const COLUMN_GAP = 12;
 
@@ -353,23 +349,19 @@ export function ProcessBoard({
   groups,
   selectedId,
   unread,
-  pinnedIds,
   actions,
-  onTogglePin,
   onToast,
   groupOptions,
   onRenameGroup,
   dragEnabled = true,
 }: {
-  groups: { label: string; processes: ProcessView[] }[];
+  groups: ProcessGroup[];
   selectedId: string | null;
   unread: Record<string, number>;
-  pinnedIds: Set<string>;
   actions: RowActions;
-  onTogglePin: (p: ProcessView) => void;
   onToast: (message: string, isError?: boolean) => void;
   groupOptions: string[];
-  onRenameGroup: (g: { label: string; processes: ProcessView[] }) => void;
+  onRenameGroup: (g: ProcessGroup) => void;
   dragEnabled?: boolean;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -392,33 +384,46 @@ export function ProcessBoard({
     return () => observer.disconnect();
   }, []);
 
+  const columns = Array.from(
+    { length: columnCount },
+    (): typeof groups => [],
+  );
+  groups.forEach((group, index) => {
+    columns[index % columnCount].push(group);
+  });
+
   return (
     <div ref={wrapRef} className="h-full overflow-x-hidden overflow-y-auto">
-      <div
-        className="grid items-start gap-x-3 gap-y-3"
-        style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
+      <SortableContext
+        items={groups.map((g) => `group:${g.label}`)}
+        strategy={rectSortingStrategy}
       >
-        <SortableContext
-          items={groups.map((g) => `group:${g.label}`)}
-          strategy={rectSortingStrategy}
+        <div
+          className="grid items-start gap-x-3"
+          style={{ gridTemplateColumns: `repeat(${columnCount}, minmax(0, 1fr))` }}
         >
-          {groups.map((g) => (
-            <BoardColumn
-              key={g.label}
-              g={g}
-              selectedId={selectedId}
-              unread={unread}
-              pinnedIds={pinnedIds}
-              actions={actions}
-              onTogglePin={onTogglePin}
-              onToast={onToast}
-              groupOptions={groupOptions}
-              onRenameGroup={onRenameGroup}
-              dragEnabled={dragEnabled}
-            />
+          {columns.map((column, columnIndex) => (
+            <div
+              key={columnIndex}
+              className="flex min-w-0 flex-col gap-3"
+            >
+              {column.map((g) => (
+                <BoardColumn
+                  key={g.label}
+                  g={g}
+                  selectedId={selectedId}
+                  unread={unread}
+                  actions={actions}
+                  onToast={onToast}
+                  groupOptions={groupOptions}
+                  onRenameGroup={onRenameGroup}
+                  dragEnabled={dragEnabled}
+                />
+              ))}
+            </div>
           ))}
-        </SortableContext>
-      </div>
+        </div>
+      </SortableContext>
     </div>
   );
 }

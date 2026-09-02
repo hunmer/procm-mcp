@@ -190,7 +190,9 @@ export function SettingsDialog({
         .map(toImportItem)
         .filter((item): item is ProcessExportItem => item != null);
       if (items.length === 0) throw new Error(t("settings.badFile"));
-      await Promise.all(items.map((item) => saveImportedProcess(item)));
+      // Sequential so duplicate commands within one file overwrite each other
+      // server-side instead of racing past the dedupe check.
+      for (const item of items) await saveImportedProcess(item);
       onToast(t("settings.importDone", { count: items.length }));
     } catch (err) {
       onToast(err instanceof Error ? err.message : String(err), true);

@@ -5,6 +5,8 @@ import {
   PlayIcon,
   SquareIcon,
   SquareTerminalIcon,
+  StarIcon,
+  TrashIcon,
 } from "lucide-react";
 import {
   ContextMenuItem,
@@ -19,9 +21,9 @@ import { canStopProcess } from "./utils";
 import type { RowActions } from "./types";
 
 // The right-click menu shared by the table rows and the cards. Extracted so the
-// two views can't drift: Edit, then a Copy submenu (ID / command), then Stop
-// (when live) or Restart (when stopped). Rendered as a sibling of the
-// ContextMenuTrigger.
+// two views can't drift: Stop (when live) or Run (when stopped) first, then
+// Edit and toggle favorite, then a Copy submenu (ID / command) above Delete.
+// Rendered as a sibling of the ContextMenuTrigger.
 export function ProcessContextMenu({
   p,
   actions,
@@ -33,10 +35,31 @@ export function ProcessContextMenu({
   const canStop = canStopProcess(p);
   return (
     <ContextMenuPopup>
+      {canStop ? (
+        <ContextMenuItem
+          variant="destructive"
+          onClick={() => actions.onRequestStop(p)}
+        >
+          <SquareIcon aria-hidden="true" />
+          {t("processes.stopTitle")}
+        </ContextMenuItem>
+      ) : (
+        <ContextMenuItem onClick={() => actions.onRestart(p.id)}>
+          <PlayIcon aria-hidden="true" />
+          {t("processes.runTitle")}
+        </ContextMenuItem>
+      )}
       <ContextMenuItem onClick={() => actions.onView(p)}>
         <PencilIcon aria-hidden="true" />
         {t("processes.ctxEdit")}
       </ContextMenuItem>
+      <ContextMenuItem onClick={() => actions.onToggleFavorite(p)}>
+        <StarIcon aria-hidden="true" />
+        {p.favorite
+          ? t("processes.removeFavoriteTitle")
+          : t("processes.addFavoriteTitle")}
+      </ContextMenuItem>
+      <ContextMenuSeparator />
       <ContextMenuSub>
         <ContextMenuSubTrigger>
           <CopyIcon aria-hidden="true" />
@@ -53,21 +76,13 @@ export function ProcessContextMenu({
           </ContextMenuItem>
         </ContextMenuSubPopup>
       </ContextMenuSub>
-      <ContextMenuSeparator />
-      {canStop ? (
-        <ContextMenuItem
-          variant="destructive"
-          onClick={() => actions.onRequestStop(p)}
-        >
-          <SquareIcon aria-hidden="true" />
-          {t("processes.ctxStop")}
-        </ContextMenuItem>
-      ) : (
-        <ContextMenuItem onClick={() => actions.onRestart(p.id)}>
-          <PlayIcon aria-hidden="true" />
-          {t("processes.ctxRestart")}
-        </ContextMenuItem>
-      )}
+      <ContextMenuItem
+        variant="destructive"
+        onClick={() => actions.onRequestDelete(p)}
+      >
+        <TrashIcon aria-hidden="true" />
+        {t("processes.deleteTitle")}
+      </ContextMenuItem>
     </ContextMenuPopup>
   );
 }

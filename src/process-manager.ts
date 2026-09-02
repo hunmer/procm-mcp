@@ -255,25 +255,41 @@ export async function saveProcessRecord(input: {
   favorite?: boolean;
   port?: number | null;
 }): Promise<ProcessRecord> {
+  const repo = await ensureRepository();
+  // An import whose command (script + args + cwd) matches an existing favorite
+  // record overwrites it instead of creating a duplicate.
+  const existing = (await repo.getAll()).find(
+    (p) =>
+      p.favorite &&
+      p.script === input.script &&
+      p.cwd === input.cwd &&
+      p.args.length === input.args.length &&
+      p.args.every((a, i) => a === input.args[i]),
+  );
   const record: ProcessRecord = {
-    id: generateProcessId(),
+    id: existing?.id ?? generateProcessId(),
     name: input.name || input.script,
     script: input.script,
     args: input.args,
     cwd: input.cwd,
-    status: "exited",
-    pid: null,
-    exitCode: null,
-    error: null,
+    // Runtime fields are preserved when overwriting, so an import never
+    // disturbs a running instance of the same command.
+    status: existing?.status ?? "exited",
+    pid: existing?.pid ?? null,
+    exitCode: existing?.exitCode ?? null,
+    error: existing?.error ?? null,
     desc: input.desc ?? null,
     group: input.group ?? null,
     favorite: input.favorite ?? true,
     port: input.port ?? null,
-    startedAt: Date.now(),
-    lastStartedAt: null,
-    stoppedAt: null,
+    startedAt: existing?.startedAt ?? Date.now(),
+    lastStartedAt: existing?.lastStartedAt ?? null,
+    stoppedAt: existing?.stoppedAt ?? null,
+    stdoutLogPath: existing?.stdoutLogPath ?? null,
+    stderrLogPath: existing?.stderrLogPath ?? null,
+    roomId: existing?.roomId ?? null,
+    envs: existing?.envs ?? null,
   };
-  const repo = await ensureRepository();
   await repo.upsert(record);
   dashboardEvents.emitProcessChange();
   return record;

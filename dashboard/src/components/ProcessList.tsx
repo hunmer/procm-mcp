@@ -5,7 +5,6 @@ import { CSS } from "@dnd-kit/utilities";
 import { useTranslation } from "react-i18next";
 import {
   ChevronDownIcon,
-  FolderIcon,
   FolderOpenIcon,
   GripVerticalIcon,
   InboxIcon,
@@ -34,6 +33,7 @@ import type { ProcessView } from "@/lib/types";
 import {
   type ProcessListProps,
   type RowActions,
+  type ProcessGroup,
   type SortMode,
   type StatusFilter,
   type ViewMode,
@@ -42,6 +42,7 @@ import { useProcessActions } from "./process-list/useProcessActions";
 import { canStopProcess, groupKeyOf, UNGROUPED } from "./process-list/utils";
 import { ProcessFilterBar } from "./process-list/ProcessFilterBar";
 import { ProcessBoard } from "./process-list/ProcessBoard";
+import { GroupIcon } from "./process-list/GroupIcon";
 import { ProcessCard } from "./process-list/ProcessCard";
 import { ProcessDialogs } from "./process-list/ProcessDialogs";
 import {
@@ -74,6 +75,7 @@ const VIEW_KEY = "procm.processView";
 const PINNED_KEY = "procm.pinnedProcesses";
 const GROUP_ORDER_KEY = "procm.groupOrder";
 const PROCESS_ORDER_KEY = "procm.processOrder";
+const GROUP_IMAGE_ICONS_KEY = "procm.groupImageIcons";
 
 function loadIdSet(key: string): Set<string> {
   if (typeof localStorage === "undefined") return new Set();
@@ -113,11 +115,6 @@ function loadCollapsed(): Set<string> {
   return loadIdSet(COLLAPSED_KEY);
 }
 
-interface Group {
-  label: string;
-  processes: ProcessView[];
-}
-
 // Order the rows inside a group: pinned rows always float to the top; the
 // sort mode then applies — "startedAt" newest-first, "name"
 // case-insensitive, "none" keeps the backend's push order (stabilized via
@@ -151,7 +148,7 @@ function orderGroup(
 }
 
 interface GroupSectionProps {
-  g: Group;
+  g: ProcessGroup;
   // Collapsible state is controlled by the parent so drag-start can collapse all groups.
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -165,7 +162,7 @@ interface GroupSectionProps {
   onTogglePin: (p: ProcessView) => void;
   // Only called for the Ungrouped bucket: stop its running processes and
   // remove every record from the list.
-  onClearUngrouped: (g: Group) => void;
+  onClearUngrouped: (g: ProcessGroup) => void;
   // Toast sink for the group "+" create menu (start success/error, import
   // progress).
   onToast: (message: string, isError?: boolean) => void;
@@ -173,7 +170,7 @@ interface GroupSectionProps {
   groupOptions: string[];
   // Open the rename-group dialog for this group: every process of the group
   // is moved to the name typed inside.
-  onRenameGroup: (g: Group) => void;
+  onRenameGroup: (g: ProcessGroup) => void;
   processDragEnabled: boolean;
 }
 
@@ -211,7 +208,7 @@ function GroupSection({
             render={<Button variant="ghost" className="gap-2 px-2" />}
           >
             <ChevronDownIcon className="size-4 transition-transform" />
-            <FolderIcon className="text-muted-foreground size-3.5" />
+            <GroupIcon imageIcon={g.imageIcon} className="size-3.5" />
             <span className="text-sm font-semibold">
               {g.label === UNGROUPED ? t("processes.ungrouped") : g.label}
             </span>
@@ -389,6 +386,9 @@ export function ProcessList({
   const [collapsedLabels, setCollapsedLabels] = useState<Set<string>>(loadCollapsed);
   const [groupOrder, setGroupOrder] = useState<string[]>(() => loadJson(GROUP_ORDER_KEY, []));
   const [processOrder, setProcessOrder] = useState<Record<string, string[]>>(() => loadJson(PROCESS_ORDER_KEY, {}));
+  const [groupImageIcons, setGroupImageIcons] = useState<Record<string, string>>(
+    () => loadJson(GROUP_IMAGE_ICONS_KEY, {}),
+  );
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   // Manual drag ordering exists in both views (grouped cards and board) and
   // only without active filters.
@@ -520,7 +520,7 @@ export function ProcessList({
   // Clearing the Ungrouped bucket. The pending state holds the bucket snapshot
   // from click time, so WS updates arriving while the dialog is open don't
   // change what gets cleared.
-  const [pendingClear, setPendingClear] = useState<Group | null>(null);
+  const [pendingClear, setPendingClear] = useState<ProcessGroup | null>(null);
 
   // Rename-group dialog state, snapshotted at click time. `ids` comes from the
   // unfiltered list so an active status/name filter doesn't silently skip rows
@@ -529,7 +529,7 @@ export function ProcessList({
     null,
   );
 
-  function requestRenameGroup(g: Group) {
+  function requestRenameGroup(g: ProcessGroup) {
     const isUngrouped = g.label === UNGROUPED;
     const ids = processes
       .filter((p) => groupKeyOf(p.group ?? undefined) === g.label)
@@ -539,15 +539,33 @@ export function ProcessList({
       seed: isUngrouped ? "" : g.label,
       count: ids.length,
       ids,
+      imageIcon: g.imageIcon,
+    });
+  }
+
+  function saveGroupImageIcon(from: string, to: string, imageIcon?: string) {
+    setGroupImageIcons((current) => {
+      const next = { ...current };
+      if (from !== to) delete next[from];
+      if (imageIcon) next[to] = imageIcon;
+      else delete next[to];
+      saveJson(GROUP_IMAGE_ICONS_KEY, next);
+      return next;
     });
   }
 
   // Move every snapshotted process to the typed group ("" = Ungrouped). A name
   // equal to the current one is a no-op; the WS push refreshes the list.
-  async function confirmRenameGroup(value: string) {
+  async function confirmRenameGroup(value: string, imageIcon?: string) {
     const pending = pendingRename;
     setPendingRename(null);
-    if (!pending || value === pending.seed) return;
+    if (!pending) return;
+    const from = pending.seed || UNGROUPED;
+    const to = value || UNGROUPED;
+    if (value === pending.seed) {
+      saveGroupImageIcon(from, to, imageIcon);
+      return;
+    }
     const results = await Promise.allSettled(
       pending.ids.map((id) => updateProcess(id, { group: value || null })),
     );
@@ -556,6 +574,7 @@ export function ProcessList({
       onToast(t("toasts.groupMoveFailed", { failed }), true);
       return;
     }
+    saveGroupImageIcon(from, to, imageIcon);
     onToast(
       t("toasts.groupMoved", {
         count: pending.ids.length,
@@ -573,7 +592,7 @@ export function ProcessList({
     [processes],
   );
 
-  function requestClearUngrouped(g: Group) {
+  function requestClearUngrouped(g: ProcessGroup) {
     if (g.label !== UNGROUPED) return;
     setPendingClear(g);
   }
@@ -640,8 +659,8 @@ export function ProcessList({
   // Grouping is computed from the filtered sets so empty groups vanish.
   // Named groups sort alphabetically; the Ungrouped catch-all goes last.
   const groups = useMemo(() => {
-    const map = new Map<string, Group>();
-    const bucket = (label: string): Group => {
+    const map = new Map<string, ProcessGroup>();
+    const bucket = (label: string): ProcessGroup => {
       let b = map.get(label);
       if (!b) {
         b = { label, processes: [] };
@@ -655,6 +674,7 @@ export function ProcessList({
     return [...map.values()]
       .map((g) => ({
         label: g.label,
+        imageIcon: groupImageIcons[g.label],
         // Pinned rows first, then the selected sort order.
         processes: orderGroup(g.processes, sortMode, pinnedIds),
       }))
@@ -665,12 +685,21 @@ export function ProcessList({
         if (b.label === UNGROUPED) return -1;
         return a.label.localeCompare(b.label);
       });
-  }, [filteredProcesses, sortMode, pinnedIds, groupOrder, processOrder]);
+  }, [filteredProcesses, sortMode, pinnedIds, groupOrder, processOrder, groupImageIcons]);
 
   const orderedGroups = groups.map((g) => ({
     ...g,
     processes: processDragEnabled && processOrder[g.label]?.length
-      ? [...g.processes].sort((a, b) => (processOrder[g.label].indexOf(a.id) < 0 ? Number.MAX_SAFE_INTEGER : processOrder[g.label].indexOf(a.id)) - (processOrder[g.label].indexOf(b.id) < 0 ? Number.MAX_SAFE_INTEGER : processOrder[g.label].indexOf(b.id)))
+      ? [...g.processes].sort((a, b) => {
+          const pinOrder = Number(pinnedIds.has(b.id)) - Number(pinnedIds.has(a.id));
+          if (pinOrder !== 0) return pinOrder;
+          const aIndex = processOrder[g.label].indexOf(a.id);
+          const bIndex = processOrder[g.label].indexOf(b.id);
+          return (
+            (aIndex < 0 ? Number.MAX_SAFE_INTEGER : aIndex) -
+            (bIndex < 0 ? Number.MAX_SAFE_INTEGER : bIndex)
+          );
+        })
       : g.processes,
   }));
 
@@ -728,9 +757,7 @@ export function ProcessList({
             groups={orderedGroups}
             selectedId={selectedId}
             unread={unread}
-            pinnedIds={pinnedIds}
             actions={actions}
-            onTogglePin={togglePin}
             groupOptions={groupOptions}
             onToast={onToast}
             onRenameGroup={requestRenameGroup}

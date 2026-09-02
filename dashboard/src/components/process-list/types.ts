@@ -31,6 +31,12 @@ export type SortMode = "none" | "startedAt" | "name";
 // group with dense rows — no collapsing, ordering driven by the sort select.
 export type ViewMode = "grouped" | "board";
 
+export interface ProcessGroup {
+  label: string;
+  processes: ProcessView[];
+  imageIcon?: string;
+}
+
 export const VIEW_OPTIONS: { value: ViewMode; labelKey: string }[] = [
   { value: "grouped", labelKey: "processes.viewGrouped" },
   { value: "board", labelKey: "processes.viewBoard" },
