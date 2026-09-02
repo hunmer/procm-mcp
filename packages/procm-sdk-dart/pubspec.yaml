@@ -3,7 +3,6 @@ description: Dart client and structured logger for procm-mcp rooms.
 version: 0.1.0
 repository: https://github.com/hunmer/procm-mcp
 issue_tracker: https://github.com/hunmer/procm-mcp/issues
-publish_to: none
 
 environment:
   sdk: ^3.5.0
