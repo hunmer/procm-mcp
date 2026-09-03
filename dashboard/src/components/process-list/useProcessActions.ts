@@ -2,8 +2,10 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   deleteProcessCall,
+  getProcess,
   getProcessCommand,
   restartProcess,
+  saveImportedProcess,
   stopProcess,
 } from "@/lib/api";
 import type { ProcessView } from "@/lib/types";
@@ -18,6 +20,7 @@ export interface UseProcessActionsResult {
   confirmStop: () => Promise<void>;
   handleCopyId: (p: ProcessView) => Promise<void>;
   handleCopyCommand: (p: ProcessView) => Promise<void>;
+  handleClone: (p: ProcessView) => Promise<void>;
   handleRestart: (id: string) => Promise<void>;
   dismissDelete: () => void;
   dismissStop: () => void;
@@ -109,6 +112,33 @@ export function useProcessActions(
     }
   }
 
+  // Clone = re-create the process's launch fields through the import route,
+  // which persists a stopped record and never starts it. Env vars are only
+  // exposed on the detail endpoint, so fetch it first (getProcess) instead of
+  // trusting the row snapshot. The clone is created with favorite:false —
+  // favorite imports dedupe by command and would overwrite the source record.
+  async function handleClone(p: ProcessView) {
+    const base = p.name.replace(/\s*\(copy\)(\s*\d+)?$/, "").trim() || p.name;
+    const name = `${base} (copy)`;
+    try {
+      const detail = await getProcess(p.id);
+      await saveImportedProcess({
+        name,
+        script: detail.script,
+        args: detail.args,
+        cwd: detail.cwd,
+        desc: detail.desc ?? undefined,
+        group: detail.group ?? undefined,
+        port: detail.port ?? undefined,
+        envs: detail.envs ?? undefined,
+        favorite: false,
+      });
+      onToast(t("processes.toastCloned", { name }));
+    } catch (err) {
+      onToast(err instanceof Error ? err.message : String(err), true);
+    }
+  }
+
   async function handleRestart(id: string) {
     try {
       await restartProcess(id);
@@ -128,6 +158,7 @@ export function useProcessActions(
     confirmStop,
     handleCopyId,
     handleCopyCommand,
+    handleClone,
     handleRestart,
     dismissDelete: () => setPendingDelete(null),
     dismissStop: () => setPendingStop(null),

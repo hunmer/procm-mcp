@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import {
   CopyIcon,
+  CopyPlusIcon,
   PencilIcon,
   PlayIcon,
   SquareIcon,
@@ -52,6 +53,10 @@ export function ProcessContextMenu({
       <ContextMenuItem onClick={() => actions.onView(p)}>
         <PencilIcon aria-hidden="true" />
         {t("processes.ctxEdit")}
+      </ContextMenuItem>
+      <ContextMenuItem onClick={() => actions.onClone(p)}>
+        <CopyPlusIcon aria-hidden="true" />
+        {t("processes.ctxClone")}
       </ContextMenuItem>
       <ContextMenuItem onClick={() => actions.onToggleFavorite(p)}>
         <StarIcon aria-hidden="true" />

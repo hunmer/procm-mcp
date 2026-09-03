@@ -25,6 +25,8 @@ export interface ProcessView {
     lastStartedAt?: number | null;
     stoppedAt?: number | null;
     favorite?: boolean;
+    /** Operator env vars — only present on the GET /api/processes/:id detail response. */
+    envs?: Record<string, string> | null;
 }
 export interface ProcessListResponse {
     serverId: string;

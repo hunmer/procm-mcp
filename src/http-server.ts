@@ -757,6 +757,11 @@ function createRequestHandler(token: string | undefined) {
           json(res, 400, { error: "port must be an integer between 1 and 65535" });
           return;
         }
+        // Optional operator env vars, same coercion as the start route.
+        const envs: Record<string, string> =
+          body.envs && typeof body.envs === "object" && !Array.isArray(body.envs)
+            ? body.envs
+            : {};
         const saved = await saveProcessRecord({
           name: body.name ? String(body.name) : undefined,
           script,
@@ -764,10 +769,13 @@ function createRequestHandler(token: string | undefined) {
           cwd,
           desc: body.desc ? String(body.desc) : undefined,
           group: body.group ? String(body.group).trim() : null,
-          favorite: true,
+          favorite: body.favorite !== false,
           port,
+          // Empty/absent envs -> undefined so an overwrite keeps the record's
+          // stored envs (saveProcessRecord only applies explicit values).
+          envs: Object.keys(envs).length > 0 ? envs : undefined,
         });
-        json(res, 201, { id: saved.id, name: saved.name, favorite: true });
+        json(res, 201, { id: saved.id, name: saved.name, favorite: saved.favorite ?? true });
         return;
       }
 
@@ -1337,14 +1345,23 @@ function createRequestHandler(token: string | undefined) {
           return;
         }
 
-        // GET /api/processes/:id
+        // GET /api/processes/:id -> single process detail. Live metadata wins;
+        // stopped/expired processes fall back to their persisted record (same
+        // visibility as the list). This is the only endpoint that exposes the
+        // record's envs — the list/WS views deliberately omit them, the detail
+        // view is what the dashboard's clone/edit flows read.
         if (method === "GET" && !action) {
           const meta = getProcess(idParam);
-          if (!meta) {
+          if (meta) {
+            json(res, 200, { ...toPublicView(meta), envs: meta.envs ?? null });
+            return;
+          }
+          const record = await getProcessRecord(idParam);
+          if (!record) {
             json(res, 404, { error: "Process not found" });
             return;
           }
-          json(res, 200, toPublicView(meta));
+          json(res, 200, { ...toPublicRecord(record), envs: record.envs ?? null });
           return;
         }
 

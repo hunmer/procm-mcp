@@ -513,6 +513,7 @@ export function ProcessList({
     handleRestart,
     handleCopyId,
     handleCopyCommand,
+    handleClone,
     dismissDelete,
     dismissStop,
   } = useProcessActions(onToast);
@@ -633,6 +634,7 @@ export function ProcessList({
     onRequestDelete: requestDelete,
     onCopyId: handleCopyId,
     onCopyCommand: handleCopyCommand,
+    onClone: handleClone,
   };
 
   // Client-side filtering by status and name. "expired" is a UI-only filter

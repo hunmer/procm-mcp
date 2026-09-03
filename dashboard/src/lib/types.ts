@@ -27,6 +27,9 @@ export interface ProcessView {
   lastStartedAt?: number | null;
   stoppedAt?: number | null;
   favorite?: boolean;
+  // Operator env vars. ONLY present on the GET /api/processes/:id detail
+  // response (used by the clone flow); list/WS payloads omit it.
+  envs?: Record<string, string> | null;
 }
 
 export interface ProcessListResponse {

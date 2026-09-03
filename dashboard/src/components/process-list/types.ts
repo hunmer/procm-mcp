@@ -78,4 +78,6 @@ export interface RowActions {
   onRequestDelete: (p: ProcessView) => void;
   onCopyId: (p: ProcessView) => void;
   onCopyCommand: (p: ProcessView) => void;
+  // Duplicate the process config into a new stopped record (never runs it).
+  onClone: (p: ProcessView) => void;
 }

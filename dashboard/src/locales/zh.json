@@ -84,6 +84,8 @@
     "ctxCopyCommand": "复制命令",
     "ctxCopy": "复制",
     "ctxEdit": "编辑",
+    "ctxClone": "克隆",
+    "toastCloned": "已克隆为 {{name}}（未运行）",
     "addFavoriteAria": "将 {{name}} 加入收藏",
     "removeFavoriteAria": "将 {{name}} 移出收藏",
     "addFavoriteTitle": "加入收藏",
