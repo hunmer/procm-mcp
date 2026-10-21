@@ -7,8 +7,5 @@
   "dependencies": {
     "@hunmer/procm-mcp-sdk": "link:../../packages/procm-sdk",
     "electron": "^37.2.6"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": ["electron"]
   }
 }
