@@ -19,7 +19,7 @@ export function registerProcessInputTools(server: McpServer) {
     "process-input",
     `Send input to a running process by ID.
 - "text": write a string to the process's stdin. Set "newline" (default true) to append a trailing newline; pass false to send raw bytes.
-- "signal": send an OS signal (e.g. "SIGINT" for Ctrl+C, "SIGTERM" for graceful stop, "SIGKILL" to force-kill).
+- "signal": send an OS signal (e.g. "SIGINT" for Ctrl+C, "SIGTERM" for graceful stop, "SIGKILL" to force-kill). On Windows, SIGINT/SIGTERM/SIGKILL/SIGQUIT force-stop the entire process tree; they do not deliver a graceful Ctrl+C event.
 Provide exactly one of "text" or "signal". Allowed signals: ${ALLOWED_INPUT_SIGNALS.join(", ")}.`,
     {
       id: z.string(),
@@ -31,7 +31,7 @@ Provide exactly one of "text" or "signal". Allowed signals: ${ALLOWED_INPUT_SIGN
       logToolStart("process-input", { id, hasText: text !== undefined, newline, signal });
 
       try {
-        const result = sendProcessInput(id, { text, newline, signal });
+        const result = await sendProcessInput(id, { text, newline, signal });
 
         if (result.ok) {
           if (result.kind === "text") {

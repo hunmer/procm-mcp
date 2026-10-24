@@ -1275,7 +1275,7 @@ function createRequestHandler(token: string | undefined) {
             return;
           }
           const body = JSON.parse((await readBody(req)) || "{}");
-          const result = sendProcessInput(idParam, {
+          const result = await sendProcessInput(idParam, {
             text: typeof body.text === "string" ? body.text : undefined,
             newline: typeof body.newline === "boolean" ? body.newline : undefined,
             signal: typeof body.signal === "string" ? body.signal : undefined,

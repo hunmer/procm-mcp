@@ -41,47 +41,12 @@ npm install
 npm run build
 ```
 
-### stdio MCP 模式
-
-通过 stdio 启动 MCP 服务器，将 dashboard 置于 `7331` 端口，并使用用户级共享数据目录：
-
-```bash
-node ./build/index.js --port 7331 --data-path global
-```
-
-在 MCP 客户端的项目配置中启用同一命令（例如 `.mcp.json`）：
-
-```json
-{
-  "mcpServers": {
-    "procm-mcp": {
-      "command": "procm-mcp",
-      "args": ["--port", "7331", "--data-path", "global"]
-    }
-  }
-}
-```
+### MCP 客户端配置
 
 需要启用或重启服务器时，使用全局 `procm-mcp` 管理；自带热更新的服务不需要重启。
 如果 MCP 不可用，则加载 `procm-http` skill，使用 HTTP 作为兜底。
 
-单个 Agent 客户端使用默认的 stdio 配置：
-
-```json
-{
-  "mcpServers": {
-    "procm-mcp": {
-      "command": "procm-mcp",
-      "args": ["--port", "7331", "--data-path", "global"]
-    }
-  }
-}
-```
-
-#### 如果在多个 Agent 客户端之间共享进程（备用选项）
-
-如果多个 Agent 客户端需要共享同一个进程管理器，则使用上面启动的 HTTP 后端，
-并在每个客户端中配置：
+要使用安装步骤中打开的 dashboard，Agent 客户端应连接同一个后端：
 
 ```json
 {
@@ -93,6 +58,30 @@ node ./build/index.js --port 7331 --data-path global
   }
 }
 ```
+
+需要共享该进程管理器的所有客户端均使用此配置。
+
+每次 stdio 启动都会创建独立的进程管理器，共享数据目录不会共享实时进程状态或
+dashboard 通知。如果 `7331` 已被后端占用，另一个 stdio 实例仍可能接受 MCP 调用，
+但 dashboard 会使用其他端口（或未启用），因此它启动的进程不属于 `7331` 网页中的管理器。
+
+#### 独立 stdio 管理器
+
+需要独立管理器时，使用 stdio，并为其指定独立的数据目录和 dashboard 端口：
+
+```json
+{
+  "mcpServers": {
+    "procm-mcp": {
+      "command": "procm-mcp",
+      "args": ["--port", "7333", "--data-path", ".procm-mcp-stdio"]
+    }
+  }
+}
+```
+
+此管理器应打开 `http://127.0.0.1:7333`。若端口已被占用，以启动输出中的实际
+dashboard 地址为准。
 
 最后，将以下规则添加到项目的 `AGENTS.md` 或 `CLAUDE.md`，让 AI Agent 遵循统一的
 进程管理规范：
@@ -391,6 +380,7 @@ npm run test:custom-noise
   - `text`（可选）：写入进程 stdin 的字符串
   - `newline`（可选）：在 `text` 末尾追加换行（默认 true；设 false 发送原始字节）
   - `signal`（可选）：改为发送 OS 信号——`SIGINT` `SIGTERM` `SIGKILL` `SIGHUP` `SIGUSR1` `SIGUSR2` `SIGTSTP` `SIGCONT` `SIGQUIT` 之一。`text`/`signal` 二选一
+  - Windows 下 `SIGINT` / `SIGTERM` / `SIGKILL` / `SIGQUIT` 会强制终止整棵进程树，并等待终止命令完成；不会向应用投递可优雅处理的 Ctrl+C 事件，也不保证退出码为 0。`POST /api/processes/:id/input` 同样适用。
 - `procm-command` 管理定义在 `procm-commands.json` 中的进程
   - `action`（必填）：`list` | `start`
   - `name`（start 必填）：文件中定义的命令名

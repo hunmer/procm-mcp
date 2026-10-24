@@ -1,5 +1,9 @@
 # HTTP API 变更记录
 
+## 2026-10-24
+
+- `POST /api/processes/:id/input`：请求及响应字段不变。Windows 下 `signal` 为 `SIGINT`、`SIGTERM`、`SIGKILL` 或 `SIGQUIT` 时，改为终止整棵进程树并等待终止命令完成，避免只杀包装进程后遗留子进程占端口；其他信号保留平台原有行为。Windows 的终止信号不等同于可优雅处理的 Ctrl+C。
+
 ## 2026-09-03
 
 - `GET /api/processes/:id`：响应新增 `envs` 字段（`Record<string,string> | null`，唯一下发 envs 的端点，供克隆/编辑流程读取）；行为变更——已停止/历史进程不再返回 404，改为返回其持久化记录（与列表可见性一致），仅完全不存在的 id 才 404。

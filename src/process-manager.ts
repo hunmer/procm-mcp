@@ -748,8 +748,7 @@ export async function deleteProcesses(
 
 // Whitelisted POSIX/Windows signals we allow sending to a managed child. These
 // cover the common operator intents (Ctrl+C = SIGINT, suspend/resume, custom
-// hooks, hard kill). Names are platform-portable constants on Node; on Windows
-// tree-kill semantics differ but process.kill with these names still resolves.
+// hooks, hard kill). Unsupported signals still fail on the target platform.
 export const ALLOWED_INPUT_SIGNALS = [
   "SIGINT", // Ctrl+C
   "SIGTERM", // default "terminate" (graceful shutdown)
@@ -780,17 +779,16 @@ export type SendInputResult =
 
 // Write to a running process's stdin (text mode) or deliver an OS signal to it
 // (signal mode). One of `text` or `signal` must be provided; both is rejected.
-// The child is spawned with the default piped stdio, so `stdin` is a writable
-// stream we can write to directly. Signals go through `process.kill(pid, sig)`,
-// which is cross-platform (Windows maps these to TerminateProcess-style calls).
+// Windows termination signals must kill the tree while the wrapper PID still
+// exists; killing only cmd.exe leaves its workers orphaned and holding ports.
 //
 // This does NOT persist state or broadcast a process-list change: sending input
 // doesn't alter the process record. The exit/error handlers on the child still
 // fire normally if the input (e.g. SIGINT) causes it to terminate.
-export function sendProcessInput(
+export async function sendProcessInput(
   id: string,
   opts: { text?: string; newline?: boolean; signal?: string },
-): SendInputResult {
+): Promise<SendInputResult> {
   const meta = getProcess(id);
   if (!meta) {
     return { ok: false, reason: "not_found" };
@@ -834,8 +832,20 @@ export function sendProcessInput(
       };
     }
     try {
-      process.kill(pid, signal);
-      serverLog(`Sent signal ${signal} to process ${meta.name} (ID: ${id}, PID: ${pid}).`);
+      if (process.platform === "win32" && ["SIGINT", "SIGTERM", "SIGKILL", "SIGQUIT"].includes(signal)) {
+        serverLog(`Terminating Windows process tree: ${meta.name} (ID: ${id}, wrapper PID: ${pid}, requested signal: ${signal}).`);
+        const killed = await killProcessTree(pid, meta);
+        if (!killed) {
+          return {
+            ok: false,
+            reason: "write_error",
+            error: `Failed to terminate process tree for ${meta.name} (ID: ${id}, PID: ${pid}).`,
+          };
+        }
+      } else {
+        process.kill(pid, signal);
+        serverLog(`Sent signal ${signal} to process ${meta.name} (ID: ${id}, PID: ${pid}).`);
+      }
       return { ok: true, kind: "signal", signal };
     } catch (err) {
       const e = err as NodeJS.ErrnoException;
@@ -888,6 +898,7 @@ export async function restartProcess(id: string): Promise<ProcessMetadata | null
   if (processIndex !== -1) {
     // Live process: kill then re-spawn in place, keeping list position.
     const processMetadata = processes[processIndex];
+    serverLog(`Restarting process ${processMetadata.name} (ID: ${id}, old PID: ${processMetadata.pid ?? "n/a"}, status: ${processMetadata.status}).`);
     await killProcess(processMetadata);
 
     const newProcess = await startProcess(
@@ -911,6 +922,7 @@ export async function restartProcess(id: string): Promise<ProcessMetadata | null
     lastStartedAtByMeta.set(id, Date.now());
     void persist(newProcess);
     dashboardEvents.emitProcessChange();
+    serverLog(`Restarted process ${newProcess.name} (ID: ${id}, old PID: ${processMetadata.pid ?? "n/a"}, new PID: ${newProcess.pid ?? "n/a"}, status: ${newProcess.status}).`);
     return newProcess;
   }
 

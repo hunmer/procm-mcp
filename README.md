@@ -42,48 +42,14 @@ npm install
 npm run build
 ```
 
-### stdio MCP mode
-
-Start the MCP server over stdio, with the dashboard on port `7331` and shared user-level data:
-
-```bash
-node ./build/index.js --port 7331 --data-path global
-```
-
-Enable the same command in your MCP client's project configuration (for example, `.mcp.json`):
-
-```json
-{
-  "mcpServers": {
-    "procm-mcp": {
-      "command": "procm-mcp",
-      "args": ["--port", "7331", "--data-path", "global"]
-    }
-  }
-}
-```
+### MCP client configuration
 
 When enabling or restarting a server, use the global `procm-mcp` manager. Services
 with built-in hot reload do not need a restart. If MCP is unavailable, load the
 `procm-http` skill and use its HTTP fallback.
 
-For a single Agent client, add the default stdio configuration:
-
-```json
-{
-  "mcpServers": {
-    "procm-mcp": {
-      "command": "procm-mcp",
-      "args": ["--port", "7331", "--data-path", "global"]
-    }
-  }
-}
-```
-
-#### Sharing processes across multiple Agent clients (backup option)
-
-If multiple Agent clients need to share the same process manager, use the HTTP
-backend started above and configure each client with:
+To use the dashboard opened during installation, configure Agent clients to
+connect to that same backend:
 
 ```json
 {
@@ -95,6 +61,32 @@ backend started above and configure each client with:
   }
 }
 ```
+
+Use this configuration in every client that needs to share the process manager.
+
+Each stdio launch creates an independent process manager. A shared data directory
+does not share live process state or dashboard notifications. If a backend already
+owns port `7331`, another stdio instance can still accept MCP calls while its
+dashboard uses a different port (or is disabled); processes it starts will not
+belong to the dashboard at `7331`.
+
+#### Independent stdio manager
+
+For a separate manager, use stdio with its own data directory and dashboard port:
+
+```json
+{
+  "mcpServers": {
+    "procm-mcp": {
+      "command": "procm-mcp",
+      "args": ["--port", "7333", "--data-path", ".procm-mcp-stdio"]
+    }
+  }
+}
+```
+
+Open `http://127.0.0.1:7333` for that manager. If the port is occupied, check the
+startup output for the actual dashboard URL.
 
 Finally, add the following rule to the project's `AGENTS.md` or `CLAUDE.md` so
 the AI agent follows the same process-management policy:
@@ -402,6 +394,7 @@ For network-facing setups, optional `PROCM_HTTP_TOKEN` requires an `Authorizatio
   - `text` (optional): String to write to the process's stdin
   - `newline` (optional): Append a trailing newline to `text` (default: true; set false to send raw bytes)
   - `signal` (optional): Send an OS signal instead — one of `SIGINT` `SIGTERM` `SIGKILL` `SIGHUP` `SIGUSR1` `SIGUSR2` `SIGTSTP` `SIGCONT` `SIGQUIT`. Provide exactly one of `text` / `signal`.
+  - On Windows, `SIGINT` / `SIGTERM` / `SIGKILL` / `SIGQUIT` force-stop the entire process tree and wait for the termination command to finish. They do not deliver a graceful Ctrl+C event or guarantee exit code 0. This also applies to `POST /api/processes/:id/input`.
 - `procm-command` Manage processes defined in `procm-commands.json`
   - `action` (required): `list` | `start`
   - `name` (required for start): The command name as defined in the file
